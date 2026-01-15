@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI聊天界面演示</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.bootcdn.net/ajax/libs/daisyui/4.12.10/full.min.css" rel="stylesheet">
+    <link href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .chat-container {
+            height: 100vh;
+            display: flex;
+        }
+        
+        .sidebar {
+            width: 300px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .chat-main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #f8fafc;
+        }
+        
+        .messages-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+        }
+        
+        .message-item {
+            display: flex;
+            margin-bottom: 1.5rem;
+            animation: fadeInUp 0.3s ease;
+        }
+        
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .user-message {
+            flex-direction: row-reverse;
+        }
+        
+        .message-content {
+            max-width: 70%;
+            padding: 1rem;
+            border-radius: 12px;
+            position: relative;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        
+        .user-message .message-content {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            margin-left: auto;
+        }
+        
+        .ai-message .message-content {
+            background: white;
+            color: #374151;
+            margin-right: auto;
+        }
+        
+        .typing-indicator {
+            display: inline-block;
+            padding: 1rem;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        
+        .typing-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #9ca3af;
+            margin: 0 2px;
+            animation: typing 1.4s infinite ease-in-out;
+        }
+        
+        .typing-dot:nth-child(1) { animation-delay: 0s; }
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+        
+        @keyframes typing {
+            0%, 60%, 100% { transform: translateY(0); }
+            30% { transform: translateY(-5px); }
+        }
+        
+        .conversation-item {
+            padding: 1rem;
+            margin: 0.5rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .conversation-item:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateX(5px);
+        }
+        
+        .conversation-item.active {
+            background: rgba(255, 255, 255, 0.3);
+            border-left: 3px solid white;
+        }
+        
+        .input-container {
+            padding: 1rem;
+            background: white;
+            border-top: 1px solid #e5e7eb;
+        }
+        
+        .model-select {
+            width: 200px;
+            margin-right: 1rem;
+        }
+        
+        .chat-header {
+            padding: 1rem;
+            background: white;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div class="chat-container">
+        <!-- 侧边栏 -->
+        <div class="sidebar">
+            <div class="p-4 gradient-bg">
+                <h2 class="text-xl font-bold mb-4 flex items-center">
+                    <i class="fas fa-comments mr-2"></i>
+                    我的对话
+                </h2>
+                <button id="newChatBtn" class="btn btn-primary w-full">
+                    <i class="fas fa-plus mr-2"></i>
+                    新对话
+                </button>
+            </div>
+            
+            <div class="flex-1 overflow-y-auto p-2">
+                <div class="conversation-item active">
+                    <div class="flex items-center">
+                        <i class="fas fa-comment mr-2"></i>
+                        <span>关于AI的讨论</span>
+                    </div>
+                    <div class="text-xs opacity-75 mt-1">2分钟前</div>
+                </div>
+                <div class="conversation-item">
+                    <div class="flex items-center">
+                        <i class="fas fa-comment mr-2"></i>
+                        <span>项目规划</span>
+                    </div>
+                    <div class="text-xs opacity-75 mt-1">1小时前</div>
+                </div>
+                <div class="conversation-item">
+                    <div class="flex items-center">
+                        <i class="fas fa-comment mr-2"></i>
+                        <span>技术问题</span>
+                    </div>
+                    <div class="text-xs opacity-75 mt-1">昨天</div>
+                </div>
+            </div>
+            
+            <div class="p-4 border-t border-white border-opacity-20">
+                <div class="flex items-center mb-2">
+                    <div class="avatar mr-3">
+                        <div class="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white">
+                            <i class="fas fa-user"></i>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="font-medium">用户</div>
+                        <div class="text-xs opacity-75">免费版</div>
+                    </div>
+                </div>
+                <select class="select select-bordered select-sm w-full mt-2 bg-white bg-opacity-20 text-white border-white border-opacity-30">
+                    <option>DeepSeek V3</option>
+                    <option>Claude 3 Opus</option>
+                    <option>GPT-4 Turbo</option>
+                    <option>Qwen VL Plus</option>
+                </select>
+            </div>
+        </div>
+        
+        <!-- 主聊天窗口 -->
+        <div class="chat-main">
+            <!-- 聊天头部 -->
+            <div class="chat-header">
+                <div class="flex items-center">
+                    <i class="fas fa-comment text-blue-500 mr-2"></i>
+                    <h1 class="text-xl font-bold">关于AI的讨论</h1>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <button class="btn btn-ghost btn-sm">
+                        <i class="fas fa-cog"></i>
+                    </button>
+                    <button class="btn btn-ghost btn-sm">
+                        <i class="fas fa-user"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 消息列表 -->
+            <div class="messages-container" id="messagesContainer">
+                <div class="message-item ai-message">
+                    <div class="flex items-start">
+                        <div class="avatar mr-3">
+                            <div class="w-8 h-8 rounded-full bg-purple-500 flex items-center justify-center text-white text-sm">
+                                <i class="fas fa-robot"></i>
+                            </div>
+                        </div>
+                        <div class="message-content">
+                            <div class="font-semibold text-sm mb-1">AI助手</div>
+                            <div class="prose prose-sm">
+                                <p>你好！我是AI助手，很高兴为你服务。你可以问我任何问题，我会尽力帮助你。</p>
+                                <p>今天我们可以聊聊人工智能的发展趋势，或者讨论一些技术问题。</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="message-item user-message">
+                    <div class="flex items-start">
+                        <div class="message-content">
+                            <div class="font-semibold text-sm mb-1">我</div>
+                            <div class="prose prose-sm text-white">
+                                <p>你好！我想了解一下人工智能的最新发展情况，特别是大语言模型方面的进展。</p>
+                            </div>
+                        </div>
+                        <div class="avatar ml-3">
+                            <div class="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm">
+                                <i class="fas fa-user"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="message-item ai-message">
+                    <div class="flex items-start">
+                        <div class="avatar mr-3">
+                            <div class="w-8 h-8 rounded-full bg-purple-500 flex items-center justify-center text-white text-sm">
+                                <i class="fas fa-robot"></i>
+                            </div>
+                        </div>
+                        <div class="message-content">
+                            <div class="font-semibold text-sm mb-1">AI助手</div>
+                            <div class="prose prose-sm">
+                                <p>人工智能领域近年来取得了显著进展，特别是在大语言模型方面：</p>
+                                <ul class="list-disc pl-5 mt-2">
+                                    <li><strong>规模增长</strong>：模型参数量从数十亿增长到数千亿甚至万亿级别</li>
+                                    <li><strong>能力提升</strong>：在自然语言理解、代码生成、推理等方面表现越来越出色</li>
+                                    <li><strong>多模态融合</strong>：结合文本、图像、音频等多种模态的信息处理</li>
+                                    <li><strong>效率优化</strong>：通过知识蒸馏、稀疏激活等技术提高推理效率</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="message-item" id="typingIndicator" style="display: none;">
+                    <div class="flex items-start">
+                        <div class="avatar mr-3">
+                            <div class="w-8 h-8 rounded-full bg-purple-500 flex items-center justify-center text-white text-sm">
+                                <i class="fas fa-robot"></i>
+                            </div>
+                        </div>
+                        <div class="typing-indicator">
+                            <div class="typing-dot"></div>
+                            <div class="typing-dot"></div>
+                            <div class="typing-dot"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 输入区域 -->
+            <div class="input-container">
+                <div class="flex items-end space-x-2">
+                    <div class="flex-1">
+                        <textarea 
+                            id="messageInput" 
+                            class="textarea textarea-bordered w-full" 
+                            rows="1" 
+                            placeholder="输入您的消息..."
+                            style="resize: none; max-height: 120px;"
+                        ></textarea>
+                    </div>
+                    <div class="flex flex-col space-y-2">
+                        <button id="sendBtn" class="btn btn-primary">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                        <button class="btn btn-ghost btn-sm">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const messageInput = document.getElementById('messageInput');
+            const sendBtn = document.getElementById('sendBtn');
+            const messagesContainer = document.getElementById('messagesContainer');
+            const typingIndicator = document.getElementById('typingIndicator');
+            const newChatBtn = document.getElementById('newChatBtn');
+            
+            // 自动调整文本框高度
+            messageInput.addEventListener('input', function() {
+                this.style.height = 'auto';
+                this.style.height = (this.scrollHeight > 120 ? 120 : this.scrollHeight) + 'px';
+            });
+            
+            // 发送消息
+            function sendMessage() {
+                const content = messageInput.value.trim();
+                if (!content) return;
+                
+                // 添加用户消息
+                addMessage(content, 'user');
+                messageInput.value = '';
+                messageInput.style.height = 'auto';
+                
+                // 显示打字指示器
+                typingIndicator.style.display = 'flex';
+                scrollToBottom();
+                
+                // 模拟AI回复
+                setTimeout(() => {
+                    typingIndicator.style.display = 'none';
+                    addMessage(getAIResponse(content), 'ai');
+                }, 1500);
+            }
+            
+            // 添加消息到聊天窗口
+            function addMessage(content, role) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `message-item ${role}-message`;
+                
+                let avatarIcon, roleName;
+                if (role === 'user') {
+                    avatarIcon = '<i class="fas fa-user"></i>';
+                    roleName = '我';
+                } else {
+                    avatarIcon = '<i class="fas fa-robot"></i>';
+                    roleName = 'AI助手';
+                }
+                
+                messageDiv.innerHTML = `
+                    <div class="flex items-start">
+                        <div class="avatar mr-3">
+                            <div class="w-8 h-8 rounded-full ${role === 'user' ? 'bg-blue-500' : 'bg-purple-500'} flex items-center justify-center text-white text-sm">
+                                ${avatarIcon}
+                            </div>
+                        </div>
+                        <div class="message-content">
+                            <div class="font-semibold text-sm mb-1">${roleName}</div>
+                            <div class="prose prose-sm ${role === 'user' ? 'text-white' : ''}">
+                                <p>${content.replace(/\n/g, '<br>')}</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                // 在打字指示器之前插入消息
+                messagesContainer.insertBefore(messageDiv, typingIndicator);
+                scrollToBottom();
+            }
+            
+            // 获取AI回复
+            function getAIResponse(userMessage) {
+                const responses = [
+                    `我理解您提到的"${userMessage}"。这是一个很有趣的话题，让我为您详细解释一下相关的概念和应用场景。`,
+                    `关于"${userMessage}"，我可以为您提供一些专业的见解和建议。这个问题涉及到多个方面，让我逐一为您分析。`,
+                    `您提到的"${userMessage}"确实很重要。根据我的知识库，这个问题可以从以下几个角度来理解...`,
+                    `感谢您分享关于"${userMessage}"的想法。这是一个值得深入探讨的问题，让我为您提供一些相关信息。`,
+                    `您询问的"${userMessage}"是一个复杂但引人入胜的主题。让我为您梳理一下关键点和最新发展。`
+                ];
+                
+                return responses[Math.floor(Math.random() * responses.length)];
+            }
+            
+            // 滚动到底部
+            function scrollToBottom() {
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }
+            
+            // 事件监听器
+            sendBtn.addEventListener('click', sendMessage);
+            
+            messageInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            });
+            
+            newChatBtn.addEventListener('click', function() {
+                alert('新对话功能演示');
+            });
+            
+            // 初始化滚动到底部
+            scrollToBottom();
+        });
+    </script>
+</body>
+</html>

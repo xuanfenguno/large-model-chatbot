@@ -1,0 +1,4 @@
+run = "frontend/src/directory_structure_guide.md"
+is_html = true
+is_resident = false
+is_gui = false

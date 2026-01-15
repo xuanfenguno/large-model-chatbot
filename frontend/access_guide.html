@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>前端访问指南</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .card {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-left: 4px solid #3498db;
+        }
+        .url {
+            background: #e8f4fd;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            word-break: break-all;
+            margin: 10px 0;
+        }
+        .status {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            margin-top: 10px;
+        }
+        .running {
+            background: #d4edda;
+            color: #155724;
+        }
+        .note {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>前端访问指南</h1>
+        
+        <div class="card">
+            <h2>前端项目状态</h2>
+            <p><strong>状态:</strong> <span class="status running">正在运行</span></p>
+            <p><strong>端口:</strong> 3001</p>
+            <p><strong>启动时间:</strong> 2026年1月14日 16:50:03</p>
+        </div>
+        
+        <div class="card">
+            <h2>访问地址</h2>
+            <p>您可以使用以下地址访问前端应用：</p>
+            
+            <h3>主页</h3>
+            <div class="url">http://localhost:3001/</div>
+            
+            <h3>登录页面</h3>
+            <div class="url">http://localhost:3001/#/login</div>
+            
+            <h3>注册页面</h3>
+            <div class="url">http://localhost:3001/#/register</div>
+            
+            <h3>聊天页面</h3>
+            <div class="url">http://localhost:3001/#/chat</div>
+        </div>
+        
+        <div class="note">
+            <h3>重要提示</h3>
+            <p>前端项目使用Vue Router进行路由管理，因此登录和注册页面是通过hash路由访问的（URL中包含#/）。</p>
+            <p>如果您在浏览器中直接访问 http://localhost:3001/login 或 http://localhost:3001/register，可能会出现404错误。请使用上面提供的正确URL格式访问相应页面。</p>
+        </div>
+        
+        <div class="card">
+            <h2>故障排除</h2>
+            <p>如果仍然无法访问界面，请检查以下几点：</p>
+            <ol>
+                <li>确认前端服务已在端口3001上启动</li>
+                <li>确保浏览器允许加载JavaScript和CSS资源</li>
+                <li>清除浏览器缓存后重试</li>
+                <li>检查浏览器控制台是否有错误信息</li>
+                <li>确认防火墙或网络设置没有阻止本地访问</li>
+            </ol>
+        </div>
+    </div>
+</body>
+</html>

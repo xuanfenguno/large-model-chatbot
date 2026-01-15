@@ -1,0 +1,366 @@
+from rest_framework import viewsets, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from .models import Conversation, Message
+from .serializers import ConversationSerializer, MessageSerializer
+from django.db.models import Q
+import requests
+import json
+from django.contrib.auth.models import User
+from rest_framework.permissions import AllowAny
+from rest_framework.decorators import api_view, permission_classes
+from django.contrib.auth import authenticate, login
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.decorators import api_view, permission_classes
+from django.conf import settings
+import openai
+
+# 设置OpenAI API密钥
+if hasattr(settings, 'LLM_CONFIG'):
+    openai.api_key = settings.LLM_CONFIG.get('OPENAI_API_KEY')
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def health_check(request):
+    """健康检查接口"""
+    return Response({
+        'status': 'ok',
+        'message': 'AI聊天机器人服务正常运行'
+    }, status=status.HTTP_200_OK)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def login_view(request):
+    """用户登录"""
+    username = request.data.get('username')
+    password = request.data.get('password')
+    
+    user = authenticate(username=username, password=password)
+    
+    if user:
+        refresh = RefreshToken.for_user(user)
+        return Response({
+            'refresh': str(refresh),
+            'access': str(refresh.access_token),
+            'username': user.username,
+            'email': user.email
+        })
+    
+    return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def register_view(request):
+    """用户注册"""
+    username = request.data.get('username')
+    email = request.data.get('email')
+    password = request.data.get('password')
+    
+    if User.objects.filter(username=username).exists():
+        return Response({'error': 'Username already exists'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    if User.objects.filter(email=email).exists():
+        return Response({'error': 'Email already exists'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    user = User.objects.create_user(
+        username=username,
+        email=email,
+        password=password
+    )
+    
+    refresh = RefreshToken.for_user(user)
+    return Response({
+        'refresh': str(refresh),
+        'access': str(refresh.access_token),
+        'username': user.username,
+        'email': user.email
+    }, status=status.HTTP_201_CREATED)
+
+class ConversationViewSet(viewsets.ModelViewSet):
+    """会话视图集"""
+    serializer_class = ConversationSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        """获取用户的会话"""
+        return Conversation.objects.filter(user=self.request.user)
+    
+    def perform_create(self, serializer):
+        """创建会话时设置用户"""
+        serializer.save(user=self.request.user)
+    
+    @action(detail=True, methods=['get'])
+    def messages(self, request, pk=None):
+        """获取会话的消息"""
+        conversation = self.get_object()
+        messages = Message.objects.filter(conversation=conversation)
+        serializer = MessageSerializer(messages, many=True)
+        
+        # 标记未读消息为已读
+        messages.filter(role='assistant', is_read=False).update(is_read=True)
+        
+        return Response(serializer.data)
+
+
+class MessageViewSet(viewsets.ModelViewSet):
+    """消息视图集"""
+    serializer_class = MessageSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        """获取用户的消息"""
+        return Message.objects.filter(conversation__user=self.request.user)
+    
+    def perform_create(self, serializer):
+        """创建消息时设置用户"""
+        serializer.save()
+    
+    @action(detail=False, methods=['post'])
+    def chat(self, request):
+        """聊天接口（支持流式响应）"""
+        conversation_id = request.data.get('conversation_id')
+        message = request.data.get('message')
+        image_url = request.data.get('image_url')
+        model = request.data.get('model', 'gpt-3.5-turbo')  # 默认模型
+        
+        try:
+            # 创建或获取会话
+            if conversation_id:
+                conversation = Conversation.objects.get(id=conversation_id, user=request.user)
+            else:
+                # 创建新会话，使用消息前50字符作为标题
+                title = message[:50] if len(message) > 50 else message
+                conversation = Conversation.objects.create(
+                    user=request.user,
+                    title=title,
+                    model=model  # 保存使用的模型
+                )
+            
+            # 保存用户消息
+            user_message = Message.objects.create(
+                conversation=conversation,
+                role='user',
+                content=message,
+                image_url=image_url
+            )
+            
+            # 立即返回用户消息和会话信息，然后异步处理AI回复
+            response_data = {
+                'conversation_id': conversation.id,
+                'user_message': MessageSerializer(user_message).data,
+                'ai_message': None,
+                'status': 'processing'
+            }
+            
+            # 使用异步任务处理AI回复（这里简化处理，实际项目可使用Celery等）
+            try:
+                # 调用AI API
+                ai_response = self._call_ai_api(conversation, user_message, model)
+                
+                # 保存AI回复
+                ai_message = Message.objects.create(
+                    conversation=conversation,
+                    role='assistant',
+                    content=ai_response
+                )
+                
+                # 更新会话更新时间
+                conversation.save()
+                
+                response_data['ai_message'] = MessageSerializer(ai_message).data
+                response_data['status'] = 'completed'
+                
+            except Exception as e:
+                response_data['status'] = 'error'
+                response_data['error'] = str(e)
+            
+            return Response(response_data, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def _call_ai_api(self, conversation, user_message, model):
+        """调用AI API（优化请求速度）"""
+        # 构建对话历史（优化查询和处理）
+        history = []
+        
+        # 获取最近的对话历史（最多8条，减少API调用时间）
+        messages = Message.objects.filter(conversation=conversation).order_by('created_at')
+        
+        # 只保留用户和助手的消息
+        history_messages = []
+        for msg in messages:
+            if msg.role == 'user':
+                if msg.image_url:
+                    history_messages.append({
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": msg.content},
+                            {"type": "image_url", "image_url": {"url": msg.image_url}}
+                        ]
+                    })
+                else:
+                    history_messages.append({
+                        "role": "user",
+                        "content": msg.content
+                    })
+            elif msg.role == 'assistant':
+                history_messages.append({
+                    "role": "assistant",
+                    "content": msg.content
+                })
+        
+        # 最多保留8条对话历史，减少API调用负载
+        history = history_messages[-8:]
+        
+        # 根据模型类型选择API
+        if model.startswith('gpt'):
+            # OpenAI API
+            try:
+                response = openai.ChatCompletion.create(
+                    model=model,
+                    messages=history,
+                    max_tokens=2000,
+                    temperature=0.6,
+                    top_p=0.7,
+                    top_k=30,
+                    frequency_penalty=0.0,
+                    presence_penalty=0.0
+                )
+                
+                if 'choices' in response and len(response['choices']) > 0:
+                    return response['choices'][0]['message']['content']
+            except Exception as e:
+                return f"抱歉，请求OpenAI服务时发生错误：{str(e)}"
+        elif model.startswith('deepseek'):
+            # DeepSeek API
+            api_key = settings.LLM_CONFIG.get('DEEPSEEK_API_KEY')
+            if not api_key:
+                return "抱歉，DeepSeek API密钥未配置。"
+                
+            url = "https://api.deepseek.com/chat/completions"
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}"
+            }
+            
+            data = {
+                "model": model,
+                "messages": history,
+                "max_tokens": 2000,
+                "temperature": 0.6,
+                "top_p": 0.7,
+                "top_k": 30,
+                "frequency_penalty": 0.0,
+                "presence_penalty": 0.0
+            }
+            
+            try:
+                response = requests.post(url, headers=headers, data=json.dumps(data), timeout=30)
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    
+                    if 'choices' in result and len(result['choices']) > 0:
+                        return result['choices'][0]['message']['content']
+                
+                return "抱歉，我暂时无法回答您的问题。请稍后再试。"
+                
+            except requests.exceptions.Timeout:
+                return "抱歉，请求超时。请稍后再试。"
+            except requests.exceptions.RequestException as e:
+                return f"抱歉，请求DeepSeek服务时发生错误：{str(e)}"
+        elif model.startswith('qwen'):
+            # Qwen API
+            api_key = settings.LLM_CONFIG.get('QWEN_API_KEY')
+            if not api_key:
+                return "抱歉，Qwen API密钥未配置。"
+                
+            url = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}"
+            }
+            
+            data = {
+                "model": model,
+                "messages": history,
+                "max_tokens": 2000,
+                "temperature": 0.6,
+                "top_p": 0.7,
+                "top_k": 30,
+                "frequency_penalty": 0.0,
+                "presence_penalty": 0.0
+            }
+            
+            try:
+                response = requests.post(url, headers=headers, data=json.dumps(data), timeout=30)
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    
+                    if 'choices' in result and len(result['choices']) > 0:
+                        return result['choices'][0]['message']['content']
+                
+                return "抱歉，我暂时无法回答您的问题。请稍后再试。"
+                
+            except requests.exceptions.Timeout:
+                return "抱歉，请求超时。请稍后再试。"
+            except requests.exceptions.RequestException as e:
+                return f"抱歉，请求Qwen服务时发生错误：{str(e)}"
+        else:
+            # 默认使用CSDN AI API
+            url = "https://models.csdn.net/v1/chat/completions"
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer sk-oxpetfthyrbxzgxyonrmssftsbgbfhpxuhtvoihmqhotm"
+            }
+            
+            # 选择模型
+            selected_model = "qwen-vl-plus" if user_message.image_url else "Deepseek-V3"
+            
+            data = {
+                "model": selected_model,
+                "stream": False,
+                "messages": history,
+                "max_tokens": 2000,  # 减少回复长度，提升响应速度
+                "temperature": 0.6,  # 稍微降低随机性，提升回复速度
+                "top_p": 0.7,
+                "top_k": 30,  # 减少候选token数量，提升响应速度
+                "frequency_penalty": 0.0,
+                "presence_penalty": 0.0
+            }
+            
+            try:
+                # 优化超时时间
+                response = requests.post(url, headers=headers, data=json.dumps(data), timeout=30)
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    
+                    if 'choices' in result and len(result['choices']) > 0:
+                        return result['choices'][0]['message']['content']
+                
+                return "抱歉，我暂时无法回答您的问题。请稍后再试。"
+                
+            except requests.exceptions.Timeout:
+                return "抱歉，请求超时。请稍后再试。"
+            except requests.exceptions.RequestException as e:
+                return f"抱歉，请求AI服务时发生错误：{str(e)}"
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def available_models(request):
+    """返回可用的大模型列表"""
+    models = [
+        {'id': 'gpt-3.5-turbo', 'name': 'GPT-3.5 Turbo', 'provider': 'OpenAI'},
+        {'id': 'gpt-4', 'name': 'GPT-4', 'provider': 'OpenAI'},
+        {'id': 'deepseek-chat', 'name': 'DeepSeek Chat', 'provider': 'DeepSeek'},
+        {'id': 'deepseek-coder', 'name': 'DeepSeek Coder', 'provider': 'DeepSeek'},
+        {'id': 'qwen-max', 'name': 'Qwen Max', 'provider': 'Alibaba Cloud'},
+        {'id': 'qwen-plus', 'name': 'Qwen Plus', 'provider': 'Alibaba Cloud'},
+        {'id': 'qwen-turbo', 'name': 'Qwen Turbo', 'provider': 'Alibaba Cloud'}
+    ]
+    return Response(models)
