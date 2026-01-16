@@ -75,12 +75,65 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+# 尝试连接MySQL，如果失败则使用SQLite作为备选
+try:
+    import pymysql
+    pymysql.install_as_MySQLdb()
+    
+    # 首先尝试连接到MySQL以确认凭据是否正确
+    connection = pymysql.connect(
+        host=os.getenv('DB_HOST', 'localhost'),
+        port=int(os.getenv('DB_PORT', 3306)),
+        user=os.getenv('DB_USER', 'root'),
+        password=os.getenv('DB_PASSWORD', 'root123'),
+        charset='utf8mb4'
+    )
+    
+    # 检查数据库是否存在，如果不存在则尝试创建
+    with connection.cursor() as cursor:
+        # 检查数据库是否存在
+        cursor.execute("SHOW DATABASES;")
+        databases = cursor.fetchall()
+        target_db = os.getenv('DB_NAME', 'chatbot_db')
+        
+        if (target_db,) not in [db for db in databases]:
+            # 数据库不存在，尝试创建
+            try:
+                cursor.execute(f"CREATE DATABASE `{target_db}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;")
+                print(f"MySQL数据库 '{target_db}' 已创建成功!")
+            except Exception as e:
+                print(f"创建MySQL数据库 '{target_db}' 失败: {e}")
+    
+    connection.close()
+    
+    # 如果连接成功，则使用MySQL
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.mysql',
+            'NAME': os.getenv('DB_NAME', 'chatbot_db'),
+            'USER': os.getenv('DB_USER', 'root'),
+            'PASSWORD': os.getenv('DB_PASSWORD', 'root123'),
+            'HOST': os.getenv('DB_HOST', 'localhost'),
+            'PORT': os.getenv('DB_PORT', '3306'),
+            'OPTIONS': {
+                'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+                'charset': 'utf8mb4',
+            },
+            'TEST': {
+                'CHARSET': 'utf8mb4',
+                'COLLATION': 'utf8mb4_unicode_ci',
+            },
+        }
     }
-}
+except Exception as e:
+    # 如果MySQL连接失败（无论是因为模块不存在还是凭据错误），则使用SQLite
+    print(f"MySQL连接失败，将使用SQLite: {e}")
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 
 # Password validation
@@ -192,5 +245,9 @@ LLM_CONFIG = {
     'OPENAI_API_KEY': os.getenv('OPENAI_API_KEY'),
     'DEEPSEEK_API_KEY': os.getenv('DEEPSEEK_API_KEY'),
     'QWEN_API_KEY': os.getenv('QWEN_API_KEY'),
-    'DEFAULT_MODEL': 'gpt-3.5-turbo',  # 默认模型
+    'GEMINI_API_KEY': os.getenv('GEMINI_API_KEY'),
+    'KIMI_API_KEY': os.getenv('KIMI_API_KEY'),
+    'DOUBAO_API_KEY': os.getenv('DOUBAO_API_KEY'),
+    'QWEN_CODE_API_KEY': os.getenv('QWEN_CODE_API_KEY'),
+    'DEFAULT_MODEL': 'gemini-pro',  # 默认模型
 }

@@ -88,8 +88,10 @@ class ConversationViewSet(viewsets.ModelViewSet):
         return Conversation.objects.filter(user=self.request.user)
     
     def perform_create(self, serializer):
-        """创建会话时设置用户"""
-        serializer.save(user=self.request.user)
+        """创建会话时设置用户和默认模型"""
+        # 从请求中获取模型参数，如果没有则使用默认值
+        model = self.request.data.get('model', 'gpt-3.5-turbo')
+        serializer.save(user=self.request.user, model=model)
     
     @action(detail=True, methods=['get'])
     def messages(self, request, pk=None):
@@ -234,6 +236,168 @@ class MessageViewSet(viewsets.ModelViewSet):
                     return response['choices'][0]['message']['content']
             except Exception as e:
                 return f"抱歉，请求OpenAI服务时发生错误：{str(e)}"
+        elif model.startswith('gemini'):
+            # Google Gemini API
+            api_key = settings.LLM_CONFIG.get('GEMINI_API_KEY')
+            if not api_key:
+                return "抱歉，Gemini API密钥未配置。"
+                
+            import google.generativeai as genai
+            genai.configure(api_key=api_key)
+            
+            # 映射模型名称
+            if model in ['gemini-pro', 'gemini-1.0-pro']:
+                model_name = 'gemini-1.0-pro'
+            elif model in ['gemini-1.5-pro']:
+                model_name = 'gemini-1.5-pro'
+            elif model in ['gemini-ultra', 'gemini-1.0-ultra']:
+                model_name = 'gemini-1.0-ultra'
+            else:
+                model_name = 'gemini-1.0-pro'  # 默认模型
+            
+            try:
+                gemini_model = genai.GenerativeModel(model_name)
+                
+                # 将对话历史转换为Gemini格式
+                gemini_history = []
+                for msg in history:
+                    role = 'user' if msg['role'] == 'user' else 'model'
+                    content = msg['content']
+                    if isinstance(content, list):
+                        # 处理图文混合内容
+                        parts = []
+                        for item in content:
+                            if item['type'] == 'text':
+                                parts.append(item['text'])
+                            elif item['type'] == 'image_url':
+                                # 注意：Gemini需要直接的图像数据，这里只是示意
+                                # 实际应用中需要下载图像并转换为适当格式
+                                parts.append(f"[图像: {item['image_url']['url']}]")
+                        gemini_history.append({'role': role, 'parts': parts})
+                    else:
+                        gemini_history.append({'role': role, 'parts': [content]})
+                
+                # 生成内容
+                chat = gemini_model.start_chat(history=gemini_history)
+                response = chat.send_message(msg.content)
+                
+                return response.text
+            except Exception as e:
+                return f"抱歉，请求Gemini服务时发生错误：{str(e)}"
+        elif model.startswith('kimi'):
+            # Moonshot Kimi API (假设类似OpenAI接口)
+            api_key = settings.LLM_CONFIG.get('KIMI_API_KEY')
+            if not api_key:
+                return "抱歉，Kimi API密钥未配置。"
+                
+            url = "https://api.moonshot.cn/v1/chat/completions"
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}"
+            }
+            
+            data = {
+                "model": model,
+                "messages": history,
+                "max_tokens": 2000,
+                "temperature": 0.6,
+                "top_p": 0.7,
+                "top_k": 30,
+                "frequency_penalty": 0.0,
+                "presence_penalty": 0.0
+            }
+            
+            try:
+                response = requests.post(url, headers=headers, data=json.dumps(data), timeout=30)
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    
+                    if 'choices' in result and len(result['choices']) > 0:
+                        return result['choices'][0]['message']['content']
+                
+                return "抱歉，我暂时无法回答您的问题。请稍后再试。"
+                
+            except requests.exceptions.Timeout:
+                return "抱歉，请求超时。请稍后再试。"
+            except requests.exceptions.RequestException as e:
+                return f"抱歉，请求Kimi服务时发生错误：{str(e)}"
+        elif model.startswith('doubao'):
+            # 字节跳动豆包 API
+            api_key = settings.LLM_CONFIG.get('DOUBAO_API_KEY')
+            if not api_key:
+                return "抱歉，豆包API密钥未配置。"
+                
+            url = "https://ark.cn-beijing.volces.com/api/v3/chat/completions"
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}"
+            }
+            
+            data = {
+                "model": model,
+                "messages": history,
+                "max_tokens": 2000,
+                "temperature": 0.6,
+                "top_p": 0.7,
+                "top_k": 30,
+                "frequency_penalty": 0.0,
+                "presence_penalty": 0.0
+            }
+            
+            try:
+                response = requests.post(url, headers=headers, data=json.dumps(data), timeout=30)
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    
+                    if 'choices' in result and len(result['choices']) > 0:
+                        return result['choices'][0]['message']['content']
+                
+                return "抱歉，我暂时无法回答您的问题。请稍后再试。"
+                
+            except requests.exceptions.Timeout:
+                return "抱歉，请求超时。请稍后再试。"
+            except requests.exceptions.RequestException as e:
+                return f"抱歉，请求豆包服务时发生错误：{str(e)}"
+        elif model.startswith('qwen-code') or model.startswith('qwen_coder'):
+            # 针对代码的Qwen模型
+            api_key = settings.LLM_CONFIG.get('QWEN_CODE_API_KEY')
+            if not api_key:
+                return "抱歉，Qwen_Code API密钥未配置。"
+                
+            url = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}"
+            }
+            
+            data = {
+                "model": model,
+                "messages": history,
+                "max_tokens": 2000,
+                "temperature": 0.6,
+                "top_p": 0.7,
+                "top_k": 30,
+                "frequency_penalty": 0.0,
+                "presence_penalty": 0.0
+            }
+            
+            try:
+                response = requests.post(url, headers=headers, data=json.dumps(data), timeout=30)
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    
+                    if 'choices' in result and len(result['choices']) > 0:
+                        return result['choices'][0]['message']['content']
+                
+                return "抱歉，我暂时无法回答您的问题。请稍后再试。"
+                
+            except requests.exceptions.Timeout:
+                return "抱歉，请求超时。请稍后再试。"
+            except requests.exceptions.RequestException as e:
+                return f"抱歉，请求Qwen_Code服务时发生错误：{str(e)}"
         elif model.startswith('deepseek'):
             # DeepSeek API
             api_key = settings.LLM_CONFIG.get('DEEPSEEK_API_KEY')
@@ -357,6 +521,12 @@ def available_models(request):
     models = [
         {'id': 'gpt-3.5-turbo', 'name': 'GPT-3.5 Turbo', 'provider': 'OpenAI'},
         {'id': 'gpt-4', 'name': 'GPT-4', 'provider': 'OpenAI'},
+        {'id': 'gemini-pro', 'name': 'Gemini Pro', 'provider': 'Google'},
+        {'id': 'gemini-1.5-pro', 'name': 'Gemini 1.5 Pro', 'provider': 'Google'},
+        {'id': 'kimi-large', 'name': 'Kimi Large', 'provider': 'Moonshot AI'},
+        {'id': 'doubao-pro', 'name': '豆包Pro', 'provider': 'ByteDance'},
+        {'id': 'qwen-code', 'name': 'Qwen-Code', 'provider': 'Alibaba Cloud'},
+        {'id': 'qwen-code-coder', 'name': 'Qwen-Code-Coder', 'provider': 'Alibaba Cloud'},
         {'id': 'deepseek-chat', 'name': 'DeepSeek Chat', 'provider': 'DeepSeek'},
         {'id': 'deepseek-coder', 'name': 'DeepSeek Coder', 'provider': 'DeepSeek'},
         {'id': 'qwen-max', 'name': 'Qwen Max', 'provider': 'Alibaba Cloud'},

@@ -18,7 +18,7 @@ class ConversationSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Conversation
-        fields = ['id', 'title', 'created_at', 'updated_at', 'unread_count', 'last_message']
+        fields = ['id', 'title', 'created_at', 'updated_at', 'unread_count', 'last_message', 'model']  # 添加model字段
     
     def get_unread_count(self, obj):
         """获取未读消息数"""

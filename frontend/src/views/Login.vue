@@ -200,7 +200,7 @@ const loginRules = reactive({
   ],
   password: [
     { required: true, message: '请输入密码', trigger: 'blur' },
-    { min: 6, max: 20, message: '密码长度在6到20个字符之间', trigger: 'blur' }
+    { min: 6, message: '密码长度至少6个字符', trigger: 'blur' }
   ]
 })
 
@@ -218,124 +218,132 @@ const registerRules = reactive({
     { min: 3, max: 20, message: '用户名长度在3到20个字符之间', trigger: 'blur' }
   ],
   email: [
-    { required: true, message: '请输入邮箱', trigger: 'blur' },
-    { type: 'email', message: '请输入有效的邮箱地址', trigger: 'blur' }
+    { required: true, message: '请输入邮箱地址', trigger: 'blur' },
+    { type: 'email', message: '请输入正确的邮箱地址', trigger: 'blur' }
   ],
   password: [
     { required: true, message: '请输入密码', trigger: 'blur' },
-    { min: 6, max: 20, message: '密码长度在6到20个字符之间', trigger: 'blur' }
+    { min: 6, message: '密码长度至少6个字符', trigger: 'blur' }
   ],
   confirmPassword: [
     { required: true, message: '请确认密码', trigger: 'blur' },
     { 
       validator: (rule, value, callback) => {
-        if (value === '') {
-          callback(new Error('请确认密码'))
-        } else if (value !== registerForm.password) {
+        if (value !== registerForm.password) {
           callback(new Error('两次输入的密码不一致'))
         } else {
           callback()
         }
       }, 
-      trigger: 'blur'
+      trigger: 'blur' 
     }
   ]
 })
 
-// 检查路由参数，如果指定了tab为register，则切换到注册表单
-onMounted(() => {
-  if (route.query.tab === 'register') {
-    isRegisterForm.value = true
-  }
-})
-
-const handleLogin = async () => {
-  try {
-    const valid = await loginFormRef.value?.validate()
-    if (!valid) return
-
-    isLoading.value = true
-    await authStore.login(loginForm.username, loginForm.password)
-    
-    const redirect = router.currentRoute.value.query.redirect || '/chat'
-    router.push(redirect)
-  } catch (error) {
-    console.error('登录失败:', error)
-    ElMessage.error(error.message || '登录失败')
-  } finally {
-    isLoading.value = false
-  }
+// 切换到登录表单
+const switchToLogin = () => {
+  isRegisterForm.value = false
+  // 清空之前的查询参数
+  router.replace({ path: '/login', query: {} })
 }
 
+// 切换到注册表单
+const switchToRegister = () => {
+  isRegisterForm.value = true
+  // 设置查询参数以记住选项卡状态
+  router.replace({ path: '/login', query: { tab: 'register' } })
+}
+
+// 处理登录
+const handleLogin = async () => {
+  await loginFormRef.value.validate(async (valid) => {
+    if (valid) {
+      try {
+        isLoading.value = true
+        const success = await authStore.login(loginForm.username, loginForm.password)
+        if (success) {
+          ElMessage.success('登录成功')
+          router.push('/')
+        } else {
+          ElMessage.error('登录失败，请检查用户名和密码')
+        }
+      } catch (error) {
+        console.error('登录错误:', error)
+        ElMessage.error('登录失败，请稍后重试')
+      } finally {
+        isLoading.value = false
+      }
+    }
+  })
+}
+
+// 处理注册
 const handleRegister = async () => {
   if (!agreeTerms.value) {
     ElMessage.warning('请先同意用户协议和隐私政策')
     return
   }
 
-  try {
-    const valid = await registerFormRef.value?.validate()
-    if (!valid) return
+  await registerFormRef.value.validate(async (valid) => {
+    if (valid) {
+      try {
+        isLoading.value = true
+        const success = await authStore.register(
+          registerForm.username,
+          registerForm.email,
+          registerForm.password
+        )
+        if (success) {
+          ElMessage.success('注册成功')
+          // 自动切换到登录表单
+          isRegisterForm.value = false
+          router.replace({ path: '/login', query: { tab: 'login' } })
+        } else {
+          ElMessage.error('注册失败，请稍后重试')
+        }
+      } catch (error) {
+        console.error('注册错误:', error)
+        ElMessage.error('注册失败，请稍后重试')
+      } finally {
+        isLoading.value = false
+      }
+    }
+  })
+}
 
-    isLoading.value = true
-    await authStore.register(
-      registerForm.username,
-      registerForm.email,
-      registerForm.password
-    )
-    
-    ElMessage.success('注册成功，请登录')
-    
-    switchToLogin()
-  } catch (error) {
-    console.error('注册失败:', error)
-    ElMessage.error(error.message || '注册失败')
-  } finally {
-    isLoading.value = false
+// 初始化时根据查询参数决定显示哪个表单
+onMounted(() => {
+  if (route.query.tab === 'register') {
+    isRegisterForm.value = true
+  } else {
+    isRegisterForm.value = false
   }
-}
-
-const switchToLogin = () => {
-  isRegisterForm.value = false
-  // 更新URL参数
-  router.replace({ query: { ...route.query, tab: undefined } })
-}
-
-const switchToRegister = () => {
-  isRegisterForm.value = true
-  // 更新URL参数
-  router.replace({ query: { ...route.query, tab: 'register' } })
-}
+})
+</script>
 
 <style scoped>
 .login-container {
-  position: relative;
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   padding: 20px;
-  box-sizing: border-box;
 }
 
 .login-card {
-  position: relative;
-  z-index: 1;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  border-radius: 20px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-  overflow: hidden;
   width: 100%;
   max-width: 420px;
-  padding: 0;
+  background: white;
+  border-radius: 20px;
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  position: relative;
 }
 
 .form-switcher {
   display: flex;
-  background: #f5f5f5;
-  border-bottom: 1px solid #eee;
+  background: #f5f7fa;
 }
 
 .switch-btn {
@@ -345,7 +353,7 @@ const switchToRegister = () => {
   background: transparent;
   font-size: 16px;
   font-weight: 500;
-  color: #666;
+  color: #909399;
   cursor: pointer;
   transition: all 0.3s ease;
   position: relative;
@@ -359,19 +367,16 @@ const switchToRegister = () => {
 .switch-btn.active::after {
   content: '';
   position: absolute;
-  bottom: -1px;
+  bottom: 0;
   left: 0;
   right: 0;
-  height: 2px;
+  height: 3px;
   background: #409eff;
+  border-radius: 3px 3px 0 0;
 }
 
 .form-content {
   padding: 30px;
-}
-
-.form-wrapper {
-  width: 100%;
 }
 
 .form-header {
@@ -383,8 +388,8 @@ const switchToRegister = () => {
   font-size: 24px;
   font-weight: 600;
   color: #303133;
-  margin-bottom: 8px;
-  line-height: 1.3;
+  margin: 0 0 8px 0;
+  line-height: 1.2;
 }
 
 .form-subtitle {
@@ -418,7 +423,10 @@ const switchToRegister = () => {
 
 .login-form :deep(.el-input__wrapper):focus-within,
 .register-form :deep(.el-input__wrapper):focus-within {
-  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.2);
+  box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.4);
+  border-color: #409eff !important;
+  outline: none;
+  transform: translateY(-1px);
 }
 
 .submit-btn {
@@ -588,3 +596,4 @@ const switchToRegister = () => {
     padding: 14px 0;
   }
 }
+</style>
