@@ -1,0 +1,18 @@
+@echo off
+echo === 启动基于大模型的聊天机器人应用 ===
+
+REM 启动后端服务器
+echo 启动后端服务器...
+start cmd /k "cd /d %~dp0\backend && python manage.py runserver 8000"
+
+REM 等待几秒让后端启动
+timeout /t 5 /nobreak >nul
+
+REM 启动前端服务器
+echo 启动前端服务器...
+start cmd /k "cd /d %~dp0\frontend && npm run dev"
+
+echo === 应用已启动 ===
+echo 前端地址: http://localhost:3000
+echo 后端地址: http://localhost:8000
+pause

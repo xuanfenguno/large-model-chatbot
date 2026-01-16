@@ -22,7 +22,7 @@ service.interceptors.request.use(
     // 从localStorage获取token
     const token = localStorage.getItem('token')
     if (token) {
-      config.headers.Authorization = `Token ${token}`
+      config.headers.Authorization = `Bearer ${token}`
     }
 
     // 为每个请求创建取消令牌

@@ -11,30 +11,39 @@ export const useAuthStore = defineStore('auth', () => {
   // 登录
   const login = async (username, password) => {
     try {
-      const response = await axios.post('/api/v1/login/', {
+      // 清除可能存在的旧token，避免干扰登录请求
+      delete axios.defaults.headers.Authorization
+      
+      const response = await axios.post('/login/', {
         username,
         password
       })
 
-      const { access: newToken, username: usernameData, email: emailData } = response.data
-      
+      const { access: newToken, username: usernameData, email: emailData } = response
+
+      // 验证必需字段是否存在
+      if (!newToken || !usernameData) {
+        throw new Error('登录响应缺少必需字段')
+      }
+
       token.value = newToken
       user.value = { username: usernameData, email: emailData }
-      
+
       localStorage.setItem('token', newToken)
       localStorage.setItem('user', JSON.stringify({ username: usernameData, email: emailData }))
-      
+
       axios.defaults.headers.Authorization = `Bearer ${newToken}`
-      
+
       ElMessage({
         message: '登录成功',
         type: 'success'
       })
-      
+
       return true
     } catch (error) {
+      console.error('登录错误详情:', error)
       ElMessage({
-        message: error.response?.data?.error || '登录失败',
+        message: error.response?.data?.error || error.message || '登录失败',
         type: 'error'
       })
       return false
@@ -44,11 +53,21 @@ export const useAuthStore = defineStore('auth', () => {
   // 注册
   const register = async (username, email, password) => {
     try {
-      const response = await axios.post('/api/v1/register/', {
+      const response = await axios.post('/register/', {
         username,
         email,
         password
       })
+
+      const { access: newToken, username: usernameData, email: emailData } = response.data
+
+      token.value = newToken
+      user.value = { username: usernameData, email: emailData }
+
+      localStorage.setItem('token', newToken)
+      localStorage.setItem('user', JSON.stringify({ username: usernameData, email: emailData }))
+
+      axios.defaults.headers.Authorization = `Bearer ${newToken}`
 
       ElMessage({
         message: '注册成功',
@@ -116,3 +135,4 @@ export const useAuthStore = defineStore('auth', () => {
 }, {
   persist: true
 })
+
