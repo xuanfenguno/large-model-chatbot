@@ -77,15 +77,21 @@
             <div class="social-login">
               <div class="divider">其他登录方式</div>
               <div class="social-icons">
-                <el-button class="social-btn wechat" circle>
-                  <i class="fa-brands fa-weixin"></i>
-                </el-button>
-                <el-button class="social-btn qq" circle>
-                  <i class="fa-brands fa-qq"></i>
-                </el-button>
-                <el-button class="social-btn github" circle>
-                  <i class="fa-brands fa-github"></i>
-                </el-button>
+                <el-tooltip content="微信登录" placement="top">
+                  <el-button class="social-btn wechat" circle @click="handleWechatLogin">
+                    <el-icon size="20"><ChatDotRound /></el-icon>
+                  </el-button>
+                </el-tooltip>
+                <el-tooltip content="QQ登录" placement="top">
+                  <el-button class="social-btn qq" circle @click="handleQQLogin">
+                    <el-icon size="20"><ChatDotSquare /></el-icon>
+                  </el-button>
+                </el-tooltip>
+                <el-tooltip content="GitHub登录" placement="top">
+                  <el-button class="social-btn github" circle @click="handleGithubLogin">
+                    <el-icon size="20"><Platform /></el-icon>
+                  </el-button>
+                </el-tooltip>
               </div>
             </div>
           </div>
@@ -163,7 +169,7 @@
 
               <div class="form-footer">
                 <el-checkbox v-model="agreeTerms" class="terms-checkbox">
-                  我同意 <el-link type="primary" :underline="false">用户协议</el-link> 和 <el-link type="primary" :underline="false">隐私政策</el-link>
+                  我同意 <span class="link-text" @click="openUserAgreement">用户协议</span> 和 <span class="link-text" @click="openPrivacyPolicy">隐私政策</span>
                 </el-checkbox>
               </div>
             </el-form>
@@ -179,6 +185,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessage } from 'element-plus'
+import { ChatDotRound, ChatDotSquare, Platform } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -311,6 +318,214 @@ const handleRegister = async () => {
   })
 }
 
+// 处理微信登录
+const handleWechatLogin = async () => {
+  try {
+    // 显示加载状态
+    const loading = ElLoading.service({
+      lock: true,
+      text: '正在获取微信授权...',
+      background: 'rgba(0, 0, 0, 0.7)'
+    })
+    
+    // 调用后端API获取微信授权URL
+    const response = await axios.get('/api/v1/auth/wechat/')
+    const authUrl = response.data.auth_url
+    
+    // 关闭加载提示
+    loading.close()
+    
+    // 跳转到微信授权页面
+    window.location.href = authUrl
+    
+  } catch (error) {
+    console.error('微信登录错误:', error)
+    ElMessage.error('微信登录失败，请稍后重试')
+  }
+}
+
+// 处理QQ登录
+const handleQQLogin = async () => {
+  try {
+    // 显示加载状态
+    const loading = ElLoading.service({
+      lock: true,
+      text: '正在获取QQ授权...',
+      background: 'rgba(0, 0, 0, 0.7)'
+    })
+    
+    // 调用后端API获取QQ授权URL
+    const response = await axios.get('/api/v1/auth/qq/')
+    const authUrl = response.data.auth_url
+    
+    // 关闭加载提示
+    loading.close()
+    
+    // 跳转到QQ授权页面
+    window.location.href = authUrl
+    
+  } catch (error) {
+    console.error('QQ登录错误:', error)
+    ElMessage.error('QQ登录失败，请稍后重试')
+  }
+}
+
+// 处理GitHub登录
+const handleGithubLogin = async () => {
+  try {
+    // 显示加载状态
+    const loading = ElLoading.service({
+      lock: true,
+      text: '正在获取GitHub授权...',
+      background: 'rgba(0, 0, 0, 0.7)'
+    })
+    
+    // 调用后端API获取GitHub授权URL
+    const response = await axios.get('/api/v1/auth/github/')
+    const authUrl = response.data.auth_url
+    
+    // 关闭加载提示
+    loading.close()
+    
+    // 跳转到GitHub授权页面
+    window.location.href = authUrl
+    
+  } catch (error) {
+    console.error('GitHub登录错误:', error)
+    ElMessage.error('GitHub登录失败，请稍后重试')
+  }
+}
+
+// 处理微信登录回调
+const handleWechatCallback = async () => {
+  // 检查URL中是否有微信回调参数
+  const urlParams = new URLSearchParams(window.location.search)
+  const code = urlParams.get('code')
+  const state = urlParams.get('state')
+  
+  if (code && state) {
+    try {
+      const loading = ElLoading.service({
+        lock: true,
+        text: '正在处理微信登录...',
+        background: 'rgba(0, 0, 0, 0.7)'
+      })
+      
+      // 调用后端处理微信回调
+      const response = await axios.get(`/api/v1/auth/wechat/callback/?code=${code}&state=${state}`)
+      const { access: token, username, nickname, avatar, provider } = response.data
+      
+      // 保存用户信息和token
+      authStore.token = token
+      authStore.user = { username, email: username, nickname, avatar, provider }
+      
+      localStorage.setItem('token', token)
+      localStorage.setItem('user', JSON.stringify({ username, email: username, nickname, avatar, provider }))
+      
+      axios.defaults.headers.Authorization = `Bearer ${token}`
+      
+      loading.close()
+      
+      ElMessage.success(`微信登录成功！欢迎 ${nickname}`)
+      router.push('/')
+      
+    } catch (error) {
+      console.error('微信登录回调错误:', error)
+      ElMessage.error('微信登录失败，请稍后重试')
+    }
+  }
+}
+
+// 处理QQ登录回调
+const handleQQCallback = async () => {
+  // 检查URL中是否有QQ回调参数
+  const urlParams = new URLSearchParams(window.location.search)
+  const code = urlParams.get('code')
+  const state = urlParams.get('state')
+  
+  if (code && state) {
+    try {
+      const loading = ElLoading.service({
+        lock: true,
+        text: '正在处理QQ登录...',
+        background: 'rgba(0, 0, 0, 0.7)'
+      })
+      
+      // 调用后端处理QQ回调
+      const response = await axios.get(`/api/v1/auth/qq/callback/?code=${code}&state=${state}`)
+      const { access: token, username, nickname, avatar, provider } = response.data
+      
+      // 保存用户信息和token
+      authStore.token = token
+      authStore.user = { username, email: username, nickname, avatar, provider }
+      
+      localStorage.setItem('token', token)
+      localStorage.setItem('user', JSON.stringify({ username, email: username, nickname, avatar, provider }))
+      
+      axios.defaults.headers.Authorization = `Bearer ${token}`
+      
+      loading.close()
+      
+      ElMessage.success(`QQ登录成功！欢迎 ${nickname}`)
+      router.push('/')
+      
+    } catch (error) {
+      console.error('QQ登录回调错误:', error)
+      ElMessage.error('QQ登录失败，请稍后重试')
+    }
+  }
+}
+
+// 处理GitHub登录回调
+const handleGithubCallback = async () => {
+  // 检查URL中是否有GitHub回调参数
+  const urlParams = new URLSearchParams(window.location.search)
+  const code = urlParams.get('code')
+  const state = urlParams.get('state')
+  
+  if (code && state) {
+    try {
+      const loading = ElLoading.service({
+        lock: true,
+        text: '正在处理GitHub登录...',
+        background: 'rgba(0, 0, 0, 0.7)'
+      })
+      
+      // 调用后端处理GitHub回调
+      const response = await axios.get(`/api/v1/auth/github/callback/?code=${code}&state=${state}`)
+      const { access: token, username, nickname, avatar, provider } = response.data
+      
+      // 保存用户信息和token
+      authStore.token = token
+      authStore.user = { username, email: username, nickname, avatar, provider }
+      
+      localStorage.setItem('token', token)
+      localStorage.setItem('user', JSON.stringify({ username, email: username, nickname, avatar, provider }))
+      
+      axios.defaults.headers.Authorization = `Bearer ${token}`
+      
+      loading.close()
+      
+      ElMessage.success(`GitHub登录成功！欢迎 ${nickname}`)
+      router.push('/')
+      
+    } catch (error) {
+      console.error('GitHub登录回调错误:', error)
+      ElMessage.error('GitHub登录失败，请稍后重试')
+    }
+  }
+}
+
+// 打开用户协议
+const openUserAgreement = () => {
+  router.push('/user-agreement')
+}
+
+// 打开隐私政策
+const openPrivacyPolicy = () => {
+  router.push('/privacy-policy')
+}
+
 // 初始化时根据查询参数决定显示哪个表单
 onMounted(() => {
   if (route.query.tab === 'register') {
@@ -318,6 +533,11 @@ onMounted(() => {
   } else {
     isRegisterForm.value = false
   }
+  
+  // 检查是否需要处理各种OAuth登录回调
+  handleWechatCallback()
+  handleQQCallback()
+  handleGithubCallback()
 })
 </script>
 
@@ -429,6 +649,20 @@ onMounted(() => {
   transform: translateY(-1px);
 }
 
+/* 设置输入框字体颜色 */
+.login-form :deep(.el-input__inner),
+.register-form :deep(.el-input__inner) {
+  color: #303133 !important;
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.login-form :deep(.el-input__inner)::placeholder,
+.register-form :deep(.el-input__inner)::placeholder {
+  color: #909399 !important;
+  opacity: 1;
+}
+
 .submit-btn {
   width: 100%;
   height: 48px;
@@ -468,6 +702,35 @@ onMounted(() => {
 
 .terms-checkbox {
   font-size: 13px;
+  color: #606266 !important;
+}
+
+/* 复选框方框样式 */
+.terms-checkbox :deep(.el-checkbox__inner) {
+  border: 2px solid #dcdfe6 !important;
+  width: 16px;
+  height: 16px;
+}
+
+.terms-checkbox :deep(.el-checkbox__inner:hover) {
+  border-color: #409eff !important;
+}
+
+.terms-checkbox :deep(.el-checkbox__input.is-checked .el-checkbox__inner) {
+  background-color: #409eff !important;
+  border-color: #409eff !important;
+}
+
+.terms-checkbox .link-text {
+  color: #409eff !important;
+  cursor: pointer;
+  text-decoration: none;
+  transition: color 0.3s ease;
+}
+
+.terms-checkbox .link-text:hover {
+  color: #66b1ff !important;
+  text-decoration: underline;
 }
 
 .social-login {
@@ -483,55 +746,106 @@ onMounted(() => {
   margin-bottom: 20px;
 }
 
-.divider::before {
-  content: '';
+.divider::before,
+.divider::after {
+  content: "";
   position: absolute;
   top: 50%;
-  left: 0;
-  right: 0;
+  width: 40%;
   height: 1px;
-  background: #ebeef5;
-  z-index: 1;
+  background-color: #e4e7ed;
 }
 
-.divider span {
-  position: relative;
-  z-index: 2;
-  background: white;
-  padding: 0 15px;
+.divider::before {
+  left: 0;
+}
+
+.divider::after {
+  right: 0;
 }
 
 .social-icons {
   display: flex;
   justify-content: center;
-  gap: 15px;
+  gap: 16px;
 }
 
 .social-btn {
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 48px;
+  border: 1px solid #e4e7ed;
+  background-color: #fff;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid #ebeef5;
-  transition: all 0.3s ease;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+
+.social-btn::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+  transition: left 0.5s;
+}
+
+.social-btn:hover::before {
+  left: 100%;
 }
 
 .social-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
+
+.social-btn:active {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
 }
 
 .social-btn.wechat {
   color: #1aad19;
+  border-color: #1aad19;
+}
+
+.social-btn.wechat:hover {
+  background-color: #1aad19;
+  color: white;
 }
 
 .social-btn.qq {
   color: #12b7f5;
+  border-color: #12b7f5;
+}
+
+.social-btn.qq:hover {
+  background-color: #12b7f5;
+  color: white;
 }
 
 .social-btn.github {
   color: #333;
+  border-color: #333;
+}
+
+.social-btn.github:hover {
+  background-color: #333;
+  color: white;
+}
+
+.social-btn i {
+  font-size: 20px;
+  transition: transform 0.3s ease;
+}
+
+.social-btn:hover i {
+  transform: scale(1.1);
 }
 
 /* 动画效果 */

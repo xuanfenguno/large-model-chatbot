@@ -38,6 +38,24 @@ const routes = [
       requiresAuth: true,
       title: '聊天'
     }
+  },
+  {
+    path: '/user-agreement',
+    name: 'UserAgreement',
+    component: () => import('../views/UserAgreement.vue'),
+    meta: {
+      requiresAuth: false,
+      title: '用户协议'
+    }
+  },
+  {
+    path: '/privacy-policy',
+    name: 'PrivacyPolicy',
+    component: () => import('../views/PrivacyPolicy.vue'),
+    meta: {
+      requiresAuth: false,
+      title: '隐私政策'
+    }
   }
 ]
 

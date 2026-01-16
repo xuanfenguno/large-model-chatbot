@@ -251,3 +251,24 @@ LLM_CONFIG = {
     'QWEN_CODE_API_KEY': os.getenv('QWEN_CODE_API_KEY'),
     'DEFAULT_MODEL': 'gemini-pro',  # 默认模型
 }
+
+# 微信开放平台配置
+WECHAT_CONFIG = {
+    'APP_ID': os.getenv('WECHAT_APP_ID', 'your_wechat_app_id'),
+    'APP_SECRET': os.getenv('WECHAT_APP_SECRET', 'your_wechat_app_secret'),
+    'REDIRECT_URI': os.getenv('WECHAT_REDIRECT_URI', 'http://127.0.0.1:8000/api/v1/auth/wechat/callback/'),
+}
+
+# QQ互联配置
+QQ_CONFIG = {
+    'APP_ID': os.getenv('QQ_APP_ID', 'your_qq_app_id'),
+    'APP_KEY': os.getenv('QQ_APP_KEY', 'your_qq_app_key'),
+    'REDIRECT_URI': os.getenv('QQ_REDIRECT_URI', 'http://127.0.0.1:8000/api/v1/auth/qq/callback/'),
+}
+
+# GitHub OAuth配置
+GITHUB_CONFIG = {
+    'CLIENT_ID': os.getenv('GITHUB_CLIENT_ID', 'your_github_client_id'),
+    'CLIENT_SECRET': os.getenv('GITHUB_CLIENT_SECRET', 'your_github_client_secret'),
+    'REDIRECT_URI': os.getenv('GITHUB_REDIRECT_URI', 'http://127.0.0.1:8000/api/v1/auth/github/callback/'),
+}

@@ -534,3 +534,364 @@ def available_models(request):
         {'id': 'qwen-turbo', 'name': 'Qwen Turbo', 'provider': 'Alibaba Cloud'}
     ]
     return Response(models)
+
+
+# 微信OAuth登录相关功能
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def wechat_auth_url(request):
+    """获取微信授权URL"""
+    # 微信开放平台配置
+    app_id = settings.WECHAT_CONFIG.get('APP_ID', 'your_wechat_app_id')
+    redirect_uri = settings.WECHAT_CONFIG.get('REDIRECT_URI', 'http://127.0.0.1:8000/api/v1/auth/wechat/callback/')
+    
+    # 生成state参数用于防止CSRF攻击
+    import secrets
+    state = secrets.token_urlsafe(16)
+    request.session['wechat_state'] = state
+    
+    # 构建微信授权URL
+    auth_url = (
+        f"https://open.weixin.qq.com/connect/qrconnect?"
+        f"appid={app_id}&"
+        f"redirect_uri={redirect_uri}&"
+        f"response_type=code&"
+        f"scope=snsapi_login&"
+        f"state={state}#wechat_redirect"
+    )
+    
+    return Response({'auth_url': auth_url})
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def wechat_auth_callback(request):
+    """微信授权回调处理"""
+    code = request.GET.get('code')
+    state = request.GET.get('state')
+    
+    # 验证state参数
+    if not code or not state or state != request.session.get('wechat_state'):
+        return Response({'error': '无效的授权请求'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # 清除session中的state
+    request.session.pop('wechat_state', None)
+    
+    try:
+        # 通过code获取access_token
+        app_id = settings.WECHAT_CONFIG.get('APP_ID')
+        app_secret = settings.WECHAT_CONFIG.get('APP_SECRET')
+        
+        token_url = f"https://api.weixin.qq.com/sns/oauth2/access_token?"
+        token_params = {
+            'appid': app_id,
+            'secret': app_secret,
+            'code': code,
+            'grant_type': 'authorization_code'
+        }
+        
+        token_response = requests.get(token_url, params=token_params, timeout=10)
+        token_data = token_response.json()
+        
+        if 'errcode' in token_data:
+            return Response({'error': f"微信授权失败: {token_data.get('errmsg', '未知错误')}"}, 
+                          status=status.HTTP_400_BAD_REQUEST)
+        
+        access_token = token_data['access_token']
+        openid = token_data['openid']
+        
+        # 获取用户信息
+        user_info_url = f"https://api.weixin.qq.com/sns/userinfo?"
+        user_info_params = {
+            'access_token': access_token,
+            'openid': openid
+        }
+        
+        user_info_response = requests.get(user_info_url, params=user_info_params, timeout=10)
+        user_info = user_info_response.json()
+        
+        if 'errcode' in user_info:
+            return Response({'error': f"获取用户信息失败: {user_info.get('errmsg', '未知错误')}"}, 
+                          status=status.HTTP_400_BAD_REQUEST)
+        
+        # 创建或获取用户
+        username = f"wechat_{openid}"
+        nickname = user_info.get('nickname', '微信用户')
+        avatar = user_info.get('headimgurl', '')
+        
+        # 查找是否已有微信用户
+        try:
+            user = User.objects.get(username=username)
+        except User.DoesNotExist:
+            # 创建新用户
+            user = User.objects.create_user(
+                username=username,
+                email=f"{username}@wechat.com",
+                password=secrets.token_urlsafe(32)  # 随机密码
+            )
+        
+        # 生成JWT token
+        refresh = RefreshToken.for_user(user)
+        
+        return Response({
+            'refresh': str(refresh),
+            'access': str(refresh.access_token),
+            'username': user.username,
+            'nickname': nickname,
+            'avatar': avatar,
+            'provider': 'wechat'
+        })
+        
+    except Exception as e:
+        return Response({'error': f"微信登录处理失败: {str(e)}"}, 
+                      status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# QQ OAuth登录相关功能
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def qq_auth_url(request):
+    """获取QQ授权URL"""
+    app_id = settings.QQ_CONFIG.get('APP_ID', 'your_qq_app_id')
+    redirect_uri = settings.QQ_CONFIG.get('REDIRECT_URI', 'http://127.0.0.1:8000/api/v1/auth/qq/callback/')
+    
+    # 生成state参数用于防止CSRF攻击
+    import secrets
+    state = secrets.token_urlsafe(16)
+    request.session['qq_state'] = state
+    
+    # 构建QQ授权URL
+    auth_url = (
+        f"https://graph.qq.com/oauth2.0/authorize?"
+        f"response_type=code&"
+        f"client_id={app_id}&"
+        f"redirect_uri={redirect_uri}&"
+        f"state={state}&"
+        f"scope=get_user_info"
+    )
+    
+    return Response({'auth_url': auth_url})
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def qq_auth_callback(request):
+    """QQ授权回调处理"""
+    code = request.GET.get('code')
+    state = request.GET.get('state')
+    
+    # 验证state参数
+    if not code or not state or state != request.session.get('qq_state'):
+        return Response({'error': '无效的授权请求'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # 清除session中的state
+    request.session.pop('qq_state', None)
+    
+    try:
+        app_id = settings.QQ_CONFIG.get('APP_ID')
+        app_key = settings.QQ_CONFIG.get('APP_KEY')
+        redirect_uri = settings.QQ_CONFIG.get('REDIRECT_URI')
+        
+        # 通过code获取access_token
+        token_url = "https://graph.qq.com/oauth2.0/token"
+        token_params = {
+            'grant_type': 'authorization_code',
+            'client_id': app_id,
+            'client_secret': app_key,
+            'code': code,
+            'redirect_uri': redirect_uri
+        }
+        
+        token_response = requests.get(token_url, params=token_params, timeout=10)
+        token_text = token_response.text
+        
+        # 解析access_token (QQ返回的是text格式: access_token=YOUR_ACCESS_TOKEN&expires_in=7776000)
+        if 'access_token' not in token_text:
+            return Response({'error': '获取access_token失败'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        access_token = token_text.split('access_token=')[1].split('&')[0]
+        
+        # 获取openid
+        openid_url = "https://graph.qq.com/oauth2.0/me"
+        openid_params = {'access_token': access_token}
+        
+        openid_response = requests.get(openid_url, params=openid_params, timeout=10)
+        openid_text = openid_response.text
+        
+        # 解析openid (返回格式: callback( {"client_id":"YOUR_APP_ID","openid":"YOUR_OPENID"} ))
+        import json
+        openid_data = json.loads(openid_text.replace('callback(', '').replace(');', ''))
+        openid = openid_data.get('openid')
+        
+        if not openid:
+            return Response({'error': '获取openid失败'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 获取用户信息
+        user_info_url = "https://graph.qq.com/user/get_user_info"
+        user_info_params = {
+            'access_token': access_token,
+            'oauth_consumer_key': app_id,
+            'openid': openid
+        }
+        
+        user_info_response = requests.get(user_info_url, params=user_info_params, timeout=10)
+        user_info = user_info_response.json()
+        
+        if user_info.get('ret') != 0:
+            return Response({'error': f"获取用户信息失败: {user_info.get('msg', '未知错误')}"}, 
+                          status=status.HTTP_400_BAD_REQUEST)
+        
+        # 创建或获取用户
+        username = f"qq_{openid}"
+        nickname = user_info.get('nickname', 'QQ用户')
+        avatar = user_info.get('figureurl_qq_2', user_info.get('figureurl_qq_1', ''))
+        
+        # 查找是否已有QQ用户
+        try:
+            user = User.objects.get(username=username)
+        except User.DoesNotExist:
+            # 创建新用户
+            user = User.objects.create_user(
+                username=username,
+                email=f"{username}@qq.com",
+                password=secrets.token_urlsafe(32)  # 随机密码
+            )
+        
+        # 生成JWT token
+        refresh = RefreshToken.for_user(user)
+        
+        return Response({
+            'refresh': str(refresh),
+            'access': str(refresh.access_token),
+            'username': user.username,
+            'nickname': nickname,
+            'avatar': avatar,
+            'provider': 'qq'
+        })
+        
+    except Exception as e:
+        return Response({'error': f"QQ登录处理失败: {str(e)}"}, 
+                      status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# GitHub OAuth登录相关功能
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def github_auth_url(request):
+    """获取GitHub授权URL"""
+    client_id = settings.GITHUB_CONFIG.get('CLIENT_ID', 'your_github_client_id')
+    redirect_uri = settings.GITHUB_CONFIG.get('REDIRECT_URI', 'http://127.0.0.1:8000/api/v1/auth/github/callback/')
+    
+    # 生成state参数用于防止CSRF攻击
+    import secrets
+    state = secrets.token_urlsafe(16)
+    request.session['github_state'] = state
+    
+    # 构建GitHub授权URL
+    auth_url = (
+        f"https://github.com/login/oauth/authorize?"
+        f"client_id={client_id}&"
+        f"redirect_uri={redirect_uri}&"
+        f"state={state}&"
+        f"scope=user:email"
+    )
+    
+    return Response({'auth_url': auth_url})
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def github_auth_callback(request):
+    """GitHub授权回调处理"""
+    code = request.GET.get('code')
+    state = request.GET.get('state')
+    
+    # 验证state参数
+    if not code or not state or state != request.session.get('github_state'):
+        return Response({'error': '无效的授权请求'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # 清除session中的state
+    request.session.pop('github_state', None)
+    
+    try:
+        client_id = settings.GITHUB_CONFIG.get('CLIENT_ID')
+        client_secret = settings.GITHUB_CONFIG.get('CLIENT_SECRET')
+        redirect_uri = settings.GITHUB_CONFIG.get('REDIRECT_URI')
+        
+        # 通过code获取access_token
+        token_url = "https://github.com/login/oauth/access_token"
+        token_data = {
+            'client_id': client_id,
+            'client_secret': client_secret,
+            'code': code,
+            'redirect_uri': redirect_uri
+        }
+        
+        token_response = requests.post(token_url, data=token_data, headers={'Accept': 'application/json'}, timeout=10)
+        token_data = token_response.json()
+        
+        if 'error' in token_data:
+            return Response({'error': f"获取access_token失败: {token_data.get('error_description', '未知错误')}"}, 
+                          status=status.HTTP_400_BAD_REQUEST)
+        
+        access_token = token_data.get('access_token')
+        
+        if not access_token:
+            return Response({'error': '获取access_token失败'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 获取用户信息
+        user_info_url = "https://api.github.com/user"
+        headers = {
+            'Authorization': f'token {access_token}',
+            'Accept': 'application/json'
+        }
+        
+        user_info_response = requests.get(user_info_url, headers=headers, timeout=10)
+        user_info = user_info_response.json()
+        
+        if 'message' in user_info and user_info['message'] == 'Bad credentials':
+            return Response({'error': 'GitHub认证失败'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 获取用户邮箱（GitHub邮箱可能为私有）
+        email_url = "https://api.github.com/user/emails"
+        email_response = requests.get(email_url, headers=headers, timeout=10)
+        emails = email_response.json()
+        
+        primary_email = None
+        for email in emails:
+            if email.get('primary') and email.get('verified'):
+                primary_email = email.get('email')
+                break
+        
+        # 创建或获取用户
+        username = f"github_{user_info.get('id')}"
+        nickname = user_info.get('name', user_info.get('login', 'GitHub用户'))
+        avatar = user_info.get('avatar_url', '')
+        email = primary_email or f"{username}@github.com"
+        
+        # 查找是否已有GitHub用户
+        try:
+            user = User.objects.get(username=username)
+        except User.DoesNotExist:
+            # 创建新用户
+            user = User.objects.create_user(
+                username=username,
+                email=email,
+                password=secrets.token_urlsafe(32)  # 随机密码
+            )
+        
+        # 生成JWT token
+        refresh = RefreshToken.for_user(user)
+        
+        return Response({
+            'refresh': str(refresh),
+            'access': str(refresh.access_token),
+            'username': user.username,
+            'nickname': nickname,
+            'avatar': avatar,
+            'provider': 'github'
+        })
+        
+    except Exception as e:
+        return Response({'error': f"GitHub登录处理失败: {str(e)}"}, 
+                      status=status.HTTP_500_INTERNAL_SERVER_ERROR)
