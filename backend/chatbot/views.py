@@ -545,6 +545,15 @@ def wechat_auth_url(request):
     app_id = settings.WECHAT_CONFIG.get('APP_ID', 'your_wechat_app_id')
     redirect_uri = settings.WECHAT_CONFIG.get('REDIRECT_URI', 'http://127.0.0.1:8000/api/v1/auth/wechat/callback/')
     
+    # 检查是否为测试模式（使用默认配置或测试配置）
+    if app_id in ['your_wechat_app_id', 'wx1234567890abcdef']:
+        # 测试模式：直接模拟登录成功
+        return Response({
+            'auth_url': '/api/v1/auth/wechat/callback/?code=test_code&state=test_state',
+            'test_mode': True,
+            'message': '测试模式：点击后将直接登录成功'
+        })
+    
     # 生成state参数用于防止CSRF攻击
     import secrets
     state = secrets.token_urlsafe(16)
@@ -569,6 +578,35 @@ def wechat_auth_callback(request):
     """微信授权回调处理"""
     code = request.GET.get('code')
     state = request.GET.get('state')
+    
+    # 检查是否为测试模式
+    if code == 'test_code' and state == 'test_state':
+        # 测试模式：模拟微信登录成功
+        import secrets
+        
+        # 创建或获取测试用户
+        username = f"wechat_test_user_{secrets.token_hex(8)}"
+        try:
+            user = User.objects.get(username=username)
+        except User.DoesNotExist:
+            user = User.objects.create_user(
+                username=username,
+                email=f"{username}@wechat.com",
+                password=secrets.token_urlsafe(32)
+            )
+        
+        # 生成JWT token
+        refresh = RefreshToken.for_user(user)
+        
+        return Response({
+            'refresh': str(refresh),
+            'access': str(refresh.access_token),
+            'username': user.username,
+            'nickname': '微信测试用户',
+            'avatar': '',
+            'provider': 'wechat',
+            'test_mode': True
+        })
     
     # 验证state参数
     if not code or not state or state != request.session.get('wechat_state'):
@@ -655,6 +693,15 @@ def qq_auth_url(request):
     app_id = settings.QQ_CONFIG.get('APP_ID', 'your_qq_app_id')
     redirect_uri = settings.QQ_CONFIG.get('REDIRECT_URI', 'http://127.0.0.1:8000/api/v1/auth/qq/callback/')
     
+    # 检查是否为测试模式（使用默认配置或测试配置）
+    if app_id in ['your_qq_app_id', '123456789']:
+        # 测试模式：直接模拟登录成功
+        return Response({
+            'auth_url': '/api/v1/auth/qq/callback/?code=test_code&state=test_state',
+            'test_mode': True,
+            'message': '测试模式：点击后将直接登录成功'
+        })
+    
     # 生成state参数用于防止CSRF攻击
     import secrets
     state = secrets.token_urlsafe(16)
@@ -679,6 +726,35 @@ def qq_auth_callback(request):
     """QQ授权回调处理"""
     code = request.GET.get('code')
     state = request.GET.get('state')
+    
+    # 检查是否为测试模式
+    if code == 'test_code' and state == 'test_state':
+        # 测试模式：模拟QQ登录成功
+        import secrets
+        
+        # 创建或获取测试用户
+        username = f"qq_test_user_{secrets.token_hex(8)}"
+        try:
+            user = User.objects.get(username=username)
+        except User.DoesNotExist:
+            user = User.objects.create_user(
+                username=username,
+                email=f"{username}@qq.com",
+                password=secrets.token_urlsafe(32)
+            )
+        
+        # 生成JWT token
+        refresh = RefreshToken.for_user(user)
+        
+        return Response({
+            'refresh': str(refresh),
+            'access': str(refresh.access_token),
+            'username': user.username,
+            'nickname': 'QQ测试用户',
+            'avatar': '',
+            'provider': 'qq',
+            'test_mode': True
+        })
     
     # 验证state参数
     if not code or not state or state != request.session.get('qq_state'):
@@ -782,6 +858,15 @@ def github_auth_url(request):
     client_id = settings.GITHUB_CONFIG.get('CLIENT_ID', 'your_github_client_id')
     redirect_uri = settings.GITHUB_CONFIG.get('REDIRECT_URI', 'http://127.0.0.1:8000/api/v1/auth/github/callback/')
     
+    # 检查是否为测试模式（使用默认配置或测试配置）
+    if client_id in ['your_github_client_id', 'github_client_id_here']:
+        # 测试模式：直接模拟登录成功
+        return Response({
+            'auth_url': '/api/v1/auth/github/callback/?code=test_code&state=test_state',
+            'test_mode': True,
+            'message': '测试模式：点击后将直接登录成功'
+        })
+    
     # 生成state参数用于防止CSRF攻击
     import secrets
     state = secrets.token_urlsafe(16)
@@ -805,6 +890,35 @@ def github_auth_callback(request):
     """GitHub授权回调处理"""
     code = request.GET.get('code')
     state = request.GET.get('state')
+    
+    # 检查是否为测试模式
+    if code == 'test_code' and state == 'test_state':
+        # 测试模式：模拟GitHub登录成功
+        import secrets
+        
+        # 创建或获取测试用户
+        username = f"github_test_user_{secrets.token_hex(8)}"
+        try:
+            user = User.objects.get(username=username)
+        except User.DoesNotExist:
+            user = User.objects.create_user(
+                username=username,
+                email=f"{username}@github.com",
+                password=secrets.token_urlsafe(32)
+            )
+        
+        # 生成JWT token
+        refresh = RefreshToken.for_user(user)
+        
+        return Response({
+            'refresh': str(refresh),
+            'access': str(refresh.access_token),
+            'username': user.username,
+            'nickname': 'GitHub测试用户',
+            'avatar': '',
+            'provider': 'github',
+            'test_mode': True
+        })
     
     # 验证state参数
     if not code or not state or state != request.session.get('github_state'):
@@ -894,4 +1008,136 @@ def github_auth_callback(request):
         
     except Exception as e:
         return Response({'error': f"GitHub登录处理失败: {str(e)}"}, 
+                      status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# 忘记密码功能
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def request_password_reset(request):
+    """请求重置密码 - 支持邮箱或手机号"""
+    email_or_phone = request.data.get('email_or_phone')
+    
+    if not email_or_phone:
+        return Response({'error': '请输入邮箱地址或手机号'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        # 导入用户配置模型
+        from .models import UserProfile
+        
+        # 查找用户 - 支持邮箱或手机号
+        user = None
+        
+        # 先尝试邮箱查找
+        try:
+            user = User.objects.get(email=email_or_phone)
+        except User.DoesNotExist:
+            # 如果邮箱不存在，尝试手机号查找
+            try:
+                profile = UserProfile.objects.get(phone=email_or_phone)
+                user = profile.user
+            except UserProfile.DoesNotExist:
+                pass
+        
+        if not user:
+            # 出于安全考虑，不透露邮箱或手机号是否存在
+            return Response({'message': '如果邮箱或手机号存在，重置链接将发送到您的邮箱'})
+        
+        # 生成重置令牌（简化处理，实际项目应使用更安全的方式）
+        import secrets
+        import datetime
+        from django.utils import timezone
+        
+        reset_token = secrets.token_urlsafe(32)
+        expires_at = timezone.now() + datetime.timedelta(hours=1)  # 1小时后过期
+        
+        # 保存重置令牌到用户会话（实际项目应保存到数据库）
+        request.session[f'reset_token_{user.id}'] = {
+            'token': reset_token,
+            'expires_at': expires_at.isoformat(),
+            'used': False
+        }
+        
+        # 构建重置链接（实际项目应发送邮件）
+        reset_url = f"http://127.0.0.1:8082/reset-password?token={reset_token}&user_id={user.id}"
+        
+        # 模拟发送邮件（实际项目应集成邮件服务）
+        print(f"密码重置链接已发送到 {user.email}:")
+        print(f"重置链接: {reset_url}")
+        print(f"有效期至: {expires_at}")
+        
+        return Response({
+            'message': '密码重置链接已发送到您的邮箱，请查收',
+            'reset_url': reset_url,  # 开发环境返回链接便于测试
+            'expires_at': expires_at.isoformat()
+        })
+        
+    except Exception as e:
+        return Response({'error': f"发送重置邮件失败: {str(e)}"}, 
+                      status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def reset_password(request):
+    """重置密码"""
+    token = request.data.get('token')
+    user_id = request.data.get('user_id')
+    new_password = request.data.get('new_password')
+    confirm_password = request.data.get('confirm_password')
+    
+    if not all([token, user_id, new_password, confirm_password]):
+        return Response({'error': '请填写完整信息'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    if new_password != confirm_password:
+        return Response({'error': '两次输入的密码不一致'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    if len(new_password) < 6:
+        return Response({'error': '密码长度至少6位'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        # 查找用户
+        user = User.objects.get(id=user_id)
+        
+        # 验证重置令牌
+        session_key = f'reset_token_{user.id}'
+        token_data = request.session.get(session_key)
+        
+        if not token_data:
+            return Response({'error': '无效的重置令牌'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 检查令牌是否已使用
+        if token_data.get('used'):
+            return Response({'error': '重置令牌已使用'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 检查令牌是否匹配
+        if token_data.get('token') != token:
+            return Response({'error': '重置令牌不匹配'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 检查令牌是否过期
+        from django.utils import timezone
+        import datetime
+        expires_at = datetime.datetime.fromisoformat(token_data['expires_at'])
+        if timezone.now() > expires_at:
+            return Response({'error': '重置链接已过期'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 重置密码
+        user.set_password(new_password)
+        user.save()
+        
+        # 标记令牌为已使用
+        token_data['used'] = True
+        request.session[session_key] = token_data
+        
+        # 清除所有会话中的该用户令牌（安全考虑）
+        for key in list(request.session.keys()):
+            if key.startswith(f'reset_token_{user.id}'):
+                del request.session[key]
+        
+        return Response({'message': '密码重置成功，请使用新密码登录'})
+        
+    except User.DoesNotExist:
+        return Response({'error': '用户不存在'}, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        return Response({'error': f"密码重置失败: {str(e)}"}, 
                       status=status.HTTP_500_INTERNAL_SERVER_ERROR)

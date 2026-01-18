@@ -70,7 +70,7 @@
               </el-form-item>
 
               <div class="form-footer">
-                <el-link type="info" :underline="false">忘记密码？</el-link>
+                <el-link type="info" :underline="false" @click="goToForgotPassword">忘记密码？</el-link>
               </div>
             </el-form>
 
@@ -184,8 +184,9 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElLoading } from 'element-plus'
 import { ChatDotRound, ChatDotSquare, Platform } from '@element-plus/icons-vue'
+import axios from 'axios'
 
 const router = useRouter()
 const route = useRoute()
@@ -270,7 +271,7 @@ const handleLogin = async () => {
         const success = await authStore.login(loginForm.username, loginForm.password)
         if (success) {
           ElMessage.success('登录成功')
-          router.push('/')
+          router.push('/chat')
         } else {
           ElMessage.error('登录失败，请检查用户名和密码')
         }
@@ -331,12 +332,19 @@ const handleWechatLogin = async () => {
     // 调用后端API获取微信授权URL
     const response = await axios.get('/api/v1/auth/wechat/')
     const authUrl = response.data.auth_url
+    const testMode = response.data.test_mode
     
     // 关闭加载提示
     loading.close()
     
-    // 跳转到微信授权页面
-    window.location.href = authUrl
+    // 检查是否为测试模式
+    if (testMode) {
+      // 测试模式：直接调用回调处理函数
+      await handleWechatCallbackTest(authUrl)
+    } else {
+      // 真实模式：跳转到微信授权页面
+      window.location.href = authUrl
+    }
     
   } catch (error) {
     console.error('微信登录错误:', error)
@@ -357,12 +365,19 @@ const handleQQLogin = async () => {
     // 调用后端API获取QQ授权URL
     const response = await axios.get('/api/v1/auth/qq/')
     const authUrl = response.data.auth_url
+    const testMode = response.data.test_mode
     
     // 关闭加载提示
     loading.close()
     
-    // 跳转到QQ授权页面
-    window.location.href = authUrl
+    // 检查是否为测试模式
+    if (testMode) {
+      // 测试模式：直接调用回调处理函数
+      await handleQQCallbackTest(authUrl)
+    } else {
+      // 真实模式：跳转到QQ授权页面
+      window.location.href = authUrl
+    }
     
   } catch (error) {
     console.error('QQ登录错误:', error)
@@ -383,12 +398,19 @@ const handleGithubLogin = async () => {
     // 调用后端API获取GitHub授权URL
     const response = await axios.get('/api/v1/auth/github/')
     const authUrl = response.data.auth_url
+    const testMode = response.data.test_mode
     
     // 关闭加载提示
     loading.close()
     
-    // 跳转到GitHub授权页面
-    window.location.href = authUrl
+    // 检查是否为测试模式
+    if (testMode) {
+      // 测试模式：直接调用回调处理函数
+      await handleGithubCallbackTest(authUrl)
+    } else {
+      // 真实模式：跳转到GitHub授权页面
+      window.location.href = authUrl
+    }
     
   } catch (error) {
     console.error('GitHub登录错误:', error)
@@ -521,9 +543,128 @@ const openUserAgreement = () => {
   router.push('/user-agreement')
 }
 
-// 打开隐私政策
+// 打开隐私政策页面
 const openPrivacyPolicy = () => {
   router.push('/privacy-policy')
+}
+
+// 跳转到忘记密码页面
+const goToForgotPassword = () => {
+  router.push('/forgot-password')
+}
+
+// 测试模式下的微信回调处理
+const handleWechatCallbackTest = async (authUrl) => {
+  try {
+    const loading = ElLoading.service({
+      lock: true,
+      text: '正在处理微信登录...',
+      background: 'rgba(0, 0, 0, 0.7)'
+    })
+    
+    // 从URL中提取参数
+    const url = new URL(authUrl, window.location.origin)
+    const code = url.searchParams.get('code')
+    const state = url.searchParams.get('state')
+    
+    // 调用后端处理微信回调
+    const response = await axios.get(`/api/v1/auth/wechat/callback/?code=${code}&state=${state}`)
+    const { access: token, username, nickname, avatar, provider } = response.data
+    
+    // 保存用户信息和token
+    authStore.token = token
+    authStore.user = { username, email: username, nickname, avatar, provider }
+    
+    localStorage.setItem('token', token)
+    localStorage.setItem('user', JSON.stringify({ username, email: username, nickname, avatar, provider }))
+    
+    axios.defaults.headers.Authorization = `Bearer ${token}`
+    
+    loading.close()
+    
+    ElMessage.success(`微信登录成功！欢迎 ${nickname}`)
+    router.push('/')
+    
+  } catch (error) {
+    console.error('微信登录测试回调错误:', error)
+    ElMessage.error('微信登录失败，请稍后重试')
+  }
+}
+
+// 测试模式下的QQ回调处理
+const handleQQCallbackTest = async (authUrl) => {
+  try {
+    const loading = ElLoading.service({
+      lock: true,
+      text: '正在处理QQ登录...',
+      background: 'rgba(0, 0, 0, 0.7)'
+    })
+    
+    // 从URL中提取参数
+    const url = new URL(authUrl, window.location.origin)
+    const code = url.searchParams.get('code')
+    const state = url.searchParams.get('state')
+    
+    // 调用后端处理QQ回调
+    const response = await axios.get(`/api/v1/auth/qq/callback/?code=${code}&state=${state}`)
+    const { access: token, username, nickname, avatar, provider } = response.data
+    
+    // 保存用户信息和token
+    authStore.token = token
+    authStore.user = { username, email: username, nickname, avatar, provider }
+    
+    localStorage.setItem('token', token)
+    localStorage.setItem('user', JSON.stringify({ username, email: username, nickname, avatar, provider }))
+    
+    axios.defaults.headers.Authorization = `Bearer ${token}`
+    
+    loading.close()
+    
+    ElMessage.success(`QQ登录成功！欢迎 ${nickname}`)
+    router.push('/')
+    
+  } catch (error) {
+    console.error('QQ登录测试回调错误:', error)
+    ElMessage.error('QQ登录失败，请稍后重试')
+  }
+}
+
+// 测试模式下的GitHub回调处理
+const handleGithubCallbackTest = async (authUrl) => {
+  try {
+    const loading = ElLoading.service({
+      lock: true,
+      text: '正在处理GitHub登录...',
+      background: 'rgba(0, 0, 0, 0.7)'
+    })
+    
+    // 从URL中提取参数
+    const url = new URL(authUrl, window.location.origin)
+    const code = url.searchParams.get('code')
+    const state = url.searchParams.get('state')
+    
+    // 调用后端处理GitHub回调
+    const response = await axios.get(`/api/v1/auth/github/callback/?code=${code}&state=${state}`)
+    const { access: token, username, nickname, avatar, provider } = response.data
+    
+    // 保存用户信息和token
+    authStore.token = token
+    authStore.user = { username, email: username, nickname, avatar, provider }
+    
+    localStorage.setItem('token', token)
+    localStorage.setItem('user', JSON.stringify({ username, email: username, nickname, avatar, provider }))
+    
+    axios.defaults.headers.Authorization = `Bearer ${token}`
+    
+    loading.close()
+    
+    ElMessage.success(`GitHub登录成功！欢迎 ${nickname}`)
+    router.push('/')
+    
+  } catch (error) {
+    console.error('GitHub登录测试回调错误:', error)
+    ElMessage.error('GitHub登录失败，请稍后重试')
+  }
 }
 
 // 初始化时根据查询参数决定显示哪个表单

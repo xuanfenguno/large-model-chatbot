@@ -97,6 +97,24 @@ cabal.sandbox.config
 target/
 *.class
 
+# --- 环境变量文件保护 ---
+# 保护敏感的环境变量文件
+.env
+.env.*
+!.env.example
+backend/.env
+backend/.env.*
+!backend/.env.example
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+
+# --- 本地开发环境文件 ---
+local_settings.py
+local.py
+secrets.py
+config/local.py
+
 # Kotlin
 *.class
 /build/

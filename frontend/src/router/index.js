@@ -49,6 +49,15 @@ const routes = [
     }
   },
   {
+    path: '/forgot-password',
+    name: 'ForgotPassword',
+    component: () => import('../views/ForgotPassword.vue'),
+    meta: {
+      requiresAuth: false,
+      title: '忘记密码'
+    }
+  },
+  {
     path: '/privacy-policy',
     name: 'PrivacyPolicy',
     component: () => import('../views/PrivacyPolicy.vue'),
