@@ -65,6 +65,15 @@ const routes = [
       requiresAuth: false,
       title: '隐私政策'
     }
+  },
+  {
+    path: '/settings',
+    name: 'Settings',
+    component: () => import('../views/Settings.vue'),
+    meta: {
+      requiresAuth: true,
+      title: '设置'
+    }
   }
 ]
 

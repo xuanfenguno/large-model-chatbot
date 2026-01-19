@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
-import axios from '@/utils/request'
+import service from '@/utils/request'
 
 export const useAuthStore = defineStore('auth', () => {
   const token = ref(localStorage.getItem('token') || null)
@@ -14,7 +14,12 @@ export const useAuthStore = defineStore('auth', () => {
 
   const login = async (username, password) => {
     try {
-      delete axios.defaults.headers.Authorization
+      // 彻底清理所有可能的token存储
+      delete service.defaults.headers.Authorization
+      localStorage.removeItem('token')
+      localStorage.removeItem('user')
+      token.value = null
+      user.value = null
       
       console.log('开始登录请求，用户名:', username, '密码长度:', password.length)
       
@@ -25,12 +30,12 @@ export const useAuthStore = defineStore('auth', () => {
       
       console.log('请求数据:', requestData)
       console.log('请求路径:', '/api/v1/login/')
-      console.log('axios baseURL:', axios.defaults.baseURL)
+      console.log('service baseURL:', service.defaults.baseURL)
       
-      const response = await axios.post('/api/v1/login/', requestData, {
-        timeout: 30000,
-        _isLoginRequest: true
-      })
+      const response = await service.post('/api/v1/login/', requestData, {
+          timeout: 30000,
+          _isLoginRequest: true
+        })
       console.log('收到响应:', response)
 
       console.log('登录完整响应:', response)
@@ -57,7 +62,7 @@ export const useAuthStore = defineStore('auth', () => {
       localStorage.setItem('token', newToken)
       localStorage.setItem('user', JSON.stringify({ username: usernameData, email: emailData || '' }))
 
-      axios.defaults.headers.Authorization = `Bearer ${newToken}`
+      service.defaults.headers.Authorization = `Bearer ${newToken}`
 
       console.log('登录成功，token已保存:', newToken)
       console.log('用户信息已保存:', { username: usernameData, email: emailData || '' })
@@ -79,10 +84,10 @@ export const useAuthStore = defineStore('auth', () => {
 
   const register = async (username, email, password) => {
     try {
-      const response = await axios.post('/api/v1/register/', {
+      const response = await service.post('/api/v1/register/', {
         username,
-        email,
-        password
+        password,
+        email
       }, {
         timeout: 30000
       })

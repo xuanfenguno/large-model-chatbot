@@ -9,13 +9,20 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useAuthStore } from './stores/auth'
 import { useChatStore } from './stores/chat'
+import { useSettingsStore } from './stores/settings'
 import { ElMessage } from 'element-plus'
 
 const authStore = useAuthStore()
 const chatStore = useChatStore()
+const settingsStore = useSettingsStore()
+
+// 初始化设置
+onMounted(() => {
+  settingsStore.initSettings()
+})
 
 // 监听未读消息
 const unreadCount = computed(() => chatStore.unreadCount)
