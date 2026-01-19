@@ -40,6 +40,33 @@ const routes = [
     }
   },
   {
+    path: '/voice-chat',
+    name: 'VoiceChat',
+    component: () => import('../views/VoiceChat.vue'),
+    meta: {
+      requiresAuth: true,
+      title: '语音助手'
+    }
+  },
+  {
+    path: '/video-chat',
+    name: 'VideoChat',
+    component: () => import('../views/VideoChat.vue'),
+    meta: {
+      requiresAuth: true,
+      title: '视频通话'
+    }
+  },
+  {
+    path: '/settings',
+    name: 'Settings',
+    component: () => import('../views/Settings.vue'),
+    meta: {
+      requiresAuth: true,
+      title: '设置'
+    }
+  },
+  {
     path: '/user-agreement',
     name: 'UserAgreement',
     component: () => import('../views/UserAgreement.vue'),
@@ -65,15 +92,6 @@ const routes = [
       requiresAuth: false,
       title: '隐私政策'
     }
-  },
-  {
-    path: '/settings',
-    name: 'Settings',
-    component: () => import('../views/Settings.vue'),
-    meta: {
-      requiresAuth: true,
-      title: '设置'
-    }
   }
 ]
 
@@ -91,15 +109,23 @@ router.beforeEach(async (to, from, next) => {
   }
   
   // 检查路由保护
-  if (to.meta.requiresAuth && !authStore.isLoggedIn) {
-    ElMessageBox.alert('请先登录', '提示', {
-      confirmButtonText: '去登录',
-      type: 'warning'
-    }).then(() => {
-      next({ name: 'Login', query: { redirect: to.fullPath } })
-    }).catch(() => {
-      next({ name: 'Login' })
+  if (to.meta.requiresAuth) {
+    // 添加调试信息
+    console.log('路由守卫检查认证状态:', {
+      path: to.path,
+      token: authStore.token,
+      user: authStore.user,
+      isLoggedIn: authStore.isLoggedIn
     })
+    
+    if (!authStore.isLoggedIn) {
+      console.log('用户未登录，跳转到登录页面')
+      // 如果用户未登录，直接跳转到登录页面
+      next({ name: 'Login', query: { redirect: to.fullPath } })
+    } else {
+      console.log('用户已登录，允许访问')
+      next()
+    }
   } else {
     next()
   }

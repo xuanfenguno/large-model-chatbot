@@ -51,6 +51,28 @@
 
       <!-- 左侧栏底部设置区域 -->
       <div class="sidebar-footer">
+        <!-- 语音助手入口 - 在上方 -->
+        <el-button
+          type="success"
+          size="small"
+          class="voice-assistant-btn"
+          @click="goToVoiceChat"
+          icon="Microphone"
+        >
+          语音助手
+        </el-button>
+        
+        <!-- 视频通话入口 - 在下方 -->
+        <el-button
+          type="danger"
+          size="small"
+          class="video-chat-btn"
+          @click="goToVideoChat"
+          icon="VideoCamera"
+        >
+          视频通话
+        </el-button>
+        
         <el-dropdown @command="handleSettingsCommand" placement="top-start" class="settings-dropdown">
           <el-button
             type="text"
@@ -155,11 +177,23 @@
                 <template #dropdown>
                   <el-dropdown-menu>
                     <el-dropdown-item command="text" icon="ChatLineRound">文字聊天</el-dropdown-item>
-                    <el-dropdown-item command="voice" icon="Microphone">语音通话</el-dropdown-item>
-                    <el-dropdown-item command="video" icon="VideoCamera">视频通话</el-dropdown-item>
+                    <el-dropdown-item command="voice" icon="Microphone">语音聊天</el-dropdown-item>
                   </el-dropdown-menu>
                 </template>
               </el-dropdown>
+              
+              <!-- 语音通话按钮 -->
+              <el-button 
+                v-if="chatMode === 'voice'"
+                type="primary" 
+                size="small"
+                class="voice-call-button"
+                @click="initiateVoiceCall"
+                :disabled="isVoiceCallActive"
+              >
+                <el-icon><Phone /></el-icon>
+                <span>{{ isVoiceCallActive ? '通话中' : '发起通话' }}</span>
+              </el-button>
             </div>
           </div>
         </div>
@@ -231,13 +265,6 @@
                 @click="handleAddAttachment"
                 :disabled="isSending"
               />
-              <el-button
-                type="text"
-                size="small"
-                icon="VideoCamera"
-                @click="handleStartVideo"
-                :disabled="isSending"
-              />
             </template>
           </el-input>
           <el-button
@@ -261,19 +288,17 @@
           ref="voiceControlsRef"
         />
         
-        <!-- 视频通话模式 -->
-        <div v-else-if="chatMode === 'video'" class="video-controls-placeholder">
-          <el-alert 
-            title="视频通话功能开发中" 
-            type="info" 
-            :closable="false"
-            show-icon
-          >
-            当前版本暂不支持视频通话，敬请期待
-          </el-alert>
-        </div>
+
       </footer>
     </main>
+    
+    <!-- 语音通话组件 -->
+    <VoiceCall 
+      v-if="isVoiceCallActive"
+      ref="voiceCallRef"
+      :socket="socket"
+      @call-ended="endVoiceCall"
+    />
   </div>
 </template>
 
@@ -287,7 +312,8 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import Vue3MarkdownIt from 'vue3-markdown-it'
 import ChatModeSelector from '@/components/ChatModeSelector.vue'
 import VoiceControls from '@/components/VoiceControls.vue'
-import { Message, User, Setting, SwitchButton, Paperclip, Plus, VideoCamera, Delete, Warning, Connection, ArrowDown, ChatLineRound, Microphone } from '@element-plus/icons-vue'
+import VoiceCall from '@/components/VoiceCall.vue'
+import { Message, User, Setting, SwitchButton, Paperclip, Plus, Delete, Warning, Connection, ArrowDown, ChatLineRound, Microphone, Phone } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -302,6 +328,11 @@ const models = ref([])
 const chatMode = ref('text') // 聊天模式：text, voice, video
 const modeSelectorRef = ref(null)
 const voiceControlsRef = ref(null)
+
+// 语音通话相关状态
+const isVoiceCallActive = ref(false)
+const voiceCallRef = ref(null)
+const socket = ref(null) // WebSocket连接
 
 // AI API选择器相关数据
 const modelGroups = ref([
@@ -464,12 +495,44 @@ const handleSendMessage = async () => {
 
   try {
     // 在发送消息时传递当前选择的模型
-    await chatStore.sendMessage(content, null, selectedModel.value)
+    const response = await chatStore.sendMessage(content, null, selectedModel.value)
+    
+    // 如果当前是语音模式，自动播放AI回复
+    if (chatMode.value === 'voice') {
+      await speakText(response)
+    }
   } catch (error) {
     ElMessage.error('发送消息失败')
   } finally {
     isSending.value = false
   }
+}
+
+// 文字转语音
+const speakText = (text) => {
+  return new Promise((resolve) => {
+    if ('speechSynthesis' in window && chatMode.value === 'voice') {
+      const utterance = new SpeechSynthesisUtterance(text)
+      utterance.lang = 'zh-CN'
+      utterance.volume = 0.8
+      utterance.rate = 1.0
+      utterance.pitch = 1.0
+
+      utterance.onend = () => {
+        console.log('AI语音回复播放完成')
+        resolve()
+      }
+
+      utterance.onerror = () => {
+        console.error('语音合成错误')
+        resolve()
+      }
+
+      speechSynthesis.speak(utterance)
+    } else {
+      resolve()
+    }
+  })
 }
 
 // 处理重试消息
@@ -485,10 +548,7 @@ const handleAddAttachment = () => {
   ElMessage.info('附件功能开发中...')
 }
 
-// 处理开始视频
-const handleStartVideo = () => {
-  ElMessage.info('视频通话功能开发中...')
-}
+
 
 // 处理模型切换
 const handleModelChange = async (modelId) => {
@@ -559,18 +619,58 @@ const handleLogout = async () => {
 const handleModeChange = (newMode) => {
   console.log('切换到模式:', newMode)
   
+  // 更新聊天模式
+  chatMode.value = newMode
+  
   // 根据模式显示不同的提示信息
   switch (newMode) {
     case 'text':
       ElMessage.success('已切换到文字聊天模式')
       break
     case 'voice':
-      ElMessage.info('语音通话模式 - 点击麦克风开始说话')
-      break
-    case 'video':
-      ElMessage.info('视频通话模式 - 功能开发中')
+      ElMessage.info('语音聊天模式 - 点击麦克风开始说话')
+      // 检查WebRTC支持
+      checkWebRTCSupport()
       break
   }
+}
+
+// 检查WebRTC支持
+const checkWebRTCSupport = () => {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    ElMessage.warning('您的浏览器不支持语音通话功能，请使用Chrome、Edge等现代浏览器')
+    return false
+  }
+  return true
+}
+
+// 发起语音通话
+const initiateVoiceCall = async () => {
+  if (!checkWebRTCSupport()) return
+  
+  try {
+    // 这里需要先建立WebSocket连接
+    // 简化实现：直接显示通话界面
+    isVoiceCallActive.value = true
+    
+    // 实际项目中应该在这里建立WebSocket连接并发送通话请求
+    ElMessage.info('正在发起语音通话...')
+  } catch (error) {
+    console.error('发起语音通话失败:', error)
+    ElMessage.error('发起语音通话失败')
+  }
+}
+
+// 结束语音通话
+const endVoiceCall = () => {
+  isVoiceCallActive.value = false
+  
+  // 实际项目中应该在这里关闭WebSocket连接
+  if (voiceCallRef.value) {
+    voiceCallRef.value.endCall()
+  }
+  
+  ElMessage.info('通话已结束')
 }
 
 // 获取模式标签类型
@@ -597,20 +697,37 @@ const getModeText = (mode) => {
 const handleVoiceData = (voiceData) => {
   console.log('收到语音数据:', voiceData)
   
-  // 将语音转文字的内容设置为输入内容
-  inputContent.value = voiceData.text
-  
-  // 自动发送消息
-  handleSendMessage()
+  if (voiceData.type === 'speech-completed') {
+    // 用户说完，自动发送消息并等待AI回复
+    inputContent.value = voiceData.text
+    handleSendMessage()
+  } else if (voiceData.type === 'recording-started') {
+    ElMessage.info('语音识别已开始，请说话...')
+  } else if (voiceData.type === 'recording-ended') {
+    console.log('语音识别已结束')
+  } else if (voiceData.type === 'recording-error') {
+    ElMessage.error(`语音识别错误: ${voiceData.error}`)
+  }
 }
 
 // 处理语音转文字结果
 const handleVoiceTranscription = (text) => {
   console.log('语音转文字结果:', text)
-  inputContent.value = text
+  // 实时显示语音转文字结果
+  // 这里不需要设置输入内容，因为speech-completed事件会处理
 }
 
-// 切换模式时停止录音
+// 跳转到语音聊天界面
+const goToVoiceChat = () => {
+  router.push('/voice-chat')
+}
+
+// 跳转到视频聊天界面
+const goToVideoChat = () => {
+  router.push('/video-chat')
+}
+
+// 监听聊天模式变化
 watch(chatMode, (newMode, oldMode) => {
   if (oldMode === 'voice' && newMode !== 'voice') {
     // 如果从语音模式切换到其他模式，停止录音
@@ -769,7 +886,54 @@ onMounted(() => {
   padding: 0.5rem;
   background: rgba(255, 255, 255, 0.8);
   display: flex;
-  justify-content: flex-end;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* 语音助手按钮 - 在上方 */
+.voice-assistant-btn {
+  width: calc(100% - 1rem);
+  height: 36px;
+  background: linear-gradient(45deg, #ff6b6b, #ffd93d);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  font-weight: 600;
+  font-size: 12px;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  margin: 0 0.5rem;
+}
+
+.voice-assistant-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 107, 107, 0.3);
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+/* 视频通话按钮 - 在下方 */
+.video-chat-btn {
+  width: calc(100% - 1rem);
+  height: 36px;
+  background: linear-gradient(45deg, #ff416c, #ff4b2b);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  font-weight: 600;
+  font-size: 12px;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  margin: 0 0.5rem;
+}
+
+.video-chat-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 65, 108, 0.3);
+  border-color: rgba(255, 255, 255, 0.6);
 }
 
 .settings-dropdown {
@@ -777,7 +941,7 @@ onMounted(() => {
 }
 
 .settings-button {
-  width: auto;
+  width: calc(100% - 1rem);
   height: 32px;
   display: flex;
   align-items: center;
@@ -787,7 +951,7 @@ onMounted(() => {
   border: 1px solid #dcdfe6;
   background: white;
   transition: all 0.3s ease;
-  min-width: 60px;
+  margin: 0 0.5rem;
 }
 
 .settings-button:hover {
@@ -997,6 +1161,23 @@ onMounted(() => {
   font-size: 14px;
 }
 
+.voice-call-button {
+  margin-left: 8px;
+  background: #67c23a;
+  border-color: #67c23a;
+}
+
+.voice-call-button:hover:not(:disabled) {
+  background: #85ce61;
+  border-color: #85ce61;
+}
+
+.voice-call-button:disabled {
+  background: #c2e7b0;
+  border-color: #c2e7b0;
+  cursor: not-allowed;
+}
+
 .chat-actions {
   display: flex;
   gap: 0.5rem;
@@ -1158,6 +1339,76 @@ onMounted(() => {
 
 .video-controls-placeholder {
   padding: 1rem;
+}
+
+.video-redirect-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  align-items: center;
+}
+
+.redirect-actions {
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.redirect-btn {
+  background: linear-gradient(45deg, #ff416c, #ff4b2b);
+  border: none;
+  color: white;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.redirect-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 65, 108, 0.3);
+}
+
+.back-btn {
+  background: linear-gradient(45deg, #4facfe, #00f2fe);
+  border: none;
+  color: white;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.back-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(79, 172, 254, 0.3);
+}
+
+.feature-list {
+  text-align: left;
+  background: white;
+  padding: 15px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  max-width: 400px;
+}
+
+.feature-list h4 {
+  margin: 0 0 10px 0;
+  color: #303133;
+  font-weight: 600;
+}
+
+.feature-list ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.feature-list li {
+  margin-bottom: 8px;
+  color: #606266;
+  font-size: 0.95rem;
+}
+
+.feature-list li:last-child {
+  margin-bottom: 0;
 }
 
 .empty-state {

@@ -29,10 +29,10 @@ export const useAuthStore = defineStore('auth', () => {
       }
       
       console.log('请求数据:', requestData)
-      console.log('请求路径:', '/api/v1/login/')
+      console.log('请求路径:', '/v1/login/')
       console.log('service baseURL:', service.defaults.baseURL)
       
-      const response = await service.post('/api/v1/login/', requestData, {
+      const response = await service.post('/v1/login/', requestData, {
           timeout: 30000,
           _isLoginRequest: true
         })
@@ -84,7 +84,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   const register = async (username, email, password) => {
     try {
-      const response = await service.post('/api/v1/register/', {
+      const response = await service.post('/v1/register/', {
         username,
         password,
         email
@@ -108,12 +108,25 @@ export const useAuthStore = defineStore('auth', () => {
       return false
     } catch (error) {
       console.error('注册错误:', error)
-      console.error('注册错误响应:', error.response)
+      console.error('注册错误响应状态:', error.response?.status)
       console.error('注册错误数据:', error.response?.data)
-      ElMessage({
-        message: error.response?.data?.error || error.message || '注册失败',
-        type: 'error'
-      })
+      
+      // 根据后端返回的具体错误信息显示不同的提示
+      const errorMessage = error.response?.data?.error || error.message || '注册失败'
+      
+      // 处理重复注册的错误信息
+      if (error.response?.status === 400) {
+        if (errorMessage.includes('Username already exists')) {
+          ElMessage.warning('该用户名已被注册，请使用其他用户名')
+        } else if (errorMessage.includes('Email already exists')) {
+          ElMessage.warning('该邮箱已被注册，请使用其他邮箱')
+        } else {
+          ElMessage.error(errorMessage)
+        }
+      } else {
+        ElMessage.error(errorMessage)
+      }
+      
       return false
     }
   }

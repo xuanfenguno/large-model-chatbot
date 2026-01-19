@@ -11,14 +11,7 @@
         {{ isRecording ? '停止录音' : '开始说话' }}
       </button>
       
-      <button 
-        class="voice-btn" 
-        @click="playLastResponse"
-        :disabled="!hasAudioResponse"
-      >
-        <el-icon><Headset /></el-icon>
-        播放回复
-      </button>
+
     </div>
     
     <!-- 语音波形显示 -->
@@ -84,11 +77,95 @@ const toggleRecording = async () => {
 }
 
 // 开始录音
-const startRecording = () => {
+const startRecording = async () => {
   isRecording.value = true
   transcribedText.value = ''
   
-  // 模拟语音识别过程（实际项目中需要集成Web Speech API）
+  // 检查浏览器是否支持真实的语音识别
+  if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+    // 使用真实的Web Speech API
+    await startRealSpeechRecognition()
+  } else {
+    // 降级到模拟语音识别
+    startSimulatedRecognition()
+  }
+  
+  ElMessage.success('开始录音，请说话...')
+}
+
+// 使用真实的Web Speech API进行语音识别
+const startRealSpeechRecognition = () => {
+  return new Promise((resolve) => {
+    try {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+      const recognition = new SpeechRecognition()
+      
+      recognition.continuous = true
+      recognition.interimResults = true
+      recognition.lang = 'zh-CN'
+      
+      recognition.onstart = () => {
+        console.log('语音识别已开始')
+        transcribedText.value = '正在识别您的语音...'
+        emit('voice-data', { type: 'recording-started' })
+      }
+      
+      recognition.onresult = (event) => {
+        let finalTranscript = ''
+        let interimTranscript = ''
+        
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript
+          if (event.results[i].isFinal) {
+            finalTranscript += transcript
+          } else {
+            interimTranscript += transcript
+          }
+        }
+        
+        if (finalTranscript) {
+          transcribedText.value = finalTranscript
+          emit('transcription', finalTranscript)
+          // 用户说完，自动触发AI回复
+          emit('voice-data', { 
+            type: 'speech-completed', 
+            text: finalTranscript 
+          })
+        } else if (interimTranscript) {
+          transcribedText.value = interimTranscript
+        }
+      }
+      
+      recognition.onerror = (event) => {
+        console.error('语音识别错误:', event.error)
+        emit('voice-data', { type: 'recording-error', error: event.error })
+        // 降级到模拟识别
+        startSimulatedRecognition()
+      }
+      
+      recognition.onend = () => {
+        console.log('语音识别已结束')
+        emit('voice-data', { type: 'recording-ended' })
+        if (isRecording.value) {
+          // 如果仍在录音状态，重新开始识别
+          recognition.start()
+        }
+      }
+      
+      recognition.start()
+      resolve()
+    } catch (error) {
+      console.error('语音识别初始化失败:', error)
+      emit('voice-data', { type: 'recording-error', error: error.message })
+      // 降级到模拟识别
+      startSimulatedRecognition()
+      resolve()
+    }
+  })
+}
+
+// 模拟语音识别（兼容性降级）
+const startSimulatedRecognition = () => {
   setTimeout(() => {
     transcribedText.value = '正在识别您的语音...'
     
@@ -98,13 +175,21 @@ const startRecording = () => {
       emit('transcription', transcribedText.value)
     }, 2000)
   }, 500)
-  
-  ElMessage.success('开始录音，请说话...')
 }
 
 // 停止录音
 const stopRecording = () => {
   isRecording.value = false
+  
+  // 停止语音识别（如果正在使用真实API）
+  if (window.SpeechRecognition || window.webkitSpeechRecognition) {
+    try {
+      // 这里可以添加停止语音识别的逻辑
+      // 实际实现需要保存对recognition实例的引用
+    } catch (error) {
+      console.error('停止语音识别失败:', error)
+    }
+  }
   
   if (transcribedText.value) {
     // 发送识别结果

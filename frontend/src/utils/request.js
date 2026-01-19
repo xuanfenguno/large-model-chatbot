@@ -4,7 +4,7 @@ import { useAuthStore } from '@/stores/auth'
 
 // 创建axios实例（优化超时和配置）
 const service = axios.create({
-  baseURL: '',  // 修改baseURL，因为我们希望请求直接发送到 /api/v1/ 路径
+  baseURL: '/api',  // 修改baseURL，指向代理路径
   timeout: 60000, // 增加超时时间到60秒，考虑到AI响应可能需要更长时间
   headers: {
     'Content-Type': 'application/json'

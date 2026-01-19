@@ -12,7 +12,7 @@ export const useChatStore = defineStore('chat', () => {
   // 获取会话列表（优化缓存）
   const fetchConversations = async () => {
     try {
-      const response = await service.get('/api/v1/conversations/', {
+      const response = await service.get('/v1/conversations/', {
         timeout: 10000
       })
       conversations.value = response.data
@@ -27,7 +27,7 @@ export const useChatStore = defineStore('chat', () => {
   // 创建新会话
   const createConversation = async (title) => {
     try {
-      const response = await service.post('/api/v1/conversations/', {
+      const response = await service.post('/v1/conversations/', {
         title: title || '新会话'
       }, {
         timeout: 10000
@@ -61,7 +61,7 @@ export const useChatStore = defineStore('chat', () => {
   // 获取消息列表（优化响应速度）
   const fetchMessages = async (conversationId) => {
     try {
-      const response = await service.get(`/api/v1/conversations/${conversationId}/messages/`, {
+      const response = await service.get(`/v1/conversations/${conversationId}/messages/`, {
         timeout: 10000
       })
       messages.value = response.data
@@ -119,7 +119,7 @@ export const useChatStore = defineStore('chat', () => {
         requestData.model = model;
       }
       
-      const response = await service.post('/api/v1/messages/chat/', requestData, {
+      const response = await service.post('/v1/messages/chat/', requestData, {
         timeout: 30000
       })
 
@@ -158,7 +158,7 @@ export const useChatStore = defineStore('chat', () => {
   // 删除会话
   const deleteConversation = async (conversationId) => {
     try {
-      await service.delete(`/api/v1/conversations/${conversationId}/`, {
+      await service.delete(`/v1/conversations/${conversationId}/`, {
         timeout: 10000
       })
       conversations.value = conversations.value.filter(c => c.id !== conversationId)
