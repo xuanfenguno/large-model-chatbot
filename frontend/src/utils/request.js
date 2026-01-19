@@ -4,7 +4,7 @@ import { useAuthStore } from '@/stores/auth'
 
 // 创建axios实例（优化超时和配置）
 const service = axios.create({
-  baseURL: '/api/v1',
+  baseURL: '',  // 修改baseURL，因为我们希望请求直接发送到 /api/v1/ 路径
   timeout: 60000, // 增加超时时间到60秒，考虑到AI响应可能需要更长时间
   headers: {
     'Content-Type': 'application/json'
@@ -25,10 +25,12 @@ service.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`
     }
 
-    // 为每个请求创建取消令牌
-    const source = axios.CancelToken.source()
-    config.cancelToken = source.token
-    config._cancelTokenSource = source
+    // 移除可能导致请求取消的CancelToken配置
+    // 如果需要取消请求，使用AbortController
+    if (typeof AbortController !== 'undefined') {
+      const abortController = new AbortController()
+      config.signal = abortController.signal
+    }
 
     // 添加请求时间戳用于性能监控
     config._startTime = Date.now()
@@ -50,16 +52,16 @@ service.interceptors.response.use(
     const duration = Date.now() - response.config._startTime
     console.log(`请求 ${response.config.url} 耗时: ${duration}ms`)
 
-    // 如果响应包含状态码，检查是否成功
-    if (data.code && data.code !== 200) {
+    // 检查响应是否包含错误信息
+    if (data.error) {
       ElMessage({
-        message: data.message || '请求失败',
+        message: data.error || '请求失败',
         type: 'error'
       })
-      return Promise.reject(new Error(data.message || '请求失败'))
+      return Promise.reject(new Error(data.error || '请求失败'))
     }
 
-    return data
+    return response
   },
   error => {
     console.error('响应错误:', error)
@@ -97,7 +99,8 @@ service.interceptors.response.use(
       const { status, data } = error.response
 
       // 401未授权，清除token并跳转登录
-      if (status === 401) {
+      // 但如果是登录请求，就跳过自动登出的处理
+      if (status === 401 && !error.config._isLoginRequest) {
         const authStore = useAuthStore()
         authStore.logout()
         

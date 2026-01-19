@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录测试</title>
+    <script>
+        async function testLogin() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            console.log('开始测试登录...');
+            console.log('用户名:', username);
+            console.log('密码长度:', password.length);
+            
+            try {
+                // 直接使用fetch API测试
+                const response = await fetch('http://127.0.0.1:8000/api/v1/login/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                console.log('响应状态:', response.status);
+                console.log('响应头:', Object.fromEntries(response.headers.entries()));
+                
+                const data = await response.json();
+                console.log('响应数据:', data);
+                
+                if (response.ok) {
+                    document.getElementById('result').innerHTML = '<div style="color: green;">登录成功！</div>';
+                    document.getElementById('token').textContent = 'Token: ' + data.access;
+                } else {
+                    document.getElementById('result').innerHTML = '<div style="color: red;">登录失败：' + data.error + '</div>';
+                }
+            } catch (error) {
+                console.error('请求错误:', error);
+                document.getElementById('result').innerHTML = '<div style="color: red;">请求错误：' + error.message + '</div>';
+            }
+        }
+    </script>
+</head>
+<body>
+    <h1>登录测试</h1>
+    <div>
+        <label for="username">用户名:</label>
+        <input type="text" id="username" value="demo">
+    </div>
+    <div>
+        <label for="password">密码:</label>
+        <input type="password" id="password" value="demopassword123">
+    </div>
+    <button onclick="testLogin()">测试登录</button>
+    <div id="result"></div>
+    <div id="token"></div>
+    <div style="margin-top: 20px;">
+        <h3>使用说明：</h3>
+        <ol>
+            <li>打开开发者工具（F12）</li>
+            <li>点击"测试登录"按钮</li>
+            <li>查看控制台输出</li>
+        </ol>
+    </div>
+</body>
+</html>

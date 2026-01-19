@@ -31,6 +31,11 @@
           <div class="conversation-content">
             <div class="conversation-title">{{ conversation.title }}</div>
             <div class="conversation-time">{{ formatTime(conversation.updated_at) }}</div>
+            <div class="conversation-mode">
+              <el-tag size="small" :type="getModeTagType(conversation.mode)">
+                {{ getModeText(conversation.mode) }}
+              </el-tag>
+            </div>
           </div>
           <div class="conversation-actions">
             <el-button
@@ -47,6 +52,13 @@
 
     <!-- 主聊天窗口 -->
     <main class="chat-main">
+      <!-- 聊天模式选择器 -->
+      <ChatModeSelector 
+        v-model:modelValue="chatMode"
+        @mode-change="handleModeChange"
+        ref="modeSelectorRef"
+      />
+      
       <!-- 聊天头部 -->
       <header class="chat-header">
         <div class="chat-title">
@@ -145,7 +157,8 @@
 
       <!-- 输入区域 -->
       <footer class="chat-footer">
-        <div class="input-container">
+        <!-- 文字聊天模式 -->
+        <div v-if="chatMode === 'text'" class="input-container">
           <el-input
             v-model="inputContent"
             type="textarea"
@@ -186,6 +199,26 @@
             </template>
           </el-input>
         </div>
+        
+        <!-- 语音通话模式 -->
+        <VoiceControls 
+          v-else-if="chatMode === 'voice'"
+          @voice-data="handleVoiceData"
+          @transcription="handleVoiceTranscription"
+          ref="voiceControlsRef"
+        />
+        
+        <!-- 视频通话模式 -->
+        <div v-else-if="chatMode === 'video'" class="video-controls-placeholder">
+          <el-alert 
+            title="视频通话功能开发中" 
+            type="info" 
+            :closable="false"
+            show-icon
+          >
+            当前版本暂不支持视频通话，敬请期待
+          </el-alert>
+        </div>
       </footer>
     </main>
   </div>
@@ -198,6 +231,8 @@ import { useAuthStore } from '@/stores/auth'
 import { useChatStore } from '@/stores/chat'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import Vue3MarkdownIt from 'vue3-markdown-it'
+import ChatModeSelector from '@/components/ChatModeSelector.vue'
+import VoiceControls from '@/components/VoiceControls.vue'
 import { Message, User, Setting, SwitchButton, Paperclip, Plus, VideoCamera, Delete, Warning } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -210,6 +245,9 @@ const isSending = ref(false)
 const messagesContainer = ref(null)
 const selectedModel = ref('deepseek-v3') // 默认模型
 const models = ref([])
+const chatMode = ref('text') // 聊天模式：text, voice, video
+const modeSelectorRef = ref(null)
+const voiceControlsRef = ref(null)
 
 // 计算属性
 const conversations = computed(() => chatStore.conversations)
@@ -383,18 +421,113 @@ const handleLogout = async () => {
   }
 }
 
+// 处理模式切换
+const handleModeChange = (newMode) => {
+  console.log('切换到模式:', newMode)
+  
+  // 根据模式显示不同的提示信息
+  switch (newMode) {
+    case 'text':
+      ElMessage.success('已切换到文字聊天模式')
+      break
+    case 'voice':
+      ElMessage.info('语音通话模式 - 点击麦克风开始说话')
+      break
+    case 'video':
+      ElMessage.info('视频通话模式 - 功能开发中')
+      break
+  }
+}
+
+// 获取模式标签类型
+const getModeTagType = (mode) => {
+  const typeMap = {
+    'text': 'primary',
+    'voice': 'success', 
+    'video': 'warning'
+  }
+  return typeMap[mode] || 'info'
+}
+
+// 获取模式显示文本
+const getModeText = (mode) => {
+  const textMap = {
+    'text': '文字',
+    'voice': '语音',
+    'video': '视频'
+  }
+  return textMap[mode] || '未知'
+}
+
+// 处理语音数据
+const handleVoiceData = (voiceData) => {
+  console.log('收到语音数据:', voiceData)
+  
+  // 将语音转文字的内容设置为输入内容
+  inputContent.value = voiceData.text
+  
+  // 自动发送消息
+  handleSendMessage()
+}
+
+// 处理语音转文字结果
+const handleVoiceTranscription = (text) => {
+  console.log('语音转文字结果:', text)
+  inputContent.value = text
+}
+
+// 切换模式时停止录音
+watch(chatMode, (newMode, oldMode) => {
+  if (oldMode === 'voice' && newMode !== 'voice') {
+    // 如果从语音模式切换到其他模式，停止录音
+    if (voiceControlsRef.value) {
+      voiceControlsRef.value.stopRecordingExternal()
+    }
+  }
+})
+
+// 检查用户认证状态
+const checkAuth = () => {
+  console.log('检查认证状态:', authStore.isLoggedIn)
+  console.log('token:', localStorage.getItem('token'))
+  console.log('user:', localStorage.getItem('user'))
+  
+  if (!authStore.isLoggedIn) {
+    console.log('认证失败，跳转到登录页面')
+    ElMessage.warning('请先登录')
+    router.push('/login')
+    return false
+  }
+  console.log('认证成功')
+  return true
+}
+
 // 页面加载时获取对话列表（优化加载）
 const loadData = async () => {
+  // 先检查认证状态
+  if (!checkAuth()) {
+    return
+  }
+  
   try {
     await chatStore.fetchConversations()
     await loadModels() // 加载模型列表
   } catch (error) {
+    console.error('加载数据失败:', error)
     ElMessage.error('加载对话列表失败')
   }
 }
 
 // 页面挂载时调用
-onMounted(loadData)
+onMounted(() => {
+  // 检查认证状态
+  if (!checkAuth()) {
+    return
+  }
+  
+  // 加载数据
+  loadData()
+})
 </script>
 
 <style scoped>
@@ -486,6 +619,10 @@ onMounted(loadData)
 .conversation-time {
   font-size: 0.75rem;
   color: #909399;
+}
+
+.conversation-mode {
+  margin-top: 0.25rem;
 }
 
 .conversation-actions {
@@ -612,6 +749,9 @@ onMounted(loadData)
 }
 
 .message-text :deep(img) {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
 }
 
 .input-container {
@@ -658,6 +798,10 @@ onMounted(loadData)
 .send-btn:disabled {
   background: #c0c4cc;
   cursor: not-allowed;
+}
+
+.video-controls-placeholder {
+  padding: 1rem;
 }
 
 .empty-state {

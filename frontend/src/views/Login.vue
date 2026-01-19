@@ -268,11 +268,21 @@ const handleLogin = async () => {
     if (valid) {
       try {
         isLoading.value = true
+        console.log('开始登录，用户名:', loginForm.username)
         const success = await authStore.login(loginForm.username, loginForm.password)
+        console.log('登录结果:', success)
+        console.log('登录后isLoggedIn:', authStore.isLoggedIn)
         if (success) {
+          console.log('登录成功，准备跳转...')
           ElMessage.success('登录成功')
-          router.push('/chat')
+          console.log('开始跳转到聊天界面...')
+          setTimeout(() => {
+            console.log('执行跳转')
+            router.push('/chat')
+            console.log('跳转完成')
+          }, 500)
         } else {
+          console.log('登录失败')
           ElMessage.error('登录失败，请检查用户名和密码')
         }
       } catch (error) {

@@ -17,11 +17,6 @@ import { ElMessage } from 'element-plus'
 const authStore = useAuthStore()
 const chatStore = useChatStore()
 
-// 检查登录状态
-if (!authStore.isLoggedIn) {
-  authStore.checkAuth()
-}
-
 // 监听未读消息
 const unreadCount = computed(() => chatStore.unreadCount)
 
