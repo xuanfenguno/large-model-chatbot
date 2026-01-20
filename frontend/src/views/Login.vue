@@ -269,35 +269,58 @@ const handleLogin = async () => {
       try {
         isLoading.value = true
         console.log('开始登录，用户名:', loginForm.username)
+        
+        // 清除之前的认证状态
+        localStorage.removeItem('token')
+        localStorage.removeItem('user')
+        
         const success = await authStore.login(loginForm.username, loginForm.password)
         console.log('登录结果:', success)
-        console.log('登录后isLoggedIn:', authStore.isLoggedIn)
+        
         if (success) {
           console.log('登录成功，准备跳转...')
           ElMessage.success('登录成功')
           
           // 立即检查认证状态
-          const authStore = useAuthStore()
           console.log('跳转前认证状态检查:', {
             token: authStore.token,
             user: authStore.user,
-            isLoggedIn: authStore.isLoggedIn
+            isLoggedIn: authStore.isLoggedIn,
+            localStorageToken: localStorage.getItem('token'),
+            localStorageUser: localStorage.getItem('user')
           })
           
           console.log('开始跳转到聊天界面...')
           
           // 确保认证状态已更新后再跳转
-          await new Promise(resolve => setTimeout(resolve, 300))
+          await new Promise(resolve => setTimeout(resolve, 100))
           
           console.log('执行跳转前再次检查认证状态:', {
             token: authStore.token,
             user: authStore.user,
-            isLoggedIn: authStore.isLoggedIn
+            isLoggedIn: authStore.isLoggedIn,
+            localStorageToken: localStorage.getItem('token'),
+            localStorageUser: localStorage.getItem('user')
           })
           
+          // 强制刷新认证状态
+          if (!authStore.token && localStorage.getItem('token')) {
+            authStore.token = localStorage.getItem('token')
+            authStore.user = JSON.parse(localStorage.getItem('user') || 'null')
+            console.log('已从localStorage强制恢复认证状态')
+          }
+          
           console.log('执行跳转')
-          router.push('/chat')
-          console.log('跳转完成')
+          
+          // 分离跳转逻辑，避免影响登录成功状态
+          try {
+            await router.push('/chat')
+            console.log('跳转完成')
+          } catch (jumpError) {
+            console.error('跳转错误（不影响登录成功）:', jumpError)
+            // 跳转失败不影响登录成功状态，可以手动导航
+            window.location.href = '/chat'
+          }
         } else {
           console.log('登录失败')
           ElMessage.error('登录失败，请检查用户名和密码')

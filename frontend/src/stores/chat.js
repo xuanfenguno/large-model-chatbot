@@ -2,12 +2,17 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import service from '@/utils/request'
+import { useUnifiedAIApi } from '@/utils/ai-api'
 
 export const useChatStore = defineStore('chat', () => {
   const conversations = ref([])
   const selectedConversationId = ref(null)
   const messages = ref([])
   const isLoading = ref(false)
+  const isStreaming = ref(false)
+  
+  // 大模型API
+  const { api: aiApi } = useUnifiedAIApi()
 
   // 获取会话列表（优化缓存）
   const fetchConversations = async () => {
@@ -73,7 +78,7 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  // 发送消息（优化响应速度和用户体验）
+  // 发送消息（使用新的大模型API框架）
   const sendMessage = async (content, image = null, model = null) => {
     if (!selectedConversationId.value) {
       ElMessage({
@@ -107,31 +112,45 @@ export const useChatStore = defineStore('chat', () => {
     isLoading.value = true
 
     try {
-      // 调用AI接口
-      const requestData = {
-        conversation_id: selectedConversationId.value,
-        message: content,
-        image_url: image
-      };
-      
-      // 如果指定了模型，则添加到请求数据中
-      if (model) {
-        requestData.model = model;
-      }
-      
-      const response = await service.post('/v1/messages/chat/', requestData, {
-        timeout: 30000
+      // 构建对话历史
+      const history = messages.value
+        .filter(msg => msg.id !== aiMessage.id) // 排除当前占位消息
+        .map(msg => ({
+          role: msg.role,
+          content: msg.content
+        }))
+
+      // 使用新的大模型API发送消息
+      const result = await aiApi.sendMessage(content, {
+        model: model,
+        history: history,
+        temperature: 0.6,
+        maxTokens: 2000
       })
 
-      // 更新AI回复
-      const aiIndex = messages.value.findIndex(msg => msg.id === aiMessage.id)
-      if (aiIndex !== -1) {
-        messages.value[aiIndex] = {
-          id: response.data.ai_message.id,
-          role: 'assistant',
-          content: response.data.ai_message.content,
-          created_at: response.data.ai_message.created_at
+      if (result.success) {
+        // 更新AI回复
+        const aiIndex = messages.value.findIndex(msg => msg.id === aiMessage.id)
+        if (aiIndex !== -1) {
+          messages.value[aiIndex] = {
+            id: Date.now() + 2,
+            role: 'assistant',
+            content: result.content,
+            created_at: new Date().toISOString(),
+            model: result.model,
+            responseTime: result.responseTime
+          }
         }
+        
+        // 显示成功消息
+        ElMessage({
+          message: `消息发送成功 (${result.responseTime}ms)`,
+          type: 'success',
+          duration: 2000
+        })
+      } else {
+        // 处理API错误
+        throw new Error(result.error)
       }
 
     } catch (error) {
@@ -140,18 +159,110 @@ export const useChatStore = defineStore('chat', () => {
       if (aiIndex !== -1) {
         messages.value[aiIndex] = {
           ...aiMessage,
-          content: '抱歉，消息发送失败。请稍后重试。',
+          content: error.message || '抱歉，消息发送失败。请稍后重试。',
           is_loading: false,
           error: true
         }
       }
       
-      ElMessage({
-        message: '发送消息失败',
-        type: 'error'
-      })
+      // 错误消息已经在错误处理器中显示，这里不需要重复显示
     } finally {
       isLoading.value = false
+    }
+  }
+
+  // 流式发送消息（支持实时显示）
+  const sendMessageStream = async (content, model = null) => {
+    if (!selectedConversationId.value) {
+      ElMessage({
+        message: '请先创建或选择一个会话',
+        type: 'warning'
+      })
+      return
+    }
+
+    // 创建本地用户消息预览
+    const userMessage = {
+      id: Date.now(),
+      role: 'user',
+      content: content,
+      created_at: new Date().toISOString()
+    }
+    
+    messages.value.push(userMessage)
+    
+    // 创建AI回复的占位消息
+    const aiMessage = {
+      id: Date.now() + 1,
+      role: 'assistant',
+      content: '',
+      is_loading: true,
+      is_streaming: true,
+      created_at: new Date().toISOString()
+    }
+    messages.value.push(aiMessage)
+
+    isStreaming.value = true
+
+    try {
+      // 构建对话历史
+      const history = messages.value
+        .filter(msg => msg.id !== aiMessage.id)
+        .map(msg => ({
+          role: msg.role,
+          content: msg.content
+        }))
+
+      await aiApi.sendMessageStream(
+        content,
+        {
+          model: model,
+          history: history,
+          temperature: 0.6,
+          maxTokens: 2000
+        },
+        // 数据块回调
+        (chunk) => {
+          const aiIndex = messages.value.findIndex(msg => msg.id === aiMessage.id)
+          if (aiIndex !== -1) {
+            messages.value[aiIndex].content += chunk
+          }
+        },
+        // 完成回调
+        (result) => {
+          const aiIndex = messages.value.findIndex(msg => msg.id === aiMessage.id)
+          if (aiIndex !== -1) {
+            messages.value[aiIndex] = {
+              ...messages.value[aiIndex],
+              is_loading: false,
+              is_streaming: false,
+              model: result.model
+            }
+          }
+          
+          if (result.success) {
+            ElMessage({
+              message: '流式消息发送完成',
+              type: 'success',
+              duration: 2000
+            })
+          }
+        }
+      )
+
+    } catch (error) {
+      const aiIndex = messages.value.findIndex(msg => msg.id === aiMessage.id)
+      if (aiIndex !== -1) {
+        messages.value[aiIndex] = {
+          ...aiMessage,
+          content: error.message || '抱歉，流式消息发送失败。',
+          is_loading: false,
+          is_streaming: false,
+          error: true
+        }
+      }
+    } finally {
+      isStreaming.value = false
     }
   }
 
@@ -199,11 +310,13 @@ export const useChatStore = defineStore('chat', () => {
     selectedConversationId,
     messages,
     isLoading,
+    isStreaming,
     fetchConversations,
     createConversation,
     selectConversation,
     fetchMessages,
     sendMessage,
+    sendMessageStream,
     deleteConversation,
     clearMessages,
     conversationTitle

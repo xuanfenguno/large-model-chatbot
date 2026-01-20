@@ -294,3 +294,700 @@ img {
     background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
   }
 }
+
+/* ===== 全局主题配置 ===== */
+
+/* 浅色主题 - 白色背景 + 黑色字体 */
+.light-theme,
+.light {
+  /* 全局背景和文字 */
+  background: #ffffff !important;
+  color: #000000 !important;
+}
+
+.light-theme body,
+.light body {
+  background: #ffffff !important;
+  color: #000000 !important;
+}
+
+.light-theme * {
+  color: #000000 !important;
+}
+
+/* 浅色主题组件样式 */
+.light-theme .el-card {
+  background: #ffffff !important;
+  border: 1px solid #e0e0e0 !important;
+  color: #000000 !important;
+}
+
+.light-theme .el-card__header {
+  background: #f8f9fa !important;
+  color: #000000 !important;
+  border-bottom: 1px solid #e0e0e0 !important;
+}
+
+/* 浅色主题标签栏样式 */
+.light-theme .el-tabs {
+  background: #ffffff !important;
+}
+
+.light-theme .el-tabs__header {
+  background: #ffffff !important;
+  border-bottom: 1px solid #e0e0e0 !important;
+}
+
+.light-theme .el-tabs__item {
+  color: #303133 !important;
+  background: #ffffff !important;
+}
+
+.light-theme .el-tabs__item:hover {
+  color: #409eff !important;
+  background: #f5f7fa !important;
+}
+
+.light-theme .el-tabs__item.is-active {
+  color: #409eff !important;
+  background: #f5f7fa !important;
+}
+
+.light-theme .el-tabs__active-bar {
+  background: #409eff !important;
+}
+
+.light-theme .el-tabs__content {
+  background: #ffffff !important;
+  color: #000000 !important;
+}
+
+.light-theme .el-input .el-input__inner {
+  background: #ffffff !important;
+  border: 1px solid #dcdfe6 !important;
+  color: #000000 !important;
+}
+
+.light-theme .el-button {
+  background: #409eff !important;
+  color: #ffffff !important;
+}
+
+.light-theme .el-button--text {
+  color: #409eff !important;
+  background: transparent !important;
+}
+
+/* 浅色主题聊天界面 */
+.light-theme .sidebar {
+  background: #f8f9fa !important;
+  color: #000000 !important;
+}
+
+.light-theme .chat-area {
+  background: #ffffff !important;
+  color: #000000 !important;
+}
+
+.light-theme .message-text {
+  background: #f0f2f5 !important;
+  color: #000000 !important;
+  border: 1px solid #e0e0e0 !important;
+}
+
+/* 深色主题 - 黑色背景 + 白色字体 */
+.dark-theme,
+.dark {
+  /* 全局背景和文字 */
+  background: #000000 !important;
+  color: #ffffff !important;
+}
+
+.dark-theme body,
+.dark body {
+  background: #000000 !important;
+  color: #ffffff !important;
+}
+
+/* 强制全局文字颜色覆盖 */
+.dark-theme *:not(input):not(textarea):not([contenteditable="true"]) {
+  color: #ffffff !important;
+}
+
+/* 输入框文字特殊处理 */
+.dark-theme input,
+.dark-theme textarea {
+  color: #ffffff !important;
+  background: #1a1a1a !important;
+}
+
+/* 强制背景色覆盖 */
+.dark-theme div:not(.el-input):not(.el-textarea):not([class*="el-"]),
+.dark-theme section,
+.dark-theme article,
+.dark-theme main,
+.dark-theme header,
+.dark-theme footer {
+  background: #000000 !important;
+  color: #ffffff !important;
+}
+
+/* 深色主题组件样式 */
+.dark-theme .el-card {
+  background: #1a1a1a !important;
+  border: 1px solid #333333 !important;
+  color: #ffffff !important;
+}
+
+.dark-theme .el-card__header {
+  background: #2a2a2a !important;
+  color: #ffffff !important;
+  border-bottom: 1px solid #333333 !important;
+}
+
+.dark-theme .el-input .el-input__inner {
+  background: #1a1a1a !important;
+  border: 1px solid #444444 !important;
+  color: #ffffff !important;
+}
+
+/* 搜索框特定样式 - 针对白色背景的搜索框 */
+.dark-theme .search-input,
+.dark-theme .search-bar,
+.dark-theme [class*="search"],
+.dark-theme [class*="Search"] {
+  background: #1a1a1a !important;
+  border: 1px solid #444444 !important;
+  color: #ffffff !important;
+}
+
+.dark-theme .search-input:focus,
+.dark-theme .search-bar:focus,
+.dark-theme [class*="search"]:focus,
+.dark-theme [class*="Search"]:focus {
+  border-color: #409eff !important;
+  background: #2a2a2a !important;
+  box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.2) !important;
+}
+
+.dark-theme .search-input::placeholder,
+.dark-theme .search-bar::placeholder,
+.dark-theme [class*="search"]::placeholder,
+.dark-theme [class*="Search"]::placeholder {
+  color: #888888 !important;
+}
+
+/* 通用输入框样式覆盖 - 确保所有输入框都应用深色主题 */
+.dark-theme input[type="text"],
+.dark-theme input[type="search"],
+.dark-theme input[type="email"],
+.dark-theme input[type="password"],
+.dark-theme input[type="tel"],
+.dark-theme input[type="url"],
+.dark-theme input[type="number"] {
+  background: #1a1a1a !important;
+  border: 1px solid #444444 !important;
+  color: #ffffff !important;
+  font-size: 14px !important;
+}
+
+.dark-theme input[type="text"]:focus,
+.dark-theme input[type="search"]:focus,
+.dark-theme input[type="email"]:focus,
+.dark-theme input[type="password"]:focus,
+.dark-theme input[type="tel"]:focus,
+.dark-theme input[type="url"]:focus,
+.dark-theme input[type="number"]:focus {
+  border-color: #409eff !important;
+  background: #2a2a2a !important;
+  box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.2) !important;
+}
+
+.dark-theme input[type="text"]::placeholder,
+.dark-theme input[type="search"]::placeholder,
+.dark-theme input[type="email"]::placeholder,
+.dark-theme input[type="password"]::placeholder,
+.dark-theme input[type="tel"]::placeholder,
+.dark-theme input[type="url"]::placeholder,
+.dark-theme input[type="number"]::placeholder {
+  color: #888888 !important;
+}
+
+/* 文本域通用样式覆盖 */
+.dark-theme textarea {
+  background: #1a1a1a !important;
+  border: 1px solid #444444 !important;
+  color: #ffffff !important;
+  font-size: 14px !important;
+}
+
+.dark-theme textarea:focus {
+  border-color: #409eff !important;
+  background: #2a2a2a !important;
+  box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.2) !important;
+}
+
+.dark-theme textarea::placeholder {
+  color: #888888 !important;
+}
+
+.dark-theme .el-button {
+  background: #409eff !important;
+  color: #ffffff !important;
+}
+
+.dark-theme .el-button--text {
+  color: #409eff !important;
+  background: transparent !important;
+}
+
+/* 深色主题聊天界面 */
+.dark-theme .sidebar {
+  background: #1a1a1a !important;
+  color: #ffffff !important;
+  border-right: 1px solid #333333 !important;
+}
+
+.dark-theme .chat-area {
+  background: #000000 !important;
+  color: #ffffff !important;
+}
+
+.dark-theme .message-text {
+  background: #2a2a2a !important;
+  color: #ffffff !important;
+  border: 1px solid #444444 !important;
+}
+
+/* 聊天界面特定样式覆盖 */
+.dark-theme .app-container {
+  background: #000000 !important;
+}
+
+.dark-theme .sidebar-title {
+  color: #ffffff !important;
+  border-bottom: 1px solid #333333 !important;
+}
+
+.dark-theme .conversation-item {
+  background: #2a2a2a !important;
+  border: 1px solid #333333 !important;
+  color: #ffffff !important;
+}
+
+.dark-theme .conversation-item:hover {
+  background: #3a3a3a !important;
+}
+
+.dark-theme .conversation-title {
+  color: #ffffff !important;
+}
+
+.dark-theme .conversation-time {
+  color: #b0b0b0 !important;
+}
+
+.dark-theme .chat-controls {
+  background: #1a1a1a !important;
+  border-top: 1px solid #333333 !important;
+}
+
+.dark-theme .mode-dropdown-button {
+  color: #ffffff !important;
+}
+
+.dark-theme .sidebar-footer {
+  background: #1a1a1a !important;
+  border-top: 1px solid #333333 !important;
+}
+
+.dark-theme .voice-assistant-btn,
+.dark-theme .video-chat-btn {
+  background: #409eff !important;
+  color: #ffffff !important;
+  border: 1px solid #409eff !important;
+}
+
+/* 设置界面特定样式覆盖 */
+.dark-theme .el-tabs {
+  background: #1a1a1a !important;
+}
+
+.dark-theme .el-tabs__header {
+  background: #1a1a1a !important;
+  border-bottom: 1px solid #333333 !important;
+}
+
+.dark-theme .el-tabs__item {
+  color: #ffffff !important;
+  background: #1a1a1a !important;
+}
+
+.dark-theme .el-tabs__item:hover {
+  color: #409eff !important;
+  background: #2a2a2a !important;
+}
+
+.dark-theme .el-tabs__item.is-active {
+  color: #409eff !important;
+  background: #2a2a2a !important;
+}
+
+.dark-theme .el-tabs__active-bar {
+  background: #409eff !important;
+}
+
+.dark-theme .el-tabs__content {
+  background: #1a1a1a !important;
+  color: #ffffff !important;
+}
+
+/* AI模型选择器特定样式 */
+.dark-theme .el-select {
+  background: #1a1a1a !important;
+}
+
+.dark-theme .el-select .el-input__inner {
+  background: #1a1a1a !important;
+  border: 1px solid #444444 !important;
+  color: #ffffff !important;
+}
+
+.dark-theme .el-select .el-input__inner:focus {
+  border-color: #409eff !important;
+  background: #2a2a2a !important;
+}
+
+.dark-theme .el-select-dropdown {
+  background: #1a1a1a !important;
+  border: 1px solid #444444 !important;
+}
+
+.dark-theme .el-select-dropdown__item {
+  color: #ffffff !important;
+  background: #1a1a1a !important;
+}
+
+.dark-theme .el-select-dropdown__item:hover {
+  background: #2a2a2a !important;
+  color: #ffffff !important;
+}
+
+.dark-theme .el-select-dropdown__item.selected {
+  background: #409eff !important;
+  color: #ffffff !important;
+}
+
+.dark-theme .el-select-dropdown__empty {
+  color: #888888 !important;
+}
+
+/* 滑块组件样式 */
+.dark-theme .el-slider {
+  background: #1a1a1a !important;
+}
+
+.dark-theme .el-slider__runway {
+  background: #444444 !important;
+}
+
+.dark-theme .el-slider__bar {
+  background: #409eff !important;
+}
+
+.dark-theme .el-slider__button {
+  background: #409eff !important;
+  border: 2px solid #409eff !important;
+}
+
+.dark-theme .el-slider__button:hover {
+  background: #66b1ff !important;
+  border-color: #66b1ff !important;
+}
+
+.dark-theme .el-slider__stop {
+  background: #666666 !important;
+}
+
+/* 设置界面表单样式 */
+.dark-theme .settings-section {
+  background: #1a1a1a !important;
+  color: #ffffff !important;
+}
+
+.dark-theme .section-header {
+  color: #ffffff !important;
+  border-bottom: 1px solid #333333 !important;
+}
+
+.dark-theme .form-tip {
+  color: #b0b0b0 !important;
+  font-size: 0.85rem !important;
+}
+
+/* 设置界面菜单样式 */
+.dark-theme .settings-menu {
+  background: #1a1a1a !important;
+  border-right: 1px solid #333333 !important;
+}
+
+.dark-theme .settings-menu .el-menu-item {
+  color: #ffffff !important;
+  background: transparent !important;
+}
+
+.dark-theme .settings-menu .el-menu-item:hover {
+  background: #2a2a2a !important;
+  color: #409eff !important;
+}
+
+.dark-theme .settings-menu .el-menu-item.is-active {
+  background: #409eff !important;
+  color: #ffffff !important;
+}
+
+.dark-theme .settings-menu .el-icon {
+  color: #ffffff !important;
+}
+
+.dark-theme .settings-menu .el-menu-item.is-active .el-icon {
+  color: #ffffff !important;
+}
+
+/* 设置界面卡片样式 */
+.dark-theme .settings-card {
+  background: #1a1a1a !important;
+  border: 1px solid #333333 !important;
+  color: #ffffff !important;
+}
+
+.dark-theme .settings-card .el-card__header {
+  background: #2a2a2a !important;
+  border-bottom: 1px solid #333333 !important;
+  color: #ffffff !important;
+}
+
+/* 按钮组样式 */
+.dark-theme .el-button-group {
+  background: #1a1a1a !important;
+}
+
+.dark-theme .el-button-group .el-button {
+  background: #2a2a2a !important;
+  border: 1px solid #444444 !important;
+  color: #ffffff !important;
+}
+
+.dark-theme .el-button-group .el-button:hover {
+  background: #3a3a3a !important;
+  border-color: #555555 !important;
+}
+
+.dark-theme .el-button-group .el-button.is-active {
+  background: #409eff !important;
+  border-color: #409eff !important;
+  color: #ffffff !important;
+}
+
+/* 保存按钮样式 */
+.dark-theme .save-button {
+  background: #409eff !important;
+  color: #ffffff !important;
+  border: 1px solid #409eff !important;
+}
+
+.dark-theme .save-button:hover {
+  background: #66b1ff !important;
+  border-color: #66b1ff !important;
+}
+
+.dark-theme .save-button:disabled {
+  background: #666666 !important;
+  border-color: #666666 !important;
+  color: #888888 !important;
+}
+
+/* 密码输入框样式 */
+.dark-theme .el-input__suffix {
+  color: #ffffff !important;
+}
+
+.dark-theme .el-input__suffix-inner .el-icon {
+  color: #ffffff !important;
+}
+
+.dark-theme .el-menu {
+  background: #1a1a1a !important;
+  border-right: 1px solid #333333 !important;
+}
+
+.dark-theme .el-menu-item {
+  color: #ffffff !important;
+  background: transparent !important;
+}
+
+.dark-theme .el-menu-item:hover {
+  background: #2a2a2a !important;
+}
+
+.dark-theme .el-menu-item.is-active {
+  background: #409eff !important;
+  color: #ffffff !important;
+}
+
+/* 表单和标签样式覆盖 */
+.dark-theme .el-form-item__label {
+  color: #ffffff !important;
+  font-weight: 600 !important;
+}
+
+.dark-theme .form-tip {
+  color: #b0b0b0 !important;
+}
+
+.dark-theme .el-radio__label {
+  color: #ffffff !important;
+}
+
+.dark-theme .el-switch__label {
+  color: #ffffff !important;
+}
+
+/* 输入框占位符 */
+.dark-theme ::placeholder {
+  color: #888888 !important;
+}
+
+.dark-theme :-ms-input-placeholder {
+  color: #888888 !important;
+}
+
+.dark-theme ::-ms-input-placeholder {
+  color: #888888 !important;
+}
+
+/* 图标和装饰元素 */
+.dark-theme .el-icon {
+  color: #ffffff !important;
+}
+
+.dark-theme .mode-selector-label {
+  color: #ffffff !important;
+}
+
+/* 通用文本样式覆盖 */
+.dark-theme h1, .dark-theme h2, .dark-theme h3, .dark-theme h4, .dark-theme h5, .dark-theme h6 {
+  color: #ffffff !important;
+}
+
+.dark-theme p, .dark-theme span, .dark-theme div {
+  color: #ffffff !important;
+}
+
+.dark-theme a {
+  color: #409eff !important;
+}
+
+.dark-theme a:hover {
+  color: #66b1ff !important;
+}
+
+/* 通用滚动条样式 */
+.dark-theme ::-webkit-scrollbar {
+  width: 8px !important;
+}
+
+.dark-theme ::-webkit-scrollbar-track {
+  background: #1a1a1a !important;
+}
+
+.dark-theme ::-webkit-scrollbar-thumb {
+  background: #444444 !important;
+}
+
+.light-theme ::-webkit-scrollbar {
+  width: 8px !important;
+}
+
+.light-theme ::-webkit-scrollbar-track {
+  background: #f0f0f0 !important;
+}
+
+.light-theme ::-webkit-scrollbar-thumb {
+  background: #c0c0c0 !important;
+}
+
+/* 字体大小设置 */
+.font-size-small {
+  font-size: 14px !important;
+}
+
+.font-size-small * {
+  font-size: 14px !important;
+}
+
+.font-size-medium {
+  font-size: 16px !important;
+}
+
+.font-size-medium * {
+  font-size: 16px !important;
+}
+
+.font-size-large {
+  font-size: 18px !important;
+}
+
+.font-size-large * {
+  font-size: 18px !important;
+}
+
+/* 特定组件的字体大小调整 */
+.font-size-small .el-button,
+.font-size-small .el-input,
+.font-size-small .el-select,
+.font-size-small .el-radio,
+.font-size-small .el-switch {
+  font-size: 14px !important;
+}
+
+.font-size-medium .el-button,
+.font-size-medium .el-input,
+.font-size-medium .el-select,
+.font-size-medium .el-radio,
+.font-size-medium .el-switch {
+  font-size: 16px !important;
+}
+
+.font-size-large .el-button,
+.font-size-large .el-input,
+.font-size-large .el-select,
+.font-size-large .el-radio,
+.font-size-large .el-switch {
+  font-size: 18px !important;
+}
+
+/* 聊天界面字体大小调整 */
+.font-size-small .message-text {
+  font-size: 13px !important;
+}
+
+.font-size-medium .message-text {
+  font-size: 15px !important;
+}
+
+.font-size-large .message-text {
+  font-size: 17px !important;
+}
+
+.font-size-small .sidebar-title {
+  font-size: 1rem !important;
+}
+
+.font-size-medium .sidebar-title {
+  font-size: 1.2rem !important;
+}
+
+.font-size-large .sidebar-title {
+  font-size: 1.4rem !important;
+}

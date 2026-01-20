@@ -106,6 +106,10 @@ export const useSettingsStore = defineStore('settings', () => {
     
     // 应用主题
     applyTheme()
+    // 应用字体大小
+    applyFontSize()
+    // 应用语言设置
+    applyLanguage()
   }
 
   // 保存设置
@@ -113,6 +117,8 @@ export const useSettingsStore = defineStore('settings', () => {
     try {
       localStorage.setItem('userSettings', JSON.stringify(settings.value))
       applyTheme()
+      applyFontSize()
+      applyLanguage()
       return true
     } catch (error) {
       console.error('保存设置失败:', error)
@@ -135,13 +141,46 @@ export const useSettingsStore = defineStore('settings', () => {
     const theme = currentTheme.value
     const html = document.documentElement
     
+    // 移除所有主题类
+    html.classList.remove('light-theme', 'dark-theme', 'light', 'dark')
+    
     if (theme === 'dark') {
-      html.classList.add('dark-theme')
-      html.classList.remove('light-theme')
+      html.classList.add('dark-theme', 'dark')
     } else {
-      html.classList.add('light-theme')
-      html.classList.remove('dark-theme')
+      html.classList.add('light-theme', 'light')
     }
+    
+    console.log(`[主题] 应用主题: ${theme}`)
+  }
+
+  // 应用字体大小
+  const applyFontSize = () => {
+    const fontSize = settings.value.preferences.fontSize
+    const html = document.documentElement
+    
+    // 移除现有的字体大小类
+    html.classList.remove('font-size-small', 'font-size-medium', 'font-size-large')
+    
+    // 添加新的字体大小类
+    html.classList.add(`font-size-${fontSize}`)
+  }
+
+  // 应用语言设置（预留接口，等待i18n实现）
+  const applyLanguage = () => {
+    const language = settings.value.preferences.language
+    const html = document.documentElement
+    
+    // 移除现有的语言类
+    html.classList.remove('lang-zh', 'lang-en', 'lang-ja', 'lang-ko')
+    
+    // 添加新的语言类
+    html.classList.add(`lang-${language}`)
+    
+    // 设置文档语言属性
+    html.setAttribute('lang', language)
+    
+    // TODO: 等待i18n语言包系统实现后，替换为完整的语言切换逻辑
+    console.log(`[设置] 语言设置已保存: ${language} (等待i18n实现)`)
   }
 
   // 更新设置

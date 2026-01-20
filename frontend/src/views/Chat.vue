@@ -86,6 +86,7 @@
             <el-dropdown-menu>
               <el-dropdown-item command="profile" icon="User">个人资料</el-dropdown-item>
               <el-dropdown-item command="ai" icon="Cpu">AI模型</el-dropdown-item>
+              <el-dropdown-item command="api-config" icon="Key">API配置</el-dropdown-item>
               <el-dropdown-item command="preferences" icon="Setting">偏好设置</el-dropdown-item>
               <el-dropdown-item command="chat" icon="ChatDotRound">聊天设置</el-dropdown-item>
               <el-dropdown-item command="privacy" icon="Lock">隐私设置</el-dropdown-item>
@@ -102,53 +103,69 @@
       <!-- 聊天头部 -->
       <header class="chat-header">
         <div class="chat-header-content">
-          <!-- AI API选择器 -->
-          <div class="ai-api-selector">
-            <el-select
-              v-model="selectedModel"
-              placeholder="选择AI模型"
-              size="medium"
-              class="ai-model-select"
-              @change="handleModelChange"
-            >
-              <el-option-group
-                v-for="group in modelGroups"
-                :key="group.label"
-                :label="group.label"
+          <!-- 左侧：AI API选择器 -->
+          <div class="chat-header-left">
+            <div class="ai-api-selector">
+              <el-select
+                v-model="selectedModel"
+                placeholder="选择AI模型"
+                size="default"
+                class="ai-model-select"
+                @change="handleModelChange"
+                :loading="modelStatus === 'connecting'"
               >
                 <el-option
-                  v-for="model in group.models"
+                  v-for="model in flatModels"
                   :key="model.id"
                   :label="model.name"
                   :value="model.id"
-                  :disabled="model.disabled"
+                  :disabled="!model.available"
                 >
-                  <span class="model-option">
-                    <el-avatar :size="20" :src="model.icon" class="model-icon">
-                      {{ model.name.charAt(0) }}
-                    </el-avatar>
-                    <span class="model-name">{{ model.name }}</span>
-                    <el-tag v-if="model.tag" size="small" :type="model.tagType">
-                      {{ model.tag }}
-                    </el-tag>
-                  </span>
+                  <div class="model-option" :class="{ selected: selectedModel === model.id }">
+                    <div class="model-icon-left">
+                      <div class="model-icon">
+                        {{ getModelIcon(model.provider) }}
+                      </div>
+                    </div>
+                    <div class="model-content">
+                      <div class="model-header">
+                        <span class="model-name">{{ model.name }}</span>
+                        <div class="model-badges">
+                          <el-tag v-if="model.tag" :type="model.tagType" size="small" class="model-tag">
+                            {{ model.tag }}
+                          </el-tag>
+                          <div v-if="model.available" class="status-indicator available"></div>
+                          <div v-else class="status-indicator unavailable"></div>
+                        </div>
+                      </div>
+                      <div class="model-description">
+                        <span class="provider">{{ model.provider }}</span>
+                        <span v-if="model.description" class="description">{{ model.description }}</span>
+                      </div>
+                    </div>
+                    <div class="model-arrow">
+                      <el-icon :size="16" color="#94a3b8">
+                        <ArrowRight />
+                      </el-icon>
+                    </div>
+                  </div>
                 </el-option>
-              </el-option-group>
-            </el-select>
-            
-            <!-- 模型状态指示器 -->
-            <div class="model-status">
-              <el-tooltip :content="modelStatusText" placement="bottom">
-                <el-badge :type="modelStatusType" is-dot>
-                  <el-icon :size="16">
-                    <Connection />
-                  </el-icon>
-                </el-badge>
-              </el-tooltip>
+              </el-select>
+              
+              <!-- 模型状态指示器 -->
+              <div class="model-status">
+                <el-tooltip :content="modelStatusText" placement="bottom">
+                  <el-badge :type="modelStatusType" is-dot>
+                    <el-icon :size="16">
+                      <Connection />
+                    </el-icon>
+                  </el-badge>
+                </el-tooltip>
+              </div>
             </div>
           </div>
           
-          <!-- 聊天标题（居中） -->
+          <!-- 中间：聊天标题 -->
           <div class="chat-title">
             <el-icon :size="24">
               <Message />
@@ -156,44 +173,46 @@
             <h1>{{ conversationTitle }}</h1>
           </div>
           
-          <!-- 聊天模式选择器（靠右） -->
-          <div class="chat-controls">
-            <div class="mode-selector-wrapper">
-              <el-dropdown 
-                @command="handleModeChange"
-                placement="bottom-end"
-                trigger="click"
-              >
-                <el-button 
-                  type="text" 
-                  size="small"
-                  class="mode-dropdown-button"
+          <!-- 右侧：聊天模式选择器 -->
+          <div class="chat-header-right">
+            <div class="chat-controls">
+              <div class="mode-selector-wrapper">
+                <el-dropdown 
+                  @command="handleModeChange"
+                  placement="bottom-end"
+                  trigger="click"
                 >
-                  <span class="mode-selector-label">聊天模式</span>
-                  <el-icon class="el-icon--right">
-                    <ArrowDown />
-                  </el-icon>
+                  <el-button 
+                    type="text" 
+                    size="small"
+                    class="mode-dropdown-button"
+                  >
+                    <span class="mode-selector-label">聊天模式</span>
+                    <el-icon class="el-icon--right">
+                      <ArrowDown />
+                    </el-icon>
+                  </el-button>
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item command="text" icon="ChatLineRound">文字聊天</el-dropdown-item>
+                      <el-dropdown-item command="voice" icon="Microphone">语音聊天</el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
+                
+                <!-- 语音通话按钮 -->
+                <el-button 
+                  v-if="chatMode === 'voice'"
+                  type="primary" 
+                  size="small"
+                  class="voice-call-button"
+                  @click="initiateVoiceCall"
+                  :disabled="isVoiceCallActive"
+                >
+                  <el-icon><Phone /></el-icon>
+                  <span>{{ isVoiceCallActive ? '通话中' : '发起通话' }}</span>
                 </el-button>
-                <template #dropdown>
-                  <el-dropdown-menu>
-                    <el-dropdown-item command="text" icon="ChatLineRound">文字聊天</el-dropdown-item>
-                    <el-dropdown-item command="voice" icon="Microphone">语音聊天</el-dropdown-item>
-                  </el-dropdown-menu>
-                </template>
-              </el-dropdown>
-              
-              <!-- 语音通话按钮 -->
-              <el-button 
-                v-if="chatMode === 'voice'"
-                type="primary" 
-                size="small"
-                class="voice-call-button"
-                @click="initiateVoiceCall"
-                :disabled="isVoiceCallActive"
-              >
-                <el-icon><Phone /></el-icon>
-                <span>{{ isVoiceCallActive ? '通话中' : '发起通话' }}</span>
-              </el-button>
+              </div>
             </div>
           </div>
         </div>
@@ -308,22 +327,28 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useChatStore } from '@/stores/chat'
 import { useSettingsStore } from '@/stores/settings'
+import { useUnifiedAIApi } from '@/utils/ai-api'
+import { useAIConfig } from '@/utils/ai-config'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import Vue3MarkdownIt from 'vue3-markdown-it'
 import ChatModeSelector from '@/components/ChatModeSelector.vue'
 import VoiceControls from '@/components/VoiceControls.vue'
 import VoiceCall from '@/components/VoiceCall.vue'
-import { Message, User, Setting, SwitchButton, Paperclip, Plus, Delete, Warning, Connection, ArrowDown, ChatLineRound, Microphone, Phone } from '@element-plus/icons-vue'
+import { Message, User, Setting, SwitchButton, Paperclip, Plus, Delete, Warning, Connection, ArrowDown, ChatLineRound, Microphone, Phone, ArrowRight } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
 const chatStore = useChatStore()
 
+// 大模型API框架
+const { api: aiApi } = useUnifiedAIApi()
+const { configManager } = useAIConfig()
+
 // 响应式数据
 const inputContent = ref('')
 const isSending = ref(false)
 const messagesContainer = ref(null)
-const selectedModel = ref('deepseek-v3') // 默认模型
+const selectedModel = ref('deepseek-chat') // 默认模型（使用API框架的模型ID）
 const models = ref([])
 const chatMode = ref('text') // 聊天模式：text, voice, video
 const modeSelectorRef = ref(null)
@@ -335,25 +360,74 @@ const voiceCallRef = ref(null)
 const socket = ref(null) // WebSocket连接
 
 // AI API选择器相关数据
-const modelGroups = ref([
-  {
-    label: '开源模型',
-    models: [
-      { id: 'deepseek-v3', name: 'DeepSeek-V3', provider: 'DeepSeek', tag: '推荐', tagType: 'success', icon: '' },
-      { id: 'qwen', name: '通义千问', provider: '阿里云', tag: '免费', tagType: 'info', icon: '' },
-      { id: 'llama', name: 'Llama 3', provider: 'Meta', tag: '开源', tagType: 'warning', icon: '' }
-    ]
-  },
-  {
-    label: '商业模型',
-    models: [
-      { id: 'gpt-4', name: 'GPT-4', provider: 'OpenAI', tag: '智能', tagType: 'success', icon: '', disabled: false },
-      { id: 'gpt-3.5', name: 'GPT-3.5', provider: 'OpenAI', tag: '快速', tagType: 'info', icon: '', disabled: false },
-      { id: 'claude', name: 'Claude', provider: 'Anthropic', tag: '安全', tagType: 'warning', icon: '', disabled: false },
-      { id: 'wenxin', name: '文心一言', provider: '百度', tag: '中文', tagType: 'success', icon: '', disabled: false }
+const modelGroups = ref([])
+
+// 平铺的模型列表（用于显示，不分组）
+const flatModels = computed(() => {
+  return modelGroups.value.flatMap(group => group.models)
+})
+
+// 从API框架加载可用模型
+const loadAvailableModels = async () => {
+  try {
+    const availableModels = await aiApi.getAvailableModels()
+    
+    // 按提供商分组模型
+    const providers = {}
+    availableModels.forEach(model => {
+      if (!providers[model.provider]) {
+        providers[model.provider] = []
+      }
+      providers[model.provider].push({
+        id: model.id,
+        name: model.name,
+        provider: model.provider,
+        tag: model.tag || '',
+        tagType: model.tagType || 'info',
+        icon: model.icon || '',
+        available: model.available,
+        description: model.description
+      })
+    })
+    
+    // 转换为模型组格式
+    modelGroups.value = Object.keys(providers).map(provider => ({
+      label: provider,
+      models: providers[provider]
+    }))
+    
+    // 设置默认模型
+    if (availableModels.length > 0) {
+      const defaultModel = configManager.getDefaultModel()
+      if (availableModels.some(m => m.id === defaultModel)) {
+        selectedModel.value = defaultModel
+      } else {
+        selectedModel.value = availableModels[0].id
+      }
+    }
+    
+  } catch (error) {
+    console.error('加载模型列表失败:', error)
+    // 使用默认的模型列表作为后备
+    modelGroups.value = [
+      {
+        label: '开源模型',
+        models: [
+          { id: 'deepseek-chat', name: 'DeepSeek Chat', provider: 'DeepSeek', tag: '推荐', tagType: 'success', available: true },
+          { id: 'qwen-max', name: '通义千问 Max', provider: '阿里云', tag: '中文', tagType: 'info', available: true }
+        ]
+      },
+      {
+        label: '商业模型',
+        models: [
+          { id: 'gpt-4', name: 'GPT-4', provider: 'OpenAI', tag: '智能', tagType: 'success', available: true },
+          { id: 'gpt-3.5', name: 'GPT-3.5', provider: 'OpenAI', tag: '快速', tagType: 'info', available: true },
+          { id: 'claude-3', name: 'Claude 3', provider: 'Anthropic', tag: '安全', tagType: 'warning', available: true }
+        ]
+      }
     ]
   }
-])
+}
 
 // 模型状态
 const modelStatus = ref('connected') // connected, connecting, error
@@ -550,6 +624,24 @@ const handleAddAttachment = () => {
 
 
 
+// 获取模型图标
+const getModelIcon = (provider) => {
+  const iconMap = {
+    'DeepSeek': 'DS',
+    'OpenAI': 'AI',
+    'Anthropic': 'AN',
+    '阿里云': '云',
+    'Alibaba Cloud': '云',
+    'Google': 'G',
+    'Microsoft': 'MS',
+    'Meta': 'M',
+    '百度': '百',
+    '腾讯': '腾',
+    '字节跳动': '字'
+  }
+  return iconMap[provider] || provider.charAt(0).toUpperCase()
+}
+
 // 处理模型切换
 const handleModelChange = async (modelId) => {
   console.log('模型已切换到:', modelId)
@@ -558,23 +650,41 @@ const handleModelChange = async (modelId) => {
   modelStatus.value = 'connecting'
   
   try {
-    // 模拟模型连接过程
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    // 验证模型是否可用
+    const availableModels = await aiApi.getAvailableModels()
+    const selectedModel = availableModels.find(m => m.id === modelId)
     
-    // 更新设置存储中的默认模型
+    if (!selectedModel || !selectedModel.available) {
+      throw new Error('所选模型当前不可用')
+    }
+    
+    // 更新配置管理器中的默认模型
+    configManager.setDefaultModel(modelId)
+    
+    // 更新设置存储
     const settingsStore = useSettingsStore()
     settingsStore.updateAISettings({ defaultModel: modelId })
     
     // 更新模型状态为已连接
     modelStatus.value = 'connected'
     
+    // 显示模型统计信息
+    const stats = aiApi.getStats()
     const modelName = modelGroups.value.flatMap(g => g.models).find(m => m.id === modelId)?.name
-    ElMessage.success(`模型已切换到: ${modelName}`)
+    ElMessage.success({
+      message: `已切换到 ${modelName} 模型 (总调用: ${stats.client.totalCalls})`,
+      duration: 3000
+    })
     
     console.log('模型切换成功，当前模型:', modelId)
   } catch (error) {
     modelStatus.value = 'error'
-    ElMessage.error('模型切换失败，请检查网络连接')
+    ElMessage.error(`模型切换失败: ${error.message}`)
+    
+    // 恢复到之前的模型
+    const previousModel = configManager.getDefaultModel()
+    selectedModel.value = previousModel
+    
     console.error('模型切换错误:', error)
   }
 }
@@ -589,6 +699,9 @@ const handleSettingsCommand = async (command) => {
     } catch (error) {
       ElMessage.error('退出登录失败')
     }
+  } else if (command === 'api-config') {
+    // 打开API配置页面
+    router.push('/ai-test')
   } else {
     // 处理其他设置命令
     router.push(`/settings?tab=${command}`)
@@ -737,26 +850,53 @@ watch(chatMode, (newMode, oldMode) => {
   }
 })
 
-// 检查用户认证状态
+// 检查用户认证状态（与路由守卫协调）
 const checkAuth = () => {
-  console.log('检查认证状态:', authStore.isLoggedIn)
-  console.log('token:', localStorage.getItem('token'))
-  console.log('user:', localStorage.getItem('user'))
+  console.log('页面级认证检查:', {
+    isLoggedIn: authStore.isLoggedIn,
+    token: authStore.token,
+    user: authStore.user,
+    localStorageToken: localStorage.getItem('token'),
+    localStorageUser: localStorage.getItem('user')
+  })
   
-  if (!authStore.isLoggedIn) {
-    console.log('认证失败，跳转到登录页面')
+  // 更可靠的认证检查：同时检查store和localStorage
+  const hasValidToken = authStore.token || localStorage.getItem('token')
+  const hasValidUser = authStore.user || localStorage.getItem('user')
+  const isAuthenticated = hasValidToken && hasValidUser
+  
+  console.log('页面级认证检查结果:', {
+    hasValidToken: !!hasValidToken,
+    hasValidUser: !!hasValidUser,
+    isAuthenticated
+  })
+  
+  if (!isAuthenticated) {
+    console.log('页面级认证失败，跳转到登录页面')
     ElMessage.warning('请先登录')
     router.push('/login')
     return false
   }
-  console.log('认证成功')
+  
+  // 确保认证状态同步
+  if (!authStore.token && localStorage.getItem('token')) {
+    authStore.token = localStorage.getItem('token')
+    authStore.user = JSON.parse(localStorage.getItem('user') || 'null')
+    console.log('页面级：已从localStorage恢复认证状态')
+  }
+  
+  console.log('页面级认证成功')
   return true
 }
 
 // 页面加载时获取对话列表（优化加载）
 const loadData = async () => {
-  // 先检查认证状态
-  if (!checkAuth()) {
+  // 先检查认证状态，但不阻止页面渲染
+  const authResult = checkAuth()
+  if (!authResult) {
+    console.log('认证检查失败，但允许页面继续渲染')
+    // 认证失败时不阻止页面渲染，但显示提示信息
+    ElMessage.warning('请先登录以使用完整功能')
     return
   }
   
@@ -770,14 +910,58 @@ const loadData = async () => {
 }
 
 // 页面挂载时调用
-onMounted(() => {
-  // 检查认证状态
-  if (!checkAuth()) {
-    return
+onMounted(async () => {
+  console.log('Chat.vue 页面挂载开始')
+  
+  // 检查认证状态，但不阻止页面渲染
+  const authResult = checkAuth()
+  if (!authResult) {
+    console.log('认证检查失败，但允许页面继续渲染')
+    ElMessage.warning('请先登录以使用完整功能')
+    // 认证失败时仍然允许页面渲染，只是功能受限
   }
   
-  // 加载数据
-  loadData()
+  // 无论认证状态如何，都尝试加载数据
+  try {
+    await loadData()
+  } catch (error) {
+    console.error('加载数据失败:', error)
+    // 数据加载失败不影响页面渲染
+  }
+  
+  // 加载可用模型列表
+  try {
+    await loadAvailableModels()
+  } catch (error) {
+    console.error('加载模型列表失败:', error)
+    // 模型加载失败不影响页面渲染
+  }
+  
+  // 设置默认模型
+  try {
+    const settingsStore = useSettingsStore()
+    const aiSettings = settingsStore.aiSettings
+    if (aiSettings.defaultModel) {
+      selectedModel.value = aiSettings.defaultModel
+    }
+  } catch (error) {
+    console.error('设置默认模型失败:', error)
+  }
+  
+  // 验证配置状态
+  try {
+    const configValidation = configManager.validateConfig()
+    if (!configValidation.isValid && configValidation.errors.length > 0) {
+      ElMessage.warning({
+        message: 'API配置不完整，部分功能可能受限',
+        duration: 5000
+      })
+    }
+  } catch (error) {
+    console.error('验证配置失败:', error)
+  }
+  
+  console.log('Chat.vue 页面挂载完成')
 })
 </script>
 
@@ -1033,6 +1217,35 @@ onMounted(() => {
   max-width: 1200px;
   margin: 0 auto;
   position: relative;
+  padding: 0 20px;
+  height: 60px;
+}
+
+.chat-header-left {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  margin-right: auto;
+}
+
+.chat-header-right {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  margin-left: auto;
+}
+
+.chat-title {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-width: 200px;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
 }
 
 .chat-header-left {
@@ -1044,49 +1257,312 @@ onMounted(() => {
 .ai-api-selector {
   display: flex;
   align-items: center;
-  gap: 8px;
-  background: rgba(255, 255, 255, 0.8);
-  border-radius: 6px;
-  padding: 6px 10px;
-  border: 1px solid #e4e7ed;
+  gap: 16px;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-radius: 14px;
+  padding: 10px 20px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   position: static;
   z-index: 10;
-  height: 36px;
+  height: 52px;
   box-sizing: border-box;
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+  margin-right: auto;
+  flex: 0 0 auto;
+}
+
+.ai-api-selector:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  border-color: #cbd5e1;
+  transform: translateY(-1px);
 }
 
 .ai-model-select {
-  width: 160px;
+  width: 320px;
+  min-width: 280px;
 }
 
 .ai-model-select :deep(.el-input__inner) {
-  font-size: 0.95rem;
-  font-weight: 500;
-  color: #303133;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #1e293b;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 10px 16px;
+  height: 40px;
+}
+
+.ai-model-select :deep(.el-input__inner:focus) {
+  border: none;
+  box-shadow: none;
 }
 
 .ai-model-select :deep(.el-select__placeholder) {
-  color: #606266;
+  color: #64748b;
   font-weight: 500;
+  font-size: 0.95rem;
 }
+
+.ai-model-select :deep(.el-select .el-input .el-select__caret) {
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+.ai-model-select :deep(.el-select-dropdown) {
+  border: 1px solid #e2e8f0;
+  border-top: 1px solid #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  box-shadow: 
+    0 2px 4px rgba(0, 0, 0, 0.05),
+    0 8px 24px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  border-radius: 12px;
+  overflow: hidden;
+  min-width: 380px !important;
+  width: auto !important;
+  padding: 0;
+  background: #ffffff;
+  backdrop-filter: blur(10px);
+  position: relative;
+}
+
+.ai-model-select :deep(.el-select-dropdown__list) {
+  padding: 0;
+}
+
+.ai-model-select :deep(.el-select-dropdown__list) {
+  padding: 0;
+}
+
+
 
 .model-option {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
+  padding: 16px 20px;
+  border-radius: 0;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  margin: 0;
+  border: none;
+  border-bottom: 1px solid #e2e8f0;
+  width: 100%;
+  box-sizing: border-box;
+  background: transparent;
+  position: relative;
+  min-height: 60px;
+}
+
+.model-option:not(:last-child) {
+  margin-bottom: 1px;
+}
+
+.model-option:last-child {
+  border-bottom: none;
+}
+
+.model-option:hover {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-bottom-color: #cbd5e1;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.model-option.selected {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.model-option.selected {
+  background: #ffffff !important;
+  border-left: 4px solid #0284c7 !important;
+}
+
+.model-option.selected .model-name {
+  font-weight: 400 !important;
+  color: #000000 !important;
+}
+
+.model-option.selected .provider {
+  font-weight: 400 !important;
+  color: #374151 !important;
+}
+
+.model-option::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, #f1f5f9 20%, #f1f5f9 80%, transparent 100%);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.model-option:hover::before {
+  opacity: 1;
+}
+
+.model-option:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.model-icon-left {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .model-icon {
-  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 8px;
+  color: white;
+  font-size: 0.9rem;
+  font-weight: bold;
+  box-shadow: 
+    0 2px 4px rgba(0, 0, 0, 0.2),
+    inset 0 1px 1px rgba(255, 255, 255, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  position: relative;
+}
+
+.model-icon::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, transparent 50%);
+  pointer-events: none;
+}
+
+.model-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.model-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .model-name {
-  flex: 1;
+  font-weight: 600;
+  font-size: 1rem;
+  color: #1e293b;
+  line-height: 1.4;
+}
+
+.model-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.model-tag {
+  font-size: 0.75rem;
+  height: 20px;
+  line-height: 18px;
+  padding: 0 6px;
+}
+
+.status-indicator {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  position: relative;
+}
+
+.status-indicator.available {
+  background: #10b981;
+  box-shadow: 0 1px 3px rgba(16, 185, 129, 0.3);
+}
+
+.status-indicator.unavailable {
+  background: #ef4444;
+  box-shadow: 0 1px 3px rgba(239, 68, 68, 0.3);
+}
+
+.status-indicator::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  pointer-events: none;
+}
+
+.model-description {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.provider {
+  font-size: 0.85rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.description {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  line-height: 1.2;
+}
+
+.model-arrow {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: all 0.3s ease;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.model-option:hover .model-arrow {
+  opacity: 1;
+  transform: translateX(2px);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
 }
 
 .model-status {
   display: flex;
   align-items: center;
+  gap: 8px;
+  color: #475569;
+  font-size: 0.9rem;
+  font-weight: 500;
 }
 
 .model-status .el-badge {
@@ -1112,18 +1588,35 @@ onMounted(() => {
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
+  flex: 1;
+  justify-content: center;
+  min-width: 200px;
 }
 
 .chat-title h1 {
-  font-size: 1.5rem;
-  font-weight: 600;
-  margin: 0 0.5rem;
+  font-size: 2.2rem;
+  font-weight: 800;
+  margin: 0 1rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  letter-spacing: 0.5px;
+  padding: 8px 20px;
+  border-radius: 12px;
+  background-color: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .chat-controls {
   display: flex;
   align-items: center;
   margin-left: auto;
+  flex: 0 0 auto;
+  margin-right: 0;
 }
 
 .mode-selector-wrapper {
@@ -1132,21 +1625,27 @@ onMounted(() => {
 }
 
 .mode-dropdown-button {
-  background: rgba(255, 255, 255, 0.95);
-  border: 1px solid #dcdfe6;
-  border-radius: 6px;
-  padding: 6px 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 8px 20px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   transition: all 0.3s ease;
-  height: 36px;
+  height: 40px;
+  font-weight: 600;
+  color: #475569;
+  min-width: 140px;
+  justify-content: center;
 }
 
 .mode-dropdown-button:hover {
-  border-color: #409eff;
-  background: #f5f7fa;
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+  border-color: #cbd5e1;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  transform: translateY(-1px);
 }
 
 .mode-selector-label {
@@ -1428,5 +1927,134 @@ onMounted(() => {
 .empty-text {
   font-size: 1.1rem;
   text-align: center;
+}
+
+/* AI模型选择器样式 */
+.ai-api-selector {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+
+
+
+
+.model-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+}
+
+.model-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.provider {
+  font-size: 0.9rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.description {
+  font-size: 0.85rem;
+  color: #94a3b8;
+  font-style: italic;
+  line-height: 1.2;
+}
+
+.model-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #475569;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .ai-model-select {
+    width: 200px;
+  }
+}
+
+/* 深色主题支持 */
+@media (prefers-color-scheme: dark) {
+  .ai-api-selector {
+    background: linear-gradient(135deg, rgba(30, 41, 59, 0.9) 0%, rgba(15, 23, 42, 0.9) 100%);
+    border-color: #334155;
+    backdrop-filter: blur(10px);
+  }
+  
+  .ai-api-selector:hover {
+    background: linear-gradient(135deg, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.95) 100%);
+    border-color: #475569;
+  }
+  
+  .ai-model-select :deep(.el-input__inner) {
+    background: transparent;
+    color: #f1f5f9;
+  }
+  
+  .ai-model-select :deep(.el-select__placeholder) {
+    color: #94a3b8;
+  }
+  
+  .ai-model-select :deep(.el-select .el-input .el-select__caret) {
+    color: #94a3b8;
+  }
+  
+  .ai-model-select :deep(.el-select-dropdown) {
+    background: #1e293b;
+    border: 1px solid #334155;
+  }
+  
+  .ai-model-select :deep(.el-select-group__title) {
+    background: linear-gradient(135deg, #334155 0%, #1e293b 100%);
+    color: #cbd5e1;
+    border-bottom-color: #475569;
+  }
+  
+  .model-option:hover {
+    background: linear-gradient(135deg, #334155 0%, #1e293b 100%);
+    border-color: #475569;
+  }
+  
+  .model-option.selected {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+  
+  .model-option.selected {
+    background: #1e293b !important;
+    border-left: 4px solid #38bdf8 !important;
+  }
+  
+  .model-option.selected .model-name {
+    font-weight: 400 !important;
+    color: #ffffff !important;
+  }
+  
+  .model-option.selected .provider {
+    font-weight: 400 !important;
+    color: #cbd5e1 !important;
+  }
+  
+  .model-name span {
+    color: #f1f5f9;
+  }
+  
+  .provider {
+    color: #94a3b8;
+  }
+  
+  .description {
+    color: #64748b;
+  }
 }
 </style>

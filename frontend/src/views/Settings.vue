@@ -6,8 +6,10 @@
           返回聊天
         </el-button>
       </div>
-      <h1>设置</h1>
-      <p>个性化您的聊天体验</p>
+      <div class="header-title">
+        <h1>设置</h1>
+        <p>个性化您的聊天体验</p>
+      </div>
     </div>
     
     <div class="settings-content">
@@ -646,23 +648,65 @@ const savePreferences = () => {
   saving.value = true
   try {
     const oldLanguage = settingsStore.settings.preferences.language
+    const oldFontSize = settingsStore.settings.preferences.fontSize
+    const oldTheme = settingsStore.settings.preferences.theme
+    
     settingsStore.updatePreferences(preferences)
     
-    // 如果语言发生变化，刷新界面以应用新语言
-    if (oldLanguage !== preferences.language) {
-      ElMessage.success(`偏好设置保存成功，语言已切换到${getLanguageText(preferences.language)}`)
-      // 延迟刷新界面以应用新语言
-      setTimeout(() => {
-        window.location.reload()
-      }, 1000)
+    // 如果字体大小发生变化，立即应用
+    if (oldFontSize !== preferences.fontSize) {
+      applyFontSize()
+      ElMessage.success(`偏好设置保存成功，字体大小已切换到${preferences.fontSize}`)
     } else {
       ElMessage.success('偏好设置保存成功')
+    }
+    
+    // 如果主题发生变化，立即应用
+    if (oldTheme !== preferences.theme) {
+      applyTheme(preferences.theme)
+      console.log(`[设置] 主题已切换到: ${preferences.theme}`)
+    }
+    
+    // TODO: 语言切换功能等待i18n系统实现
+    // 目前仅保存语言设置，不进行界面语言切换
+    if (oldLanguage !== preferences.language) {
+      console.log(`[设置] 语言设置已保存: ${preferences.language} (等待i18n实现)`)
     }
   } catch (error) {
     ElMessage.error('保存失败')
   } finally {
     saving.value = false
   }
+}
+
+// 应用字体大小
+const applyFontSize = () => {
+  const fontSize = preferences.fontSize
+  const html = document.documentElement
+  
+  // 移除现有的字体大小类
+  html.classList.remove('font-size-small', 'font-size-medium', 'font-size-large')
+  
+  // 添加新的字体大小类
+  html.classList.add(`font-size-${fontSize}`)
+}
+
+// 应用语言设置（预留接口，等待i18n实现）
+const applyLanguage = () => {
+  const language = preferences.language
+  const html = document.documentElement
+  
+  // 移除现有的语言类
+  html.classList.remove('lang-zh', 'lang-en', 'lang-ja', 'lang-ko')
+  
+  // 添加新的语言类
+  html.classList.add(`lang-${language}`)
+  
+  // 设置文档语言属性
+  html.setAttribute('lang', language)
+  
+  // TODO: 等待i18n语言包系统实现后，替换为完整的语言切换逻辑
+  console.log(`[设置] 语言设置已应用: ${language} (等待i18n实现)`)
 }
 
 // 获取语言显示文本
@@ -737,8 +781,27 @@ const testAIConnection = async () => {
 
 // 立即应用主题
 const applyThemeNow = () => {
+  // 强制重新应用当前主题
+  const currentTheme = preferences.theme
+  console.log(`[设置] 立即应用主题: ${currentTheme}`)
+  
+  // 调用设置存储的主题应用函数
   settingsStore.applyTheme()
-  ElMessage.success('主题已立即应用')
+  
+  // 同时调用本地主题应用函数确保生效
+  applyTheme(currentTheme)
+  
+  ElMessage.success(`主题已立即应用: ${getThemeText(currentTheme)}`)
+}
+
+// 获取主题显示文本
+const getThemeText = (theme) => {
+  const themeMap = {
+    'light': '浅色',
+    'dark': '深色',
+    'auto': '自动'
+  }
+  return themeMap[theme] || theme
 }
 
 // 测试聊天功能
@@ -1005,10 +1068,23 @@ const beforeAvatarUpload = (file) => {
 
 // 应用主题
 const applyTheme = (theme) => {
-  if (theme === 'dark') {
-    document.documentElement.classList.add('dark')
+  const html = document.documentElement
+  
+  // 移除所有主题类
+  html.classList.remove('light-theme', 'dark-theme', 'light', 'dark')
+  
+  // 处理自动模式
+  let actualTheme = theme
+  if (theme === 'auto') {
+    actualTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+  }
+  
+  if (actualTheme === 'dark') {
+    html.classList.add('dark-theme', 'dark')
+    console.log(`[主题] 应用深色主题`)
   } else {
-    document.documentElement.classList.remove('dark')
+    html.classList.add('light-theme', 'light')
+    console.log(`[主题] 应用浅色主题`)
   }
 }
 
@@ -1026,15 +1102,23 @@ onMounted(() => {
 }
 
 .settings-header {
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   margin-bottom: 20px;
   position: relative;
+  min-height: 60px;
 }
 
 .header-actions {
   position: absolute;
-  top: 0;
   left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.header-title {
+  text-align: center;
 }
 
 .settings-header h1 {
@@ -1376,36 +1460,63 @@ onMounted(() => {
   font-size: 16px !important;
   padding: 15px 20px !important;
   border-bottom: 1px solid #f0f0f0 !important;
-  background: white !important;
+  background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%) !important;
   transition: all 0.3s ease !important;
   min-height: 50px !important;
   display: flex !important;
   align-items: center !important;
+  position: relative !important;
 }
 
 :deep(.el-form-item[data-language]) .el-select-dropdown .el-select-dropdown__item:last-child {
   border-bottom: none !important;
 }
 
+:deep(.el-form-item[data-language]) .el-select-dropdown .el-select-dropdown__item:not(:hover):not(.selected) {
+  background: linear-gradient(135deg, #f0f2f5 0%, #f8f9fa 100%) !important;
+  border-left: 4px solid transparent !important;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+}
+
 :deep(.el-form-item[data-language]) .el-select-dropdown .el-select-dropdown__item:hover {
-  background-color: #ecf5ff !important;
+  background: linear-gradient(135deg, #ecf5ff 0%, #d9ecff 100%) !important;
   color: #409eff !important;
   font-weight: 800 !important;
   transform: translateX(5px) !important;
   box-shadow: 0 2px 8px rgba(64, 158, 255, 0.2) !important;
+  border-left: 4px solid #409eff !important;
 }
 
 :deep(.el-form-item[data-language]) .el-select-dropdown .el-select-dropdown__item.selected {
-  background-color: #409eff !important;
+  background: linear-gradient(135deg, #409eff 0%, #66b1ff 100%) !important;
   color: white !important;
   font-weight: 800 !important;
   box-shadow: 0 2px 8px rgba(64, 158, 255, 0.3) !important;
+  border-left: 4px solid #337ecc !important;
 }
 
 :deep(.el-form-item[data-language]) .el-select-dropdown .el-select-dropdown__item span {
   color: inherit !important;
   font-weight: inherit !important;
   font-size: inherit !important;
+}
+
+/* 语言选项图标和装饰 */
+:deep(.el-form-item[data-language]) .el-select-dropdown .el-select-dropdown__item::before {
+  content: "🌐" !important;
+  margin-right: 10px !important;
+  font-size: 18px !important;
+  opacity: 0.7 !important;
+}
+
+:deep(.el-form-item[data-language]) .el-select-dropdown .el-select-dropdown__item:hover::before {
+  opacity: 1 !important;
+  transform: scale(1.1) !important;
+}
+
+:deep(.el-form-item[data-language]) .el-select-dropdown .el-select-dropdown__item.selected::before {
+  content: "✅" !important;
+  opacity: 1 !important;
 }
 
 /* 确保所有文字都是深黑色 */

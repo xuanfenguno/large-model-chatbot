@@ -92,6 +92,15 @@ const routes = [
       requiresAuth: false,
       title: '隐私政策'
     }
+  },
+  {
+    path: '/ai-test',
+    name: 'AITest',
+    component: () => import('../views/AITest.vue'),
+    meta: {
+      requiresAuth: false,
+      title: 'API测试'
+    }
   }
 ]
 
@@ -115,15 +124,36 @@ router.beforeEach(async (to, from, next) => {
       path: to.path,
       token: authStore.token,
       user: authStore.user,
-      isLoggedIn: authStore.isLoggedIn
+      isLoggedIn: authStore.isLoggedIn,
+      localStorageToken: localStorage.getItem('token'),
+      localStorageUser: localStorage.getItem('user')
     })
     
-    if (!authStore.isLoggedIn) {
+    // 更可靠的认证检查：同时检查store和localStorage
+    const hasValidToken = authStore.token || localStorage.getItem('token')
+    const hasValidUser = authStore.user || localStorage.getItem('user')
+    const isAuthenticated = hasValidToken && hasValidUser
+    
+    console.log('认证检查结果:', {
+      hasValidToken: !!hasValidToken,
+      hasValidUser: !!hasValidUser,
+      isAuthenticated
+    })
+    
+    if (!isAuthenticated) {
       console.log('用户未登录，跳转到登录页面')
       // 如果用户未登录，直接跳转到登录页面
       next({ name: 'Login', query: { redirect: to.fullPath } })
     } else {
       console.log('用户已登录，允许访问')
+      
+      // 确保认证状态同步
+      if (!authStore.token && localStorage.getItem('token')) {
+        authStore.token = localStorage.getItem('token')
+        authStore.user = JSON.parse(localStorage.getItem('user') || 'null')
+        console.log('已从localStorage恢复认证状态')
+      }
+      
       next()
     }
   } else {

@@ -49,6 +49,9 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    # 性能监控中间件
+    'config.middleware.performance.PerformanceMiddleware',
+    'config.middleware.performance.DatabaseQueryMiddleware',
 ]
 
 ROOT_URLCONF = 'config.urls'

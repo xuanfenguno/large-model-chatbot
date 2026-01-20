@@ -49,10 +49,29 @@ export const useAuthStore = defineStore('auth', () => {
         throw new Error('API响应数据为空')
       }
       
-      const { access: newToken, username: usernameData, email: emailData } = responseData
+      // 更健壮的数据解析，支持多种响应格式
+      let newToken, usernameData, emailData
+      
+      // 尝试不同的字段名
+      if (responseData.access) {
+        newToken = responseData.access
+        usernameData = responseData.username
+        emailData = responseData.email
+      } else if (responseData.token) {
+        newToken = responseData.token
+        usernameData = responseData.username || responseData.user?.username
+        emailData = responseData.email || responseData.user?.email
+      } else if (responseData.data) {
+        // 嵌套data字段的情况
+        newToken = responseData.data.access || responseData.data.token
+        usernameData = responseData.data.username || responseData.data.user?.username
+        emailData = responseData.data.email || responseData.data.user?.email
+      }
+      
+      console.log('解析后的数据:', { newToken, usernameData, emailData })
 
       if (!newToken || !usernameData) {
-        console.error('登录响应缺少必需字段:', responseData)
+        console.error('登录响应缺少必需字段，完整响应:', responseData)
         throw new Error('登录响应缺少必需字段')
       }
 
