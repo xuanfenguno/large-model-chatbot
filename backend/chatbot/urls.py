@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import ConversationViewSet, MessageViewSet, login_view, register_view, health_check, available_models, wechat_auth_url, wechat_auth_callback, qq_auth_url, qq_auth_callback, github_auth_url, github_auth_callback, request_password_reset, reset_password
+from .views import ConversationViewSet, MessageViewSet, login_view, register_view, health_check, available_models, wechat_auth_url, wechat_auth_callback, qq_auth_url, qq_auth_callback, github_auth_url, github_auth_callback, request_password_reset, reset_password, function_router
 from .voice_views import initiate_call, answer_call, reject_call, end_call, get_call_status, signaling, get_signaling
 
 router = DefaultRouter()
@@ -21,6 +21,8 @@ urlpatterns = [
     path('auth/github/callback/', github_auth_callback, name='github-auth-callback'),
     path('password/reset/request/', request_password_reset, name='request-password-reset'),
     path('password/reset/', reset_password, name='reset-password'),
+    # 功能路由API
+    path('function-router/', function_router, name='function-router'),
     # 语音通话API
     path('voice/initiate/', initiate_call, name='initiate-call'),
     path('voice/answer/', answer_call, name='answer-call'),

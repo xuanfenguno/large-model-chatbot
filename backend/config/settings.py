@@ -41,17 +41,18 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
-    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    # 统一错误处理中间件
+    'chatbot.middleware.ErrorHandlingMiddleware',
     # 性能监控中间件
     'config.middleware.performance.PerformanceMiddleware',
-    'config.middleware.performance.DatabaseQueryMiddleware',
 ]
 
 ROOT_URLCONF = 'config.urls'
@@ -181,9 +182,34 @@ STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
-# CORS settings
-CORS_ALLOW_ALL_ORIGINS = True
+# CORS settings - 生产环境中不应允许所有来源
+if DEBUG:
+    # 开发环境下允许所有来源
+    CORS_ALLOW_ALL_ORIGINS = True
+else:
+    # 生产环境下指定允许的域名
+    CORS_ALLOWED_ORIGINS = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:8080", 
+        "http://127.0.0.1:8080",
+        # 在生产环境中添加实际的前端域名
+        # "https://yourdomain.com",
+    ]
+    
 CORS_ALLOW_CREDENTIALS = True
+
+# 安全设置
+if not DEBUG:
+    # 生产环境的安全设置
+    SECURE_SSL_REDIRECT = True  # 强制HTTPS
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SECURE_BROWSER_XSS_FILTER = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    X_FRAME_OPTIONS = 'DENY'  # 防止点击劫持
+    SECURE_HSTS_SECONDS = 31536000  # HSTS
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
 
 # REST Framework settings
 REST_FRAMEWORK = {

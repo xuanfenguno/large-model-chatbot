@@ -15,12 +15,9 @@ class AIConfigManager {
    */
   _getDefaultConfig() {
     return {
-      // API密钥配置
+      // API密钥配置（只保留国内模型）
       apiKeys: {
-        OPENAI_API_KEY: '',
         DEEPSEEK_API_KEY: '',
-        CLAUDE_API_KEY: '',
-        GEMINI_API_KEY: '',
         QWEN_API_KEY: 'sk-68a322b84bc449b395e27a7dc4df7d64',
         KIMI_API_KEY: '',
         DOUBAO_API_KEY: '',
@@ -30,24 +27,39 @@ class AIConfigManager {
       // 模型默认配置
       defaultModel: 'deepseek-chat',
       
-      // 模型参数配置
+      // 模型参数配置（只保留国内模型）
       modelConfigs: {
-        'gpt-3.5-turbo': {
-          temperature: 0.6,
-          maxTokens: 2000,
-          topP: 0.7
-        },
-        'gpt-4': {
-          temperature: 0.6,
-          maxTokens: 2000,
-          topP: 0.7
-        },
         'deepseek-chat': {
           temperature: 0.6,
           maxTokens: 2000,
           topP: 0.7
         },
-        'claude-3-opus': {
+        'qwen-turbo': {
+          temperature: 0.6,
+          maxTokens: 2000,
+          topP: 0.7
+        },
+        'qwen-plus': {
+          temperature: 0.6,
+          maxTokens: 2000,
+          topP: 0.7
+        },
+        'qwen-max': {
+          temperature: 0.6,
+          maxTokens: 2000,
+          topP: 0.7
+        },
+        'kimi-chat': {
+          temperature: 0.6,
+          maxTokens: 2000,
+          topP: 0.7
+        },
+        'doubao-chat': {
+          temperature: 0.6,
+          maxTokens: 2000,
+          topP: 0.7
+        },
+        'bailian-chat': {
           temperature: 0.6,
           maxTokens: 2000,
           topP: 0.7
@@ -260,13 +272,11 @@ class AIConfigManager {
    */
   _getApiKeyName(provider) {
     const keyMap = {
-      'openai': 'OPENAI_API_KEY',
       'deepseek': 'DEEPSEEK_API_KEY',
-      'claude': 'CLAUDE_API_KEY',
-      'gemini': 'GEMINI_API_KEY',
       'qwen': 'QWEN_API_KEY',
       'kimi': 'KIMI_API_KEY',
-      'doubao': 'DOUBAO_API_KEY'
+      'doubao': 'DOUBAO_API_KEY',
+      'bailian': 'BAILIAN_API_KEY'
     }
     
     return keyMap[provider.toLowerCase()] || `${provider.toUpperCase()}_API_KEY`
@@ -279,32 +289,11 @@ class AIConfigManager {
   getSupportedProviders() {
     return [
       {
-        id: 'openai',
-        name: 'OpenAI',
-        description: 'GPT系列模型',
-        website: 'https://openai.com',
-        apiKeyName: 'OPENAI_API_KEY'
-      },
-      {
         id: 'deepseek',
         name: 'DeepSeek',
         description: '深度求索AI模型',
         website: 'https://deepseek.com',
         apiKeyName: 'DEEPSEEK_API_KEY'
-      },
-      {
-        id: 'claude',
-        name: 'Claude',
-        description: 'Anthropic AI助手',
-        website: 'https://anthropic.com',
-        apiKeyName: 'CLAUDE_API_KEY'
-      },
-      {
-        id: 'gemini',
-        name: 'Gemini',
-        description: 'Google AI模型',
-        website: 'https://gemini.google.com',
-        apiKeyName: 'GEMINI_API_KEY'
       },
       {
         id: 'qwen',
@@ -326,6 +315,13 @@ class AIConfigManager {
         description: '字节跳动AI助手',
         website: 'https://doubao.com',
         apiKeyName: 'DOUBAO_API_KEY'
+      },
+      {
+        id: 'bailian',
+        name: '百炼',
+        description: '阿里云百炼平台',
+        website: 'https://bailian.aliyun.com',
+        apiKeyName: 'BAILIAN_API_KEY'
       }
     ]
   }

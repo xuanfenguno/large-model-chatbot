@@ -40,6 +40,15 @@ const routes = [
     }
   },
   {
+    path: '/function-router',
+    name: 'FunctionRouter',
+    component: () => import('../views/FunctionRouter.vue'),
+    meta: {
+      requiresAuth: true,
+      title: 'AI多功能助手'
+    }
+  },
+  {
     path: '/voice-chat',
     name: 'VoiceChat',
     component: () => import('../views/VoiceChat.vue'),

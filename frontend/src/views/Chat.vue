@@ -51,7 +51,18 @@
 
       <!-- 左侧栏底部设置区域 -->
       <div class="sidebar-footer">
-        <!-- 语音助手入口 - 在上方 -->
+        <!-- 功能路由入口 - 在最上方 -->
+        <el-button
+          type="primary"
+          size="small"
+          class="function-router-btn"
+          @click="goToFunctionRouter"
+          icon="Menu"
+        >
+          AI多功能助手
+        </el-button>
+        
+        <!-- 语音助手入口 - 在中间 -->
         <el-button
           type="success"
           size="small"
@@ -106,21 +117,8 @@
           <!-- 左侧：AI API选择器 -->
           <div class="chat-header-left">
             <div class="ai-api-selector">
-              <el-select
-                v-model="selectedModel"
-                placeholder="选择AI模型"
-                size="default"
-                class="ai-model-select"
-                @change="handleModelChange"
-                :loading="modelStatus === 'connecting'"
-              >
-                <el-option
-                  v-for="model in flatModels"
-                  :key="model.id"
-                  :label="model.name"
-                  :value="model.id"
-                  :disabled="!model.available"
-                >
+              <el-select v-model="selectedModel" placeholder="选择AI模型" size="default" class="ai-model-select" @change="handleModelChange" :loading="modelStatus === 'connecting'">
+                <el-option v-for="model in flatModels" :key="model.id" :label="model.name" :value="model.id" :disabled="!model.available">
                   <div class="model-option" :class="{ selected: selectedModel === model.id }">
                     <div class="model-icon-left">
                       <div class="model-icon">
@@ -151,7 +149,7 @@
                   </div>
                 </el-option>
               </el-select>
-              
+ 
               <!-- 模型状态指示器 -->
               <div class="model-status">
                 <el-tooltip :content="modelStatusText" placement="bottom">
@@ -164,29 +162,20 @@
               </div>
             </div>
           </div>
-          
-          <!-- 中间：聊天标题 -->
+ 
+          <!-- 中间：新会话按钮（居中） -->
           <div class="chat-title">
-            <el-icon :size="24">
-              <Message />
-            </el-icon>
-            <h1>{{ conversationTitle }}</h1>
+            <el-button type="primary" size="large" icon="Plus" @click="handleNewChat" class="new-chat-btn">
+              新会话
+            </el-button>
           </div>
-          
+ 
           <!-- 右侧：聊天模式选择器 -->
           <div class="chat-header-right">
             <div class="chat-controls">
               <div class="mode-selector-wrapper">
-                <el-dropdown 
-                  @command="handleModeChange"
-                  placement="bottom-end"
-                  trigger="click"
-                >
-                  <el-button 
-                    type="text" 
-                    size="small"
-                    class="mode-dropdown-button"
-                  >
+                <el-dropdown @command="handleModeChange" placement="bottom-end" trigger="click">
+                  <el-button type="text" size="small" class="mode-dropdown-button">
                     <span class="mode-selector-label">聊天模式</span>
                     <el-icon class="el-icon--right">
                       <ArrowDown />
@@ -268,7 +257,7 @@
             v-model="inputContent"
             type="textarea"
             :rows="1"
-            placeholder="输入您的消息..."
+            placeholder="说点什么吧～"
             resize="none"
             @keyup.enter.exact="handleSendMessage"
             @keyup.enter.ctrl.exact="handleSendMessage"
@@ -835,6 +824,11 @@ const goToVoiceChat = () => {
   router.push('/voice-chat')
 }
 
+// 跳转到功能路由界面
+const goToFunctionRouter = () => {
+  router.push('/function-router')
+}
+
 // 跳转到视频聊天界面
 const goToVideoChat = () => {
   router.push('/video-chat')
@@ -963,6 +957,11 @@ onMounted(async () => {
   
   console.log('Chat.vue 页面挂载完成')
 })
+
+// 跳转到个人资料页面
+const goToProfile = () => {
+  router.push('/settings?tab=profile')
+}
 </script>
 
 <style scoped>
@@ -980,6 +979,7 @@ onMounted(async () => {
   border-right: 1px solid #ebeef5;
   display: flex;
   flex-direction: column;
+  height: 100vh;
 }
 
 .sidebar-header {
@@ -1071,10 +1071,33 @@ onMounted(async () => {
   background: rgba(255, 255, 255, 0.8);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px; /* 减少按钮间距 */
 }
 
-/* 语音助手按钮 - 在上方 */
+/* 功能路由按钮 - 在最上方 */
+.function-router-btn {
+  width: calc(100% - 1rem);
+  height: 36px;
+  background: linear-gradient(45deg, #667eea, #764ba2);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  font-weight: 600;
+  font-size: 12px;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  margin: 0 0.5rem;
+}
+
+.function-router-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+/* 语音助手按钮 - 在中间 */
 .voice-assistant-btn {
   width: calc(100% - 1rem);
   height: 36px;
@@ -1136,22 +1159,29 @@ onMounted(async () => {
   background: white;
   transition: all 0.3s ease;
   margin: 0 0.5rem;
+  background: linear-gradient(45deg, #4facfe, #00f2fe); /* 更醒目的渐变背景 */
+  color: white;
+  border: 2px solid rgba(255, 255, 255, 0.3);
 }
 
 .settings-button:hover {
-  border-color: #409eff;
-  background: #f5f7fa;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(79, 172, 254, 0.3);
+  border-color: rgba(255, 255, 255, 0.6);
+  background: linear-gradient(45deg, #3a9ce0, #00d9f0); /* 悬停时的深色渐变 */
+  color: white;
 }
 
 .settings-button .el-icon {
-  color: #606266;
+  color: white;
   font-size: 14px;
   margin-right: 4px;
 }
 
 .settings-button span {
   font-size: 12px;
-  color: #303133;
+  color: white;
+  font-weight: 600;
 }
 
 /* 设置菜单项字体提亮 */
@@ -1199,12 +1229,12 @@ onMounted(async () => {
   border: 1px solid #e4e7ed;
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  margin: 1rem;
+  margin: 0;
   overflow: hidden;
 }
 
 .chat-header {
-  padding: 0.75rem 1.5rem;
+  padding: 0;
   background: rgba(255, 255, 255, 0.98);
   backdrop-filter: blur(10px);
   border-bottom: 1px solid #ebeef5;
@@ -1214,45 +1244,53 @@ onMounted(async () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  max-width: 1200px;
-  margin: 0 auto;
+  width: 100%;
   position: relative;
-  padding: 0 20px;
+  padding: 0;
   height: 60px;
+  background: rgba(255, 255, 255, 0.98);
+  border-bottom: 1px solid #ebeef5;
 }
 
 .chat-header-left {
-  flex: 0 0 auto;
-  display: flex;
-  justify-content: flex-start;
-  align-items: center;
-  margin-right: auto;
+  position: absolute !important;
+  left: 0px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  display: flex !important;
+  align-items: center !important;
+  z-index: 20 !important;
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
 .chat-header-right {
-  flex: 0 0 auto;
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  margin-left: auto;
+  position: absolute !important;
+  right: 0px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  display: flex !important;
+  align-items: center !important;
+  z-index: 20 !important;
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
 .chat-title {
-  flex: 1;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-width: 200px;
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
+  position: absolute !important;
+  left: 50% !important;
+  top: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  min-width: 120px !important;
+  z-index: 10 !important;
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
-.chat-header-left {
-  display: flex;
-  align-items: center;
-  flex: 0 0 auto;
-}
+/* 删除重复的chat-header-left样式 */
 
 .ai-api-selector {
   display: flex;
@@ -1269,7 +1307,7 @@ onMounted(async () => {
   box-sizing: border-box;
   backdrop-filter: blur(10px);
   transition: all 0.3s ease;
-  margin-right: auto;
+  margin-right: 0;
   flex: 0 0 auto;
 }
 
@@ -1585,12 +1623,29 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   color: #303133;
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
   flex: 1;
   justify-content: center;
-  min-width: 200px;
+  min-width: 120px;
+}
+
+.new-chat-btn {
+  font-size: 1.1rem;
+  font-weight: 600;
+  padding: 12px 24px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  border: none;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  transition: all 0.3s ease;
+}
+
+.new-chat-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+}
+
+.new-chat-btn:active {
+  transform: translateY(0);
 }
 
 .chat-title h1 {
@@ -2056,5 +2111,35 @@ onMounted(async () => {
   .description {
     color: #64748b;
   }
+}
+
+/* 右下角用户头像悬浮块样式 */
+.user-avatar-float {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 100;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.user-avatar-float:hover {
+  transform: scale(1.1);
+}
+
+.user-avatar {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: linear-gradient(45deg, #667eea, #764ba2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+  border: 2px solid white;
+}
+
+.user-avatar-float:hover .user-avatar {
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
 }
 </style>

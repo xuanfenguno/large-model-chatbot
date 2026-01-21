@@ -202,13 +202,11 @@ class UnifiedAIApi {
    * @returns {string} 提供商名称
    */
   _getProviderFromModel(modelId) {
-    if (modelId.startsWith('gpt-')) return 'openai'
     if (modelId.startsWith('deepseek')) return 'deepseek'
-    if (modelId.startsWith('claude')) return 'claude'
-    if (modelId.startsWith('gemini')) return 'gemini'
     if (modelId.startsWith('qwen')) return 'qwen'
     if (modelId.startsWith('kimi')) return 'kimi'
     if (modelId.startsWith('doubao')) return 'doubao'
+    if (modelId.startsWith('bailian')) return 'bailian'
     return 'unknown'
   }
 

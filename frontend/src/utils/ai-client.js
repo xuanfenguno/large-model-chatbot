@@ -9,10 +9,7 @@ import { ElMessage } from 'element-plus'
 class AIClient {
   constructor() {
     this.providers = {
-      'openai': new OpenAIProvider(),
       'deepseek': new DeepSeekProvider(),
-      'claude': new ClaudeProvider(),
-      'gemini': new GeminiProvider(),
       'qwen': new QwenProvider(),
       'kimi': new KimiProvider(),
       'doubao': new DouBaoProvider(),
@@ -161,21 +158,17 @@ class AIClient {
    * @returns {Object} 提供商实例
    */
   _getProvider(modelId) {
-    // 根据模型ID前缀判断提供商
-    if (modelId.startsWith('gpt-')) {
-      return this.providers.openai
-    } else if (modelId.startsWith('deepseek')) {
+    // 根据模型ID前缀判断提供商（只支持国内模型）
+    if (modelId.startsWith('deepseek')) {
       return this.providers.deepseek
-    } else if (modelId.startsWith('claude')) {
-      return this.providers.claude
-    } else if (modelId.startsWith('gemini')) {
-      return this.providers.gemini
     } else if (modelId.startsWith('qwen')) {
       return this.providers.qwen
     } else if (modelId.startsWith('kimi')) {
       return this.providers.kimi
     } else if (modelId.startsWith('doubao')) {
       return this.providers.doubao
+    } else if (modelId.startsWith('bailian')) {
+      return this.providers.bailian
     }
     
     throw new Error(`不支持的模型: ${modelId}`)
