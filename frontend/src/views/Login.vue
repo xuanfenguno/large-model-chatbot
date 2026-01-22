@@ -1,6 +1,10 @@
 <template>
   <div class="login-container">
     <div class="login-card">
+      <!-- 机器人Logo - 正上方居中 -->
+      <div class="logo-container-center-top">
+        <div class="robot-logo-login">🤖</div>
+      </div>
       <!-- 登录/注册切换按钮 -->
       <div class="form-switcher">
         <button 
@@ -73,27 +77,6 @@
                 <el-link type="info" :underline="false" @click="goToForgotPassword">忘记密码？</el-link>
               </div>
             </el-form>
-
-            <div class="social-login">
-              <div class="divider">其他登录方式</div>
-              <div class="social-icons">
-                <el-tooltip content="微信登录" placement="top">
-                  <el-button class="social-btn wechat" circle @click="handleWechatLogin">
-                    <el-icon size="20"><ChatDotRound /></el-icon>
-                  </el-button>
-                </el-tooltip>
-                <el-tooltip content="QQ登录" placement="top">
-                  <el-button class="social-btn qq" circle @click="handleQQLogin">
-                    <el-icon size="20"><ChatDotSquare /></el-icon>
-                  </el-button>
-                </el-tooltip>
-                <el-tooltip content="GitHub登录" placement="top">
-                  <el-button class="social-btn github" circle @click="handleGithubLogin">
-                    <el-icon size="20"><Platform /></el-icon>
-                  </el-button>
-                </el-tooltip>
-              </div>
-            </div>
           </div>
 
           <!-- 注册表单 -->
@@ -748,8 +731,8 @@ onMounted(() => {
   background: white;
   border-radius: 20px;
   box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
-  overflow: hidden;
   position: relative;
+  overflow: hidden;
 }
 
 .form-switcher {
@@ -1100,5 +1083,28 @@ onMounted(() => {
     font-size: 15px;
     padding: 14px 0;
   }
+}
+
+/* 登录页面机器人Logo样式 - 正上方居中 */
+:deep(.logo-container-center-top) {
+  position: absolute;
+  top: -40px; /* 使用绝对定位，向上偏移 */
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  background: white;
+  border-radius: 50%;
+  padding: 15px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: fit-content;
+}
+
+:deep(.robot-logo-login) {
+  font-size: 60px !important;
+  line-height: 1 !important;
+  display: inline-block !important;
 }
 </style>

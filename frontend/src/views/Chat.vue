@@ -1,7 +1,7 @@
 <template>
-  <div class="chat-container">
+  <div class="chat-container apple-glass">
     <!-- 侧边栏 -->
-    <aside class="sidebar">
+    <aside class="sidebar apple-sidebar">
       <div class="sidebar-header">
         <h2 class="sidebar-title">我的对话</h2>
         <el-button
@@ -109,8 +109,8 @@
       </div>
     </aside>
 
-    <!-- 主聊天窗口 -->
-    <main class="chat-main">
+    <!-- 主聊天区域 -->
+    <main class="chat-main apple-chat-area">
       <!-- 聊天头部 -->
       <header class="chat-header">
         <div class="chat-header-content">
@@ -163,11 +163,12 @@
             </div>
           </div>
  
-          <!-- 中间：新会话按钮（居中） -->
+          <!-- 中间：AI助手品牌（居中） -->
           <div class="chat-title">
-            <el-button type="primary" size="large" icon="Plus" @click="handleNewChat" class="new-chat-btn">
-              新会话
-            </el-button>
+            <div class="ai-brand">
+              <div class="logo-icon">🤖</div>
+              <div class="brand-name">小枫</div>
+            </div>
           </div>
  
           <!-- 右侧：聊天模式选择器 -->
@@ -209,7 +210,7 @@
 
       <!-- 消息列表 -->
       <div class="messages-container" ref="messagesContainer">
-        <div v-for="(message, index) in messages" :key="message.id" class="message-item">
+        <div v-for="(message, index) in messages" :key="message.id" :class="['message-item', message.role]">
           <div class="message-avatar">
             <el-icon :size="20">
               <User />
@@ -883,6 +884,45 @@ const checkAuth = () => {
   return true
 }
 
+// 定时刷新token（防止长时间使用后自动退出）
+const setupTokenRefresh = () => {
+  // 每30分钟检查一次token状态
+  const refreshInterval = setInterval(async () => {
+    try {
+      const token = localStorage.getItem('token')
+      if (token && authStore.isLoggedIn) {
+        console.log('定时检查token状态...')
+        
+        // 尝试调用一个简单的API来验证token是否有效
+        await service.get('/v1/conversations/', {
+          timeout: 5000,
+          _isTokenCheck: true
+        })
+        
+        console.log('token状态正常')
+      }
+    } catch (error) {
+      console.log('token检查失败，尝试刷新...')
+      
+      // 如果token过期，尝试刷新
+      if (error.response?.status === 401) {
+        try {
+          await authStore.refreshToken()
+          console.log('token自动刷新成功')
+        } catch (refreshError) {
+          console.error('token自动刷新失败:', refreshError)
+          // 刷新失败，但不要强制退出，让用户继续使用
+        }
+      }
+    }
+  }, 30 * 60 * 1000) // 30分钟
+
+  // 清理定时器
+  onUnmounted(() => {
+    clearInterval(refreshInterval)
+  })
+}
+
 // 页面加载时获取对话列表（优化加载）
 const loadData = async () => {
   // 先检查认证状态，但不阻止页面渲染
@@ -954,6 +994,9 @@ onMounted(async () => {
   } catch (error) {
     console.error('验证配置失败:', error)
   }
+  
+  // 设置token自动刷新机制
+  setupTokenRefresh()
   
   console.log('Chat.vue 页面挂载完成')
 })
@@ -1648,6 +1691,275 @@ const goToProfile = () => {
   transform: translateY(0);
 }
 
+.ai-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.logo-icon {
+  font-size: 2rem;
+  color: #3b82f6;
+}
+
+.brand-name {
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+/* 苹果风格玻璃效果 */
+.apple-glass {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.apple-sidebar {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(30px);
+  -webkit-backdrop-filter: blur(30px);
+  border-right: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.05);
+}
+
+.apple-chat-area {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(40px);
+  -webkit-backdrop-filter: blur(40px);
+}
+
+/* 苹果风格按钮 */
+.apple-sidebar .btn-primary {
+  background: rgba(0, 122, 255, 0.9);
+  border: none;
+  border-radius: 10px;
+  color: white;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 15px rgba(0, 122, 255, 0.3);
+}
+
+.apple-sidebar .btn-primary:hover {
+  background: rgba(0, 122, 255, 1);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(0, 122, 255, 0.4);
+}
+
+/* 侧边栏苹果风格按钮 */
+.apple-sidebar .el-button {
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.7);
+  transition: all 0.3s ease;
+}
+
+.apple-sidebar .el-button:hover {
+  background: rgba(255, 255, 255, 0.9);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.apple-sidebar .el-button--primary {
+  background: rgba(0, 122, 255, 0.9);
+  border-color: rgba(0, 122, 255, 0.6);
+  color: white;
+}
+
+.apple-sidebar .el-button--success {
+  background: rgba(52, 199, 89, 0.9);
+  border-color: rgba(52, 199, 89, 0.6);
+  color: white;
+}
+
+.apple-sidebar .el-button--danger {
+  background: rgba(255, 59, 48, 0.9);
+  border-color: rgba(255, 59, 48, 0.6);
+  color: white;
+}
+
+/* 侧边栏下拉菜单 */
+.apple-sidebar .el-dropdown-menu {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+  backdrop-filter: blur(30px);
+}
+
+.apple-sidebar .el-dropdown-menu .el-dropdown-menu__item {
+  background: transparent;
+  border-radius: 8px;
+  margin: 2px 8px;
+}
+
+.apple-sidebar .el-dropdown-menu .el-dropdown-menu__item:hover {
+  background: rgba(0, 122, 255, 0.1);
+}
+
+/* 苹果风格对话列表 */
+.apple-sidebar .conversation-item {
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 12px;
+  margin: 8px 0;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  transition: all 0.3s ease;
+}
+
+.apple-sidebar .conversation-item:hover {
+  background: rgba(255, 255, 255, 0.8);
+  transform: translateX(4px);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.apple-sidebar .conversation-item.active {
+  background: rgba(0, 122, 255, 0.1);
+  border: 1px solid rgba(0, 122, 255, 0.3);
+}
+
+/* 苹果风格输入框 */
+.apple-chat-area .input-wrapper {
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  backdrop-filter: blur(20px);
+}
+
+/* 苹果风格下拉选择器 */
+.apple-chat-area .el-select {
+  backdrop-filter: blur(20px);
+}
+
+.apple-chat-area .el-select .el-input__wrapper {
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 12px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  backdrop-filter: blur(20px);
+}
+
+.apple-chat-area .el-select-dropdown {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+  backdrop-filter: blur(30px);
+}
+
+.apple-chat-area .el-select-dropdown .el-select-dropdown__item {
+  background: transparent;
+  border-radius: 8px;
+  margin: 2px 8px;
+}
+
+.apple-chat-area .el-select-dropdown .el-select-dropdown__item:hover {
+  background: rgba(0, 122, 255, 0.1);
+}
+
+.apple-chat-area .el-select-dropdown .el-select-dropdown__item.selected {
+  background: rgba(0, 122, 255, 0.15);
+  color: #007AFF;
+}
+
+/* 苹果风格下拉菜单 */
+.apple-chat-area .el-dropdown {
+  backdrop-filter: blur(20px);
+}
+
+.apple-chat-area .el-dropdown-menu {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+  backdrop-filter: blur(30px);
+}
+
+.apple-chat-area .el-dropdown-menu .el-dropdown-menu__item {
+  background: transparent;
+  border-radius: 8px;
+  margin: 2px 8px;
+}
+
+.apple-chat-area .el-dropdown-menu .el-dropdown-menu__item:hover {
+  background: rgba(0, 122, 255, 0.1);
+}
+
+/* 苹果风格按钮 */
+.apple-chat-area .el-button {
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.7);
+  transition: all 0.3s ease;
+}
+
+.apple-chat-area .el-button:hover {
+  background: rgba(255, 255, 255, 0.9);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.apple-chat-area .el-button--primary {
+  background: rgba(0, 122, 255, 0.9);
+  border-color: rgba(0, 122, 255, 0.6);
+  color: white;
+}
+
+.apple-chat-area .el-button--primary:hover {
+  background: rgba(0, 122, 255, 1);
+}
+
+/* 苹果风格消息容器 */
+.apple-chat-area .messages-container {
+  backdrop-filter: blur(10px);
+}
+
+/* 苹果风格消息气泡 */
+.apple-chat-area .message-item.user .message-content {
+  background: linear-gradient(135deg, #007AFF 0%, #5856D6 100%);
+  color: white;
+  border-radius: 20px 20px 4px 20px;
+  box-shadow: 0 4px 15px rgba(0, 122, 255, 0.3);
+  backdrop-filter: blur(10px);
+}
+
+.apple-chat-area .message-item.assistant .message-content {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 20px 20px 20px 4px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+  backdrop-filter: blur(10px);
+}
+
+/* 苹果风格头像 */
+.apple-chat-area .message-avatar {
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(10px);
+}
+
+/* 苹果风格头部区域 */
+.apple-chat-area .chat-header {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(30px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+/* 苹果风格底部区域 */
+.apple-chat-area .chat-footer {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(30px);
+  border-top: 1px solid rgba(255, 255, 255, 0.4);
+}
+
 .chat-title h1 {
   font-size: 2.2rem;
   font-weight: 800;
@@ -1832,15 +2144,20 @@ const goToProfile = () => {
 
 .input-wrapper {
   display: flex;
-  gap: 0.75rem;
+  gap: 0;
   align-items: flex-end;
+  width: 98%;
+  max-width: none;
+  margin: 0 auto;
+  padding: 0 1rem;
 }
 
 .message-input {
   flex: 1;
-  padding: 0.75rem;
+  padding: 0.75rem 1rem;
   border: 1px solid #dcdfe6;
-  border-radius: 8px;
+  border-right: none;
+  border-radius: 12px 0 0 12px;
   font-size: 1.1rem;
   font-weight: 600;
   color: #000000;
@@ -1862,17 +2179,17 @@ const goToProfile = () => {
 
 .message-input:focus {
   outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
 }
 
 .send-button {
   padding: 0.75rem 1.5rem;
   height: 48px;
-  background: #667eea;
+  background: #3b82f6;
   color: white;
-  border: none;
-  border-radius: 8px;
+  border: 1px solid #3b82f6;
+  border-radius: 0 12px 12px 0;
   cursor: pointer;
   transition: all 0.3s ease;
   white-space: nowrap;
@@ -1883,12 +2200,18 @@ const goToProfile = () => {
 }
 
 .send-button:hover {
-  background: #5a6fd8;
+  background: #2563eb;
+  border-color: #2563eb;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
 }
 
 .send-button:disabled {
-  background: #c0c4cc;
+  background: #9ca3af;
+  border-color: #9ca3af;
   cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 .video-controls-placeholder {

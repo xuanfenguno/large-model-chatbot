@@ -2,7 +2,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from .models import Conversation, Message
+from .models import Conversation, Message, PasswordResetToken
 from .serializers import ConversationSerializer, MessageSerializer
 from django.db.models import Q
 import requests
@@ -647,298 +647,76 @@ def function_router_api(request):
     except Exception as e:
         return Response({'error': f"Function router API error: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-# 微信、QQ、GitHub OAuth 登录相关视图函数
-# （此处省略具体实现，保持原有代码）
 
-@api_view(['POST'])
-@permission_classes([AllowAny])
-def wechat_auth_url(request):
-    """获取微信授权URL"""
-    redirect_uri = request.data.get('redirect_uri', settings.WECHAT_REDIRECT_URI)
-    state = request.data.get('state', '')
-    
-    if not redirect_uri:
-        return Response({'error': 'redirect_uri is required'}, status=status.HTTP_400_BAD_REQUEST)
-    
-    # 构造微信授权URL
-    wechat_auth_url = f"https://open.weixin.qq.com/connect/qrconnect?appid={settings.WECHAT_APP_ID}&redirect_uri={redirect_uri}&response_type=code&scope=snsapi_login&state={state}#wechat_redirect"
-    
-    return Response({'auth_url': wechat_auth_url})
 
-@api_view(['GET'])
-@permission_classes([AllowAny])
-def wechat_auth_callback(request):
-    """微信授权回调"""
-    code = request.GET.get('code')
-    state = request.GET.get('state', '')
-    
-    if not code:
-        return Response({'error': 'Code is required'}, status=status.HTTP_400_BAD_REQUEST)
-    
-    # 使用code换取access_token
-    token_url = "https://api.weixin.qq.com/sns/oauth2/access_token"
-    params = {
-        'appid': settings.WECHAT_APP_ID,
-        'secret': settings.WECHAT_APP_SECRET,
-        'grant_type': 'authorization_code',
-        'code': code
-    }
-    
-    response = requests.get(token_url, params=params)
-    token_data = response.json()
-    
-    if 'errcode' in token_data:
-        return Response({'error': f"WeChat API error: {token_data.get('errmsg')}"}, status=status.HTTP_400_BAD_REQUEST)
-    
-    # 获取用户信息
-    user_info_url = "https://api.weixin.qq.com/sns/userinfo"
-    user_params = {
-        'access_token': token_data['access_token'],
-        'openid': token_data['openid'],
-        'lang': 'zh_CN'
-    }
-    
-    user_response = requests.get(user_info_url, params=user_params)
-    user_data = user_response.json()
-    
-    if 'errcode' in user_data:
-        return Response({'error': f"WeChat API error: {user_data.get('errmsg')}"}, status=status.HTTP_400_BAD_REQUEST)
-    
-    # 查找或创建用户
-    username = f"wechat_{user_data['openid']}"
-    nickname = user_data.get('nickname', username)
-    
-    try:
-        user = User.objects.get(username=username)
-    except User.DoesNotExist:
-        # 创建新用户
-        user = User.objects.create_user(
-            username=username,
-            first_name=nickname  # 使用昵称作为first_name
-        )
-    
-    # 生成JWT token
-    refresh = RefreshToken.for_user(user)
-    
-    return Response({
-        'refresh': str(refresh),
-        'access': str(refresh.access_token),
-        'username': user.username,
-        'nickname': nickname,
-        'avatar': user_data.get('headimgurl', ''),
-        'openid': user_data['openid']
-    })
 
-@api_view(['POST'])
-@permission_classes([AllowAny])
-def qq_auth_url(request):
-    """获取QQ授权URL"""
-    redirect_uri = request.data.get('redirect_uri', settings.QQ_REDIRECT_URI)
-    state = request.data.get('state', '')
-    
-    if not redirect_uri:
-        return Response({'error': 'redirect_uri is required'}, status=status.HTTP_400_BAD_REQUEST)
-    
-    # 构造QQ授权URL
-    qq_auth_url = f"https://graph.qq.com/oauth2.0/authorize?response_type=code&client_id={settings.QQ_APP_ID}&redirect_uri={redirect_uri}&state={state}"
-    
-    return Response({'auth_url': qq_auth_url})
 
-@api_view(['GET'])
-@permission_classes([AllowAny])
-def qq_auth_callback(request):
-    """QQ授权回调"""
-    code = request.GET.get('code')
-    state = request.GET.get('state', '')
-    
-    if not code:
-        return Response({'error': 'Code is required'}, status=status.HTTP_400_BAD_REQUEST)
-    
-    # 使用code换取access_token
-    token_url = "https://graph.qq.com/oauth2.0/token"
-    params = {
-        'grant_type': 'authorization_code',
-        'client_id': settings.QQ_APP_ID,
-        'client_secret': settings.QQ_APP_SECRET,
-        'code': code,
-        'redirect_uri': settings.QQ_REDIRECT_URI
-    }
-    
-    response = requests.get(token_url, params=params)
-    token_response = response.text  # QQ返回的是URL编码格式
-    
-    # 解析access_token
-    import urllib.parse
-    token_dict = dict(urllib.parse.parse_qsl(token_response))
-    access_token = token_dict.get('access_token')
-    
-    if not access_token:
-        return Response({'error': 'Failed to get access token from QQ'}, status=status.HTTP_400_BAD_REQUEST)
-    
-    # 获取QQ openid
-    openid_url = "https://graph.qq.com/oauth2.0/me"
-    openid_params = {
-        'access_token': access_token
-    }
-    
-    openid_response = requests.get(openid_url, params=openid_params)
-    openid_text = openid_response.text
-    # 解析openid (格式: callback( {"client_id":"12345","openid":"123456"} ); )
-    import re
-    openid_match = re.search(r'"openid":"([^"]+)"', openid_text)
-    if not openid_match:
-        return Response({'error': 'Failed to get openid from QQ'}, status=status.HTTP_400_BAD_REQUEST)
-    
-    openid = openid_match.group(1)
-    
-    # 获取用户信息
-    user_info_url = "https://graph.qq.com/user/get_user_info"
-    user_params = {
-        'access_token': access_token,
-        'oauth_consumer_key': settings.QQ_APP_ID,
-        'openid': openid
-    }
-    
-    user_response = requests.get(user_info_url, params=user_params)
-    user_data = user_response.json()
-    
-    if user_data.get('ret') != 0:
-        return Response({'error': f"QQ API error: {user_data.get('msg')}"}, status=status.HTTP_400_BAD_REQUEST)
-    
-    # 查找或创建用户
-    username = f"qq_{openid}"
-    nickname = user_data.get('nickname', username)
-    
-    try:
-        user = User.objects.get(username=username)
-    except User.DoesNotExist:
-        # 创建新用户
-        user = User.objects.create_user(
-            username=username,
-            first_name=nickname  # 使用昵称作为first_name
-        )
-    
-    # 生成JWT token
-    refresh = RefreshToken.for_user(user)
-    
-    return Response({
-        'refresh': str(refresh),
-        'access': str(refresh.access_token),
-        'username': user.username,
-        'nickname': nickname,
-        'avatar': user_data.get('figureurl_qq_2', ''),  # 获取高质量头像
-        'openid': openid
-    })
 
-@api_view(['POST'])
-@permission_classes([AllowAny])
-def github_auth_url(request):
-    """获取GitHub授权URL"""
-    redirect_uri = request.data.get('redirect_uri', settings.GITHUB_REDIRECT_URI)
-    state = request.data.get('state', '')
-    
-    if not redirect_uri:
-        return Response({'error': 'redirect_uri is required'}, status=status.HTTP_400_BAD_REQUEST)
-    
-    # 构造GitHub授权URL
-    github_auth_url = f"https://github.com/login/oauth/authorize?client_id={settings.GITHUB_CLIENT_ID}&redirect_uri={redirect_uri}&state={state}"
-    
-    return Response({'auth_url': github_auth_url})
 
-@api_view(['GET'])
-@permission_classes([AllowAny])
-def github_auth_callback(request):
-    """GitHub授权回调"""
-    code = request.GET.get('code')
-    state = request.GET.get('state', '')
-    
-    if not code:
-        return Response({'error': 'Code is required'}, status=status.HTTP_400_BAD_REQUEST)
-    
-    # 使用code换取access_token
-    token_url = "https://github.com/login/oauth/access_token"
-    token_data = {
-        'client_id': settings.GITHUB_CLIENT_ID,
-        'client_secret': settings.GITHUB_CLIENT_SECRET,
-        'code': code,
-        'redirect_uri': settings.GITHUB_REDIRECT_URI
-    }
-    
-    headers = {'Accept': 'application/json'}
-    response = requests.post(token_url, data=token_data, headers=headers)
-    token_response = response.json()
-    
-    access_token = token_response.get('access_token')
-    if not access_token:
-        return Response({'error': f"GitHub API error: {token_response.get('error_description')}"}, status=status.HTTP_400_BAD_REQUEST)
-    
-    # 获取GitHub用户信息
-    user_headers = {
-        'Authorization': f'token {access_token}',
-        'Accept': 'application/json'
-    }
-    user_response = requests.get('https://api.github.com/user', headers=user_headers)
-    user_data = user_response.json()
-    
-    if 'id' not in user_data:
-        return Response({'error': 'Failed to get user info from GitHub'}, status=status.HTTP_400_BAD_REQUEST)
-    
-    # 查找或创建用户
-    username = f"github_{user_data['id']}"
-    nickname = user_data.get('name') or user_data.get('login', username)
-    
-    try:
-        user = User.objects.get(username=username)
-    except User.DoesNotExist:
-        # 创建新用户
-        user = User.objects.create_user(
-            username=username,
-            first_name=nickname,  # 使用姓名作为first_name
-            email=user_data.get('email', '')  # 如果有邮箱的话
-        )
-    
-    # 生成JWT token
-    refresh = RefreshToken.for_user(user)
-    
-    return Response({
-        'refresh': str(refresh),
-        'access': str(refresh.access_token),
-        'username': user.username,
-        'nickname': nickname,
-        'avatar': user_data.get('avatar_url', ''),
-        'github_id': user_data['id']
-    })
+
+
+
+
+
+
+
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def request_password_reset(request):
     """请求密码重置"""
-    email = request.data.get('email')
+    identifier = request.data.get('identifier')  # 可以是邮箱或用户名
     
-    if not email:
-        return Response({'error': 'Email is required'}, status=status.HTTP_400_BAD_REQUEST)
+    if not identifier:
+        return Response({'error': 'Identifier (email or username) is required'}, status=status.HTTP_400_BAD_REQUEST)
     
+    # 首先尝试按邮箱查找用户
     try:
-        user = User.objects.get(email=email)
+        user = User.objects.get(email=identifier)
     except User.DoesNotExist:
-        # 为了安全，即使用户不存在也返回成功消息
-        return Response({'message': '如果该邮箱存在于我们的系统中，您将收到密码重置邮件'})
+        # 如果邮箱找不到，尝试按用户名查找
+        try:
+            user = User.objects.get(username=identifier)
+        except User.DoesNotExist:
+            # 为了安全，即使用户不存在也返回成功消息
+            return Response({'message': '如果该账户存在于我们的系统中，您将收到密码重置邮件'})
     
-    # 生成重置令牌（这里简化实现，实际项目中应该使用Django内置的password reset功能）
+    # 验证用户是否有邮箱（第三方登录用户可能没有邮箱）
+    if not user.email:
+        return Response({'error': '该账户未绑定邮箱，无法使用密码重置功能'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # 删除旧的重置令牌（如果有）
+    PasswordResetToken.objects.filter(user=user).delete()
+    
+    # 生成重置令牌
     import uuid
     from datetime import datetime, timedelta
     
     reset_token = str(uuid.uuid4())
     reset_expiry = datetime.now() + timedelta(hours=1)  # 1小时后过期
     
-    # 在实际项目中，应该将令牌存储到数据库或缓存中
-    # 并发送包含重置链接的邮件给用户
-    # 这里只是示例实现
+    # 创建密码重置令牌记录，与用户关联
+    PasswordResetToken.objects.create(
+        user=user,
+        token=reset_token,
+        expires_at=reset_expiry
+    )
+    
+    # 构建前端重置链接（用于开发环境调试）
+    frontend_base_url = getattr(settings, 'FRONTEND_BASE_URL', 'http://localhost:5173')
+    reset_link = f"{frontend_base_url}/forgot-password?token={reset_token}"
     
     # 模拟发送邮件
-    print(f"Password reset token for {email}: {reset_token}")
+    print(f"Password reset token for {user.email} ({user.username}): {reset_token}")
+    print(f"Reset link: {reset_link}")
     
-    return Response({'message': '如果该邮箱存在于我们的系统中，您将收到密码重置邮件'})
+    # 在开发环境中返回重置链接，生产环境中会发送邮件
+    return Response({
+        'message': '如果该账户存在于我们的系统中，您将收到密码重置邮件',
+        'reset_link': reset_link,
+        'reset_token': reset_token,
+        'expires_at': reset_expiry.isoformat()
+    })
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
@@ -946,20 +724,62 @@ def reset_password(request):
     """执行密码重置"""
     reset_token = request.data.get('reset_token')
     new_password = request.data.get('new_password')
+    confirm_password = request.data.get('confirm_password')
     
     if not reset_token or not new_password:
         return Response({'error': 'Reset token and new password are required'}, status=status.HTTP_400_BAD_REQUEST)
     
-    # 在实际项目中，应该验证令牌的有效性和过期时间
-    # 并更新用户的密码
-    # 这里只是示例实现
+    if new_password != confirm_password:
+        return Response({'error': 'Passwords do not match'}, status=status.HTTP_400_BAD_REQUEST)
     
-    # 模拟验证令牌
-    if len(reset_token) != 36:  # UUID长度
-        return Response({'error': 'Invalid or expired reset token'}, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        # 查找对应的密码重置令牌
+        reset_record = PasswordResetToken.objects.select_related('user').get(token=reset_token)
+        
+        # 检查令牌是否已过期
+        if reset_record.is_expired:
+            return Response({'error': 'Reset token has expired'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 重置用户密码
+        user = reset_record.user
+        user.set_password(new_password)
+        user.save()
+        
+        # 删除已使用的重置令牌
+        reset_record.delete()
+        
+        return Response({'message': 'Password has been reset successfully'})
+        
+    except PasswordResetToken.DoesNotExist:
+        return Response({'error': 'Invalid reset token'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def reset_password_test(request):
+    """测试环境密码重置 - 直接通过用户名或邮箱重置"""
+    identifier = request.data.get('identifier')
+    new_password = request.data.get('new_password')
+    confirm_password = request.data.get('confirm_password')
     
-    # 找到对应的用户并重置密码
-    # 由于没有存储令牌与用户的关联关系，这里简化处理
-    # 实际项目中应该有一个PasswordResetToken模型
+    if not identifier or not new_password:
+        return Response({'error': 'Identifier and new password are required'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    if new_password != confirm_password:
+        return Response({'error': 'Passwords do not match'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # 首先尝试按邮箱查找用户
+    try:
+        user = User.objects.get(email=identifier)
+    except User.DoesNotExist:
+        # 如果邮箱找不到，尝试按用户名查找
+        try:
+            user = User.objects.get(username=identifier)
+        except User.DoesNotExist:
+            return Response({'error': 'User not found'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # 重置用户密码
+    user.set_password(new_password)
+    user.save()
     
     return Response({'message': 'Password has been reset successfully'})

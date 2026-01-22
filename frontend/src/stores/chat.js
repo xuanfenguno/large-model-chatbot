@@ -37,7 +37,8 @@ export const useChatStore = defineStore('chat', () => {
       }, {
         timeout: 10000
       })
-      conversations.value.push(response.data)
+      // 创建成功后重新获取会话列表，确保数据一致性
+      await fetchConversations()
       selectedConversationId.value = response.data.id
       messages.value = []
       return response.data
@@ -80,38 +81,46 @@ export const useChatStore = defineStore('chat', () => {
 
   // 发送消息（使用新的大模型API框架）
   const sendMessage = async (content, image = null, model = null) => {
-    if (!selectedConversationId.value) {
-      ElMessage({
-        message: '请先创建或选择一个会话',
-        type: 'warning'
-      })
-      return
-    }
-
-    // 创建本地用户消息预览
-    const userMessage = {
-      id: Date.now(),
-      role: 'user',
-      content: content,
-      image_url: image,
-      created_at: new Date().toISOString()
-    }
-    
-    messages.value.push(userMessage)
-    
-    // 创建AI回复的占位消息
-    const aiMessage = {
-      id: Date.now() + 1,
-      role: 'assistant',
-      content: '',
-      is_loading: true,
-      created_at: new Date().toISOString()
-    }
-    messages.value.push(aiMessage)
-
     isLoading.value = true
 
     try {
+      // 如果没有选择会话，自动创建新会话
+      if (!selectedConversationId.value) {
+        const newConversation = await createConversation(content.slice(0, 30) + '...')
+        if (!newConversation) {
+          throw new Error('创建新会话失败')
+        }
+      }
+
+      // 首先将用户消息保存到后端数据库
+      const userMessageResponse = await service.post('/v1/messages/', {
+        conversation_id: selectedConversationId.value,
+        role: 'user',
+        content: content,
+        image_url: image
+      })
+
+      // 创建本地用户消息预览
+      const userMessage = {
+        id: userMessageResponse.data.id,
+        role: 'user',
+        content: content,
+        image_url: image,
+        created_at: new Date().toISOString()
+      }
+      
+      messages.value.push(userMessage)
+      
+      // 创建AI回复的占位消息
+      const aiMessage = {
+        id: Date.now() + 1,
+        role: 'assistant',
+        content: '',
+        is_loading: true,
+        created_at: new Date().toISOString()
+      }
+      messages.value.push(aiMessage)
+
       // 构建对话历史
       const history = messages.value
         .filter(msg => msg.id !== aiMessage.id) // 排除当前占位消息
@@ -129,11 +138,19 @@ export const useChatStore = defineStore('chat', () => {
       })
 
       if (result.success) {
+        // 将AI回复保存到后端数据库
+        const aiMessageResponse = await service.post('/v1/messages/', {
+          conversation_id: selectedConversationId.value,
+          role: 'assistant',
+          content: result.content,
+          model: result.model
+        })
+
         // 更新AI回复
         const aiIndex = messages.value.findIndex(msg => msg.id === aiMessage.id)
         if (aiIndex !== -1) {
           messages.value[aiIndex] = {
-            id: Date.now() + 2,
+            id: aiMessageResponse.data.id,
             role: 'assistant',
             content: result.content,
             created_at: new Date().toISOString(),
@@ -173,38 +190,45 @@ export const useChatStore = defineStore('chat', () => {
 
   // 流式发送消息（支持实时显示）
   const sendMessageStream = async (content, model = null) => {
-    if (!selectedConversationId.value) {
-      ElMessage({
-        message: '请先创建或选择一个会话',
-        type: 'warning'
-      })
-      return
-    }
-
-    // 创建本地用户消息预览
-    const userMessage = {
-      id: Date.now(),
-      role: 'user',
-      content: content,
-      created_at: new Date().toISOString()
-    }
-    
-    messages.value.push(userMessage)
-    
-    // 创建AI回复的占位消息
-    const aiMessage = {
-      id: Date.now() + 1,
-      role: 'assistant',
-      content: '',
-      is_loading: true,
-      is_streaming: true,
-      created_at: new Date().toISOString()
-    }
-    messages.value.push(aiMessage)
-
     isStreaming.value = true
 
     try {
+      // 如果没有选择会话，自动创建新会话
+      if (!selectedConversationId.value) {
+        const newConversation = await createConversation(content.slice(0, 30) + '...')
+        if (!newConversation) {
+          throw new Error('创建新会话失败')
+        }
+      }
+
+      // 首先将用户消息保存到后端数据库
+      const userMessageResponse = await service.post('/v1/messages/', {
+        conversation_id: selectedConversationId.value,
+        role: 'user',
+        content: content
+      })
+
+      // 创建本地用户消息预览
+      const userMessage = {
+        id: userMessageResponse.data.id,
+        role: 'user',
+        content: content,
+        created_at: new Date().toISOString()
+      }
+      
+      messages.value.push(userMessage)
+      
+      // 创建AI回复的占位消息
+      const aiMessage = {
+        id: Date.now() + 1,
+        role: 'assistant',
+        content: '',
+        is_loading: true,
+        is_streaming: true,
+        created_at: new Date().toISOString()
+      }
+      messages.value.push(aiMessage)
+
       // 构建对话历史
       const history = messages.value
         .filter(msg => msg.id !== aiMessage.id)
@@ -229,11 +253,20 @@ export const useChatStore = defineStore('chat', () => {
           }
         },
         // 完成回调
-        (result) => {
+        async (result) => {
+          // 将AI回复保存到后端数据库
+          const aiMessageResponse = await service.post('/v1/messages/', {
+            conversation_id: selectedConversationId.value,
+            role: 'assistant',
+            content: messages.value.find(msg => msg.id === aiMessage.id)?.content || '',
+            model: result.model
+          })
+
           const aiIndex = messages.value.findIndex(msg => msg.id === aiMessage.id)
           if (aiIndex !== -1) {
             messages.value[aiIndex] = {
               ...messages.value[aiIndex],
+              id: aiMessageResponse.data.id,
               is_loading: false,
               is_streaming: false,
               model: result.model

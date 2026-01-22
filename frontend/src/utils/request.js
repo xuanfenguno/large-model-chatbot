@@ -98,18 +98,58 @@ service.interceptors.response.use(
     if (error.response) {
       const { status, data } = error.response
 
-      // 401未授权，清除token并跳转登录
+      // 401未授权，尝试自动刷新token
       // 但如果是登录请求，就跳过自动登出的处理
       if (status === 401 && !error.config._isLoginRequest) {
-        const authStore = useAuthStore()
-        authStore.logout()
+        // 检查是否已经尝试过刷新
+        if (error.config._isRefreshing) {
+          // 如果正在刷新中，等待刷新完成
+          return new Promise((resolve, reject) => {
+            const retryRequest = () => {
+              const newConfig = { ...error.config }
+              delete newConfig._isRefreshing
+              resolve(service(newConfig))
+            }
+            
+            // 等待刷新完成（最多等待5秒）
+            const checkInterval = setInterval(() => {
+              const token = localStorage.getItem('token')
+              if (token && token !== error.config.headers.Authorization?.replace('Bearer ', '')) {
+                clearInterval(checkInterval)
+                retryRequest()
+              }
+            }, 100)
+            
+            // 5秒后超时
+            setTimeout(() => {
+              clearInterval(checkInterval)
+              const authStore = useAuthStore()
+              authStore.logout()
+              ElMessage({
+                message: '登录已过期，请重新登录',
+                type: 'error'
+              })
+              reject(error)
+            }, 5000)
+          })
+        }
         
-        ElMessage({
-          message: '登录已过期，请重新登录',
-          type: 'error'
+        // 尝试刷新token
+        return refreshToken().then(() => {
+          // 刷新成功，重试原始请求
+          const newConfig = { ...error.config }
+          newConfig._isRefreshing = true
+          return service(newConfig)
+        }).catch(refreshError => {
+          // 刷新失败，退出登录
+          const authStore = useAuthStore()
+          authStore.logout()
+          ElMessage({
+            message: '登录已过期，请重新登录',
+            type: 'error'
+          })
+          return Promise.reject(error)
         })
-        
-        return Promise.reject(error)
       }
 
       // 403禁止访问

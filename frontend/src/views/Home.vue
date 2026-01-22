@@ -2,6 +2,9 @@
   <div class="home-container">
     <div class="hero-section">
       <div class="hero-content">
+        <div class="logo-container">
+          <div class="robot-logo">🤖</div>
+        </div>
         <h1 class="hero-title">欢迎来到AI聊天机器人</h1>
         <p class="hero-subtitle">体验智能对话，探索无限可能</p>
         <div class="hero-buttons">
@@ -198,5 +201,19 @@ const goToRegister = () => {
   .features-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* Logo 样式 */
+:deep(.logo-container) {
+  text-align: center;
+  margin-bottom: 30px;
+  overflow: hidden; /* 防止过大的logo超出容器 */
+}
+
+:deep(.robot-logo) {
+  font-size: 170px !important;
+  line-height: 1 !important;
+  display: inline-block !important;
+  text-align: center !important;
 }
 </style>

@@ -13,10 +13,18 @@
           返回聊天
         </el-button>
         
-        <!-- 标题 - 最高层级 -->
+        <!-- AI多功能助手标题 - 与返回按钮同一水平线 -->
         <div class="navbar-title">
-          <h1 class="main-title">AI多功能助手</h1>
-          <p class="subtitle">体验18种AI功能，满足您的多样化需求</p>
+          <div class="title-container">
+            <div class="title-icon">✨</div>
+            <div class="title-content">
+              <h1 class="main-title">AI多功能助手</h1>
+              <p class="subtitle">18种智能功能，为您提供个性化AI体验</p>
+            </div>
+            <div class="title-badge">
+              <span class="badge-text">智能</span>
+            </div>
+          </div>
         </div>
         
         <!-- 右侧占位，保持平衡 -->
@@ -26,8 +34,11 @@
     
     <!-- 主内容区域 -->
     <div class="main-layout">
-      <!-- 左侧菜单 - 辅助导航 -->
-      <aside class="sidebar-nav">
+      
+      <!-- 主内容区主体部分 -->
+      <div class="main-content-body">
+        <!-- 左侧菜单 - 辅助导航 -->
+        <aside class="sidebar-nav">
         <div class="menu-header">
           <h3 class="menu-title">功能菜单</h3>
         </div>
@@ -98,58 +109,19 @@
       </aside>
       
       <!-- 右侧内容区域 -->
-      <main class="content-area">
+      <main class="content-area apple-glass-content">
         <div class="function-container">
-          <!-- 功能标题区域 -->
-          <div class="function-header">
-            <h2 class="function-title">{{ getFunctionName(activeFunction) }}</h2>
-            <p class="function-description">{{ getFunctionDescription(activeFunction) }}</p>
-          </div>
-          
-          <!-- 聊天消息区域 -->
-          <div class="messages-container" ref="messagesAreaRef">
-            <div 
-              v-for="(msg, index) in messages" 
-              :key="index" 
-              :class="['message-bubble', msg.role]"
-            >
-              <div class="message-avatar">
-                {{ msg.role === 'user' ? '👤' : '🤖' }}
+          <!-- 功能控制栏 -->
+          <div class="function-control-bar">
+            <div class="function-info">
+              <div class="function-title-line">
+                <h2 class="function-title">{{ getFunctionName(activeFunction) }}</h2>
+                <p class="function-description">{{ getFunctionDescription(activeFunction) }}</p>
               </div>
-              <div class="message-content">
-                <div class="message-text">{{ msg.content }}</div>
-                <div class="message-time">{{ formatDate(msg.timestamp) }}</div>
-              </div>
-            </div>
-          </div>
-          
-          <!-- 输入区域 -->
-          <div class="input-container">
-            <div class="input-wrapper">
-              <el-input
-                v-model="inputMessage"
-                :placeholder="getInputPlaceholder(activeFunction)"
-                @keyup.enter="sendMessage"
-                :disabled="loading"
-                size="large"
-                class="message-input"
-              >
-                <template #append>
-                  <el-button 
-                    @click="sendMessage" 
-                    :loading="loading" 
-                    type="primary"
-                    size="large"
-                    class="send-button"
-                  >
-                    发送
-                  </el-button>
-                </template>
-              </el-input>
             </div>
             
             <div class="model-selector-wrapper">
-              <el-select v-model="selectedModel" placeholder="选择AI模型" class="model-selector">
+              <el-select v-model="selectedModel" placeholder="选择AI模型" class="model-selector apple-glass-select">
                 <el-option
                   v-for="model in availableModels"
                   :key="model.value"
@@ -159,8 +131,52 @@
               </el-select>
             </div>
           </div>
+          
+          <!-- 聊天消息区域 -->
+          <div class="messages-container apple-glass-messages" ref="messagesAreaRef">
+            <div 
+              v-for="(msg, index) in messages" 
+              :key="index" 
+              :class="['message-bubble', msg.role]"
+            >
+              <div class="message-avatar apple-glass-avatar">
+                {{ msg.role === 'user' ? '👤' : '🤖' }}
+              </div>
+              <div class="message-content apple-glass-message">
+                <div class="message-text">{{ msg.content }}</div>
+                <div class="message-time">{{ formatDate(msg.timestamp) }}</div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 输入区域 -->
+          <div class="input-container apple-glass-input">
+            <div class="input-wrapper">
+              <el-input
+                v-model="inputMessage"
+                :placeholder="getInputPlaceholder(activeFunction)"
+                @keyup.enter="sendMessage"
+                :disabled="loading"
+                size="large"
+                class="message-input apple-glass-field"
+              >
+                <template #append>
+                  <el-button 
+                    @click="sendMessage" 
+                    :loading="loading" 
+                    type="primary"
+                    size="large"
+                    class="send-button apple-glass-button"
+                  >
+                    发送
+                  </el-button>
+                </template>
+              </el-input>
+            </div>
+          </div>
         </div>
       </main>
+      </div>
     </div>
   </div>
 </template>
@@ -176,7 +192,7 @@ const activeFunction = ref('auto');
 const inputMessage = ref('');
 const messages = ref([]);
 const loading = ref(false);
-const selectedModel = ref('gpt-3.5-turbo');
+const selectedModel = ref('qwen-max');
 const availableModels = ref([]);
 const messagesAreaRef = ref(null);
 
@@ -192,9 +208,6 @@ const fetchAvailableModels = async () => {
     console.error('获取模型列表失败:', error);
     // 默认模型列表
     availableModels.value = [
-      { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo' },
-      { value: 'gpt-4', label: 'GPT-4' },
-      { value: 'gemini-pro', label: 'Gemini Pro' },
       { value: 'kimi-large', label: 'Kimi Large' },
       { value: 'qwen-max', label: 'Qwen Max' },
       { value: 'qwen-plus', label: 'Qwen Plus' },
@@ -382,8 +395,74 @@ onMounted(() => {
   justify-content: space-between;
   max-width: 1400px;
   margin: 0 auto;
-  padding: 16px 24px;
+  padding: 0 20px;
   height: 80px;
+}
+
+/* 导航栏标题样式 */
+.navbar-title {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex: 1;
+  margin: 0 20px;
+}
+
+.navbar-title .title-container {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  border-radius: 16px;
+  padding: 12px 20px;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  max-width: 500px;
+  width: 100%;
+  justify-content: center;
+}
+
+.navbar-title .title-icon {
+  font-size: 2rem;
+  animation: sparkle 2s ease-in-out infinite;
+}
+
+.navbar-title .title-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+  text-align: center;
+}
+
+.navbar-title .main-title {
+  font-size: 1.6rem;
+  font-weight: 700;
+  margin: 0;
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: -0.5px;
+}
+
+.navbar-title .subtitle {
+  font-size: 0.8rem;
+  color: #64748b;
+  margin: 0;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.navbar-title .title-badge {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  border-radius: 20px;
+  padding: 4px 12px;
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(5, 150, 105, 0.3);
 }
 
 .nav-back-button {
@@ -427,6 +506,172 @@ onMounted(() => {
   letter-spacing: 0.2px;
 }
 
+/* 苹果风格毛玻璃效果样式 */
+.apple-glass-title {
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(30px);
+  border-radius: 12px;
+  padding: 8px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 3px 16px rgba(0, 0, 0, 0.1);
+}
+
+.title-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+}
+
+.title-icon {
+  font-size: 1.6rem;
+  animation: icon-float 3s ease-in-out infinite;
+}
+
+.title-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.title-badge {
+  background: linear-gradient(135deg, #ff6b6b 0%, #ffd93d 100%);
+  border-radius: 10px;
+  padding: 4px 10px;
+  backdrop-filter: blur(10px);
+}
+
+.badge-text {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: white;
+  letter-spacing: 0.5px;
+}
+
+.apple-glass-content {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(40px);
+  border-radius: 16px;
+  margin: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+.function-control-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+.function-info {
+  flex: 1;
+}
+
+.function-control-bar .function-title-line {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: nowrap;  /* 禁止换行，强制同一行显示 */
+}
+
+.function-control-bar .function-title {
+  font-size: 1.3rem;
+  font-weight: 700;
+  margin: 0;
+  color: #1e293b;
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  white-space: nowrap;
+  flex-shrink: 0;  /* 防止标题压缩 */
+}
+
+.function-control-bar .function-description {
+  font-size: 0.8rem;
+  color: #64748b;
+  margin: 0;
+  white-space: nowrap;
+  position: relative;
+  padding-left: 12px;
+  flex-shrink: 0;  /* 防止描述压缩 */
+}
+
+.function-control-bar .function-description::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1px;
+  height: 12px;
+  background: rgba(100, 116, 139, 0.3);
+}
+
+.apple-glass-select .el-input__wrapper {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 12px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  backdrop-filter: blur(20px);
+}
+
+.apple-glass-messages {
+  backdrop-filter: blur(10px);
+  padding: 14px 18px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.apple-glass-avatar {
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(10px);
+}
+
+.apple-glass-message {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 10px;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.05);
+  backdrop-filter: blur(10px);
+}
+
+.apple-glass-input {
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(30px);
+  border-top: 1px solid rgba(255, 255, 255, 0.4);
+  padding: 14px 18px;
+}
+
+.apple-glass-field .el-input__wrapper {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 12px 0 0 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  backdrop-filter: blur(20px);
+}
+
+.apple-glass-button {
+  background: rgba(0, 122, 255, 0.9) !important;
+  border: 1px solid rgba(0, 122, 255, 0.6) !important;
+  border-radius: 0 12px 12px 0 !important;
+  backdrop-filter: blur(20px);
+}
+
+@keyframes icon-float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
 .navbar-actions {
   width: 140px;
   display: flex;
@@ -436,11 +681,27 @@ onMounted(() => {
 /* 主布局 */
 .main-layout {
   display: flex;
-  flex: 1;
-  max-width: 1400px;
-  margin: 0 auto;
-  width: 100%;
+  flex-direction: column;
+  height: calc(100vh - 80px);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   overflow: hidden;
+  padding: 0;
+}
+
+/* 主内容区主体部分 */
+.main-content-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+}
+
+
+
+@keyframes sparkle {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.1); opacity: 0.8; }
 }
 
 /* 左侧菜单 - 辅助导航 */
@@ -504,13 +765,23 @@ onMounted(() => {
   flex-direction: column;
   background: #f8fafc;
   overflow: hidden;
+  height: 100%;
+}
+
+/* 功能容器 */
+.function-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 0;
+  margin: 0;
 }
 
 .function-container {
   flex: 1;
   display: flex;
   flex-direction: column;
-  max-width: 900px;
+  max-width: none;
   margin: 0 auto;
   width: 100%;
   padding: 0 24px;
@@ -547,7 +818,8 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 20px;
-  max-height: calc(100vh - 300px);
+  max-height: calc(100vh - 280px);
+  margin-bottom: 0;
 }
 
 /* 消息气泡 */
@@ -637,14 +909,26 @@ onMounted(() => {
 
 /* 输入区域 */
 .input-container {
-  padding: 24px 0 32px;
+  padding: 20px 0 24px;
   background: white;
   border-top: 1px solid #e2e8f0;
   margin-top: auto;
+  width: 100%;
 }
 
 .input-wrapper {
-  margin-bottom: 16px;
+  display: flex;
+  gap: 6px;
+  align-items: flex-end;
+  width: 100%;
+  max-width: none;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+.message-input :deep(.el-input-group) {
+  display: flex;
+  width: 100%;
 }
 
 .message-input :deep(.el-input__inner) {
@@ -653,6 +937,7 @@ onMounted(() => {
   font-size: 1rem;
   padding: 12px 20px;
   transition: all 0.2s ease;
+  flex: 1;
 }
 
 .message-input :deep(.el-input__inner:focus) {
@@ -660,10 +945,39 @@ onMounted(() => {
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
+.message-input :deep(.el-input-group__append) {
+  border-radius: 12px;
+  border: 1px solid #3b82f6;
+  background: #3b82f6;
+  padding: 0 8px;
+  overflow: hidden;
+  border-left: none;
+}
+
 .send-button {
+  background: #3b82f6 !important;
+  border-color: #3b82f6 !important;
+  color: white !important;
   border-radius: 12px !important;
-  padding: 12px 24px !important;
+  transition: all 0.2s ease;
+  height: 100%;
+  padding: 0 24px;
+  min-width: 100px;
   font-weight: 600;
+  border: none !important;
+}
+
+.send-button:hover {
+  background: #2563eb !important;
+  border-color: #2563eb !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+}
+
+.send-button:active {
+  background: #1d4ed8 !important;
+  transform: translateY(0);
+  box-shadow: none;
 }
 
 .model-selector-wrapper {

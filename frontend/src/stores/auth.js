@@ -3,6 +3,9 @@ import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import service from '@/utils/request'
 
+// 导出refreshToken函数供其他模块使用
+export let refreshToken = null
+
 export const useAuthStore = defineStore('auth', () => {
   const token = ref(localStorage.getItem('token') || null)
   const user = ref(JSON.parse(localStorage.getItem('user') || 'null'))
@@ -155,7 +158,7 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = null
     localStorage.removeItem('token')
     localStorage.removeItem('user')
-    delete axios.defaults.headers.Authorization
+    delete service.defaults.headers.Authorization
     
     ElMessage({
       message: '已退出登录',
@@ -163,12 +166,65 @@ export const useAuthStore = defineStore('auth', () => {
     })
   }
 
+  // 刷新token
+  const refreshTokenFn = async () => {
+    try {
+      console.log('开始刷新token...')
+      
+      // 检查是否有有效的token
+      const currentToken = token.value || localStorage.getItem('token')
+      if (!currentToken) {
+        throw new Error('没有有效的token可以刷新')
+      }
+      
+      // 调用后端刷新接口
+      const response = await service.post('/v1/token/refresh/', {
+        token: currentToken
+      }, {
+        timeout: 10000,
+        _isRefreshRequest: true
+      })
+      
+      const responseData = response.data
+      let newToken
+      
+      // 解析新的token
+      if (responseData.access) {
+        newToken = responseData.access
+      } else if (responseData.token) {
+        newToken = responseData.token
+      } else if (responseData.data) {
+        newToken = responseData.data.access || responseData.data.token
+      }
+      
+      if (!newToken) {
+        throw new Error('刷新token失败：响应中缺少token')
+      }
+      
+      // 更新token
+      token.value = newToken
+      localStorage.setItem('token', newToken)
+      service.defaults.headers.Authorization = `Bearer ${newToken}`
+      
+      console.log('token刷新成功')
+      return true
+      
+    } catch (error) {
+      console.error('刷新token失败:', error)
+      throw error
+    }
+  }
+
+  // 将refreshToken函数赋值给导出的变量
+  refreshToken = refreshTokenFn
+
   return {
     token,
     user,
     isLoggedIn,
     login,
     register,
-    logout
+    logout,
+    refreshToken: refreshTokenFn
   }
 })

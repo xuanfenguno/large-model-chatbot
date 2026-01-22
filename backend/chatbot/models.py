@@ -2,6 +2,27 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+from datetime import datetime, timedelta
+
+class PasswordResetToken(models.Model):
+    """密码重置令牌模型"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='用户')
+    token = models.CharField(max_length=36, unique=True, verbose_name='重置令牌')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
+    expires_at = models.DateTimeField(verbose_name='过期时间')
+    
+    class Meta:
+        verbose_name = '密码重置令牌'
+        verbose_name_plural = '密码重置令牌'
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f'{self.user.username} - {self.token[:8]}...'
+    
+    @property
+    def is_expired(self):
+        """检查令牌是否已过期"""
+        return datetime.now() > self.expires_at
 
 class Conversation(models.Model):
     """会话模型"""
