@@ -16,7 +16,7 @@
         <!-- 重置密码表单 (测试环境：直接显示) -->
         <div class="form-wrapper">
           <div class="reset-password-header">
-            <p class="reset-subtitle">请填写用户名或邮箱，设置8-20位新密码，包含字母+数字，不能为纯数字/纯字母</p>
+            <p class="reset-subtitle">请填写用户名或邮箱，设置不少于6位的新密码</p>
           </div>
           
           <el-form
@@ -153,14 +153,11 @@ const checkPasswordStrength = () => {
   
   let level = 'weak'
   
-  // 密码长度8-20位
-  if (password.length >= 8 && password.length <= 20) {
-    // 包含字母+数字 → 中
+  // 密码长度不少于6位
+  if (password.length >= 6) {
+    level = 'medium'
+    // 包含字母+数字 → 强
     if (/[a-zA-Z]/.test(password) && /[0-9]/.test(password)) {
-      level = 'medium'
-    }
-    // 包含字母+数字+特殊符号 → 强
-    if (/[a-zA-Z]/.test(password) && /[0-9]/.test(password) && /[!@#$%^&*]/.test(password)) {
       level = 'strong'
     }
   }
@@ -179,14 +176,13 @@ const checkPasswordStrength = () => {
 const canSubmit = computed(() => {
   const pwd = resetForm.newPassword
   // 1. 用户名/邮箱至少填写一个且格式正确
-  // 2. 密码长度8-20位
-  // 3. 包含字母+数字
-  // 4. 两次密码输入一致
-  // 5. 确认密码不为空
+  // 2. 密码长度不少于6位
+  // 3. 两次密码输入一致
+  // 4. 确认密码不为空
   const isUsernameValid = resetForm.username && resetForm.username.trim().length >= 3
   const isEmailValid = resetForm.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(resetForm.email)
   const isIdentifierValid = isUsernameValid || isEmailValid
-  const isPwdValid = pwd.length >= 8 && pwd.length <= 20 && /[a-zA-Z]/.test(pwd) && /[0-9]/.test(pwd)
+  const isPwdValid = pwd.length >= 6
   const isConfirmValid = resetForm.confirmPassword && pwd === resetForm.confirmPassword
   return isIdentifierValid && isPwdValid && isConfirmValid
 })
@@ -247,10 +243,8 @@ const resetRules = {
       validator: (rule, value, callback) => {
         if (!value) {
           callback(new Error('请输入新密码'))
-        } else if (value.length < 8 || value.length > 20) {
-          callback(new Error('密码长度应为8-20位'))
-        } else if (!/[a-zA-Z]/.test(value) || !/\d/.test(value)) {
-          callback(new Error('密码必须包含字母和数字'))
+        } else if (value.length < 6) {
+          callback(new Error('密码长度应不少于6位'))
         } else {
           callback()
         }

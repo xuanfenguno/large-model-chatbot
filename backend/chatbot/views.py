@@ -732,6 +732,10 @@ def reset_password(request):
     if new_password != confirm_password:
         return Response({'error': 'Passwords do not match'}, status=status.HTTP_400_BAD_REQUEST)
     
+    # 验证密码长度不少于6位
+    if len(new_password) < 6:
+        return Response({'error': 'Password must be at least 6 characters long'}, status=status.HTTP_400_BAD_REQUEST)
+    
     try:
         # 查找对应的密码重置令牌
         reset_record = PasswordResetToken.objects.select_related('user').get(token=reset_token)
@@ -767,6 +771,10 @@ def reset_password_test(request):
     
     if new_password != confirm_password:
         return Response({'error': 'Passwords do not match'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # 验证密码长度不少于6位
+    if len(new_password) < 6:
+        return Response({'error': 'Password must be at least 6 characters long'}, status=status.HTTP_400_BAD_REQUEST)
     
     # 首先尝试按邮箱查找用户
     try:
