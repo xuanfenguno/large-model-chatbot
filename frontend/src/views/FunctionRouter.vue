@@ -937,23 +937,7 @@ onMounted(() => {
 }
 
 /* 输入区域 */
-.input-container {
-  padding: 20px 0 24px;
-  background: white;
-  border-top: 1px solid #e2e8f0;
-  margin-top: auto;
-  width: 100%;
-}
-
-.input-wrapper {
-  display: flex;
-  gap: 6px;
-  align-items: flex-end;
-  width: 100%;
-  max-width: none;
-  margin: 0 auto;
-  padding: 0 24px;
-}
+/* 删除重复的.input-container样式 */
 
 .message-input :deep(.el-input-group) {
   display: flex;
@@ -1337,7 +1321,7 @@ onMounted(() => {
 .input-wrapper {
   display: flex;
   gap: 12px;
-  align-items: flex-end;
+  align-items: center; /* 改为center确保在同一水平线 */
 }
 
 .message-input {
@@ -1378,7 +1362,7 @@ onMounted(() => {
   width: 80px !important;
   font-size: 0.9rem !important;
   font-weight: 600 !important;
-  margin-bottom: 8px !important;
+  margin-bottom: 0 !important; /* 移除底部边距 */
 }
 
 .send-button:hover {

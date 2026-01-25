@@ -1,10 +1,11 @@
 <template>
   <div class="login-container">
     <div class="login-card">
-      <!-- 机器人Logo - 正上方居中 -->
-      <div class="logo-container-center-top">
-        <div class="robot-logo-login">🤖</div>
+      <!-- Logo 悬浮在卡片正上方 -->
+      <div class="floating-logo">
+        <span class="logo-emoji">🤖</span>
       </div>
+      
       <!-- 登录/注册切换按钮 -->
       <div class="form-switcher">
         <button 
@@ -726,13 +727,35 @@ onMounted(() => {
 }
 
 .login-card {
+  position: relative; /* 关键：作为定位上下文 */
   width: 100%;
   max-width: 420px;
   background: white;
   border-radius: 20px;
   box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
-  position: relative;
-  overflow: hidden;
+  overflow: visible; /* 允许Logo超出卡片边界 */
+}
+
+.floating-logo {
+  position: absolute;
+  top: -90px; /* 再高一点，悬浮效果达到最高 */
+  left: 50%;
+  transform: translateX(-50%); /* 水平居中 */
+  width: 100px; /* 增大Logo尺寸 */
+  height: 100px; /* 增大Logo尺寸 */
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  z-index: 9999; /* 确保在最上层 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+  border: 3px solid white;
+}
+
+.logo-emoji {
+  font-size: 50px; /* 增大emoji尺寸 */
+  line-height: 1;
 }
 
 .form-switcher {
@@ -1083,28 +1106,5 @@ onMounted(() => {
     font-size: 15px;
     padding: 14px 0;
   }
-}
-
-/* 登录页面机器人Logo样式 - 正上方居中 */
-:deep(.logo-container-center-top) {
-  position: absolute;
-  top: -40px; /* 使用绝对定位，向上偏移 */
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 10;
-  background: white;
-  border-radius: 50%;
-  padding: 15px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  width: fit-content;
-}
-
-:deep(.robot-logo-login) {
-  font-size: 60px !important;
-  line-height: 1 !important;
-  display: inline-block !important;
 }
 </style>

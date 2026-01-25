@@ -149,6 +149,28 @@ class OpenAIApi(BaseAIApi):
     def _get_api_key(self, model: str) -> Optional[str]:
         return getattr(settings, 'OPENAI_API_KEY', None)
     
+    def _prepare_headers(self, api_key: str) -> Dict[str, str]:
+        """准备OpenAI API请求头"""
+        return {
+            'Content-Type': 'application/json',
+            'Authorization': f'Bearer {api_key}'
+        }
+    
+    def _prepare_payload(self, message: str, history: List[Dict], config: Dict) -> Dict:
+        """准备OpenAI API请求载荷"""
+        # 构建消息历史
+        messages = self._build_messages(message, history)
+        
+        payload = {
+            'model': config.get('model', 'gpt-3.5-turbo'),
+            'messages': messages,
+            'temperature': config.get('temperature', 0.6),
+            'max_tokens': config.get('max_tokens', 2000),
+            'top_p': config.get('top_p', 0.7),
+        }
+        
+        return payload
+    
     def _extract_response_content(self, response_data: Dict) -> Dict:
         """从OpenAI API响应中提取内容"""
         if 'choices' not in response_data or len(response_data['choices']) == 0:
@@ -253,14 +275,29 @@ class MoonshotKimiApi(BaseAIApi):
     
     def __init__(self):
         super().__init__()
-        self.base_url = getattr(settings, 'MOONSHOT_API_BASE_URL', 'https://api.moonshot.cn/v1/chat/completions')
+        self.base_url = getattr(settings, 'MOONSHOT_API_BASE_URL', 'https://api.moonshot.cn/v1')
         self.name = "Moonshot Kimi"
     
     def _get_api_key(self, model: str) -> Optional[str]:
         return getattr(settings, 'MOONSHOT_API_KEY', None)
     
+    def _prepare_payload(self, message: str, history: List[Dict], config: Dict) -> Dict:
+        """准备OpenAI兼容的请求载荷"""
+        # 构建消息历史
+        messages = self._build_messages(message, history)
+        
+        payload = {
+            'model': config.get('model', 'moonshot-v1-8k'),
+            'messages': messages,
+            'temperature': config.get('temperature', 0.6),
+            'max_tokens': config.get('max_tokens', 2000),
+            'top_p': config.get('top_p', 0.7),
+        }
+        
+        return payload
+    
     def _extract_response_content(self, response_data: Dict) -> Dict:
-        """从Moonshot API响应中提取内容"""
+        """从OpenAI兼容响应中提取内容"""
         if 'choices' not in response_data or len(response_data['choices']) == 0:
             raise Exception("Moonshot API响应格式错误")
         
@@ -293,32 +330,44 @@ class DoubaoApi(BaseAIApi):
 
 
 class QwenApi(BaseAIApi):
-    """通义千问API实现"""
+    """通义千问API实现 - OpenAI兼容接口"""
     
     def __init__(self):
         super().__init__()
-        self.base_url = getattr(settings, 'QWEN_API_BASE_URL', 'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation')
+        self.base_url = getattr(settings, 'QWEN_API_BASE_URL', 'https://dashscope.aliyuncs.com/compatible-mode/v1')
         self.name = "Qwen"
     
     def _get_api_key(self, model: str) -> Optional[str]:
         return getattr(settings, 'QWEN_API_KEY', None)
     
     def _prepare_headers(self, api_key: str) -> Dict[str, str]:
-        """重写头部格式以适配阿里云API"""
+        """使用标准的OpenAI API头部格式"""
         return {
             'Content-Type': 'application/json',
-            'Authorization': f'Bearer {api_key}',
-            'X-DashScope-Async': 'enable'  # 如果需要异步处理
+            'Authorization': f'Bearer {api_key}'
         }
     
+    def _prepare_payload(self, message: str, history: List[Dict], config: Dict) -> Dict:
+        """准备OpenAI兼容的请求载荷"""
+        # 构建消息历史
+        messages = self._build_messages(message, history)
+        
+        payload = {
+            'model': config.get('model', 'qwen-turbo'),
+            'messages': messages,
+            'temperature': config.get('temperature', 0.6),
+            'max_tokens': config.get('max_tokens', 2000),
+            'top_p': config.get('top_p', 0.7),
+        }
+        
+        return payload
+    
     def _extract_response_content(self, response_data: Dict) -> Dict:
-        """从Qwen API响应中提取内容"""
-        if 'output' in response_data and 'text' in response_data['output']:
-            content = response_data['output']['text']
-        elif 'choices' in response_data and len(response_data['choices']) > 0:
-            content = response_data['choices'][0]['message']['content']
-        else:
+        """从OpenAI兼容响应中提取内容"""
+        if 'choices' not in response_data or len(response_data['choices']) == 0:
             raise Exception("Qwen API响应格式错误")
+        
+        content = response_data['choices'][0]['message']['content']
         
         usage = response_data.get('usage', {})
         
@@ -329,18 +378,33 @@ class QwenApi(BaseAIApi):
 
 
 class DeepSeekApi(BaseAIApi):
-    """DeepSeek API实现"""
+    """DeepSeek API实现 - OpenAI兼容接口"""
     
     def __init__(self):
         super().__init__()
-        self.base_url = getattr(settings, 'DEEPSEEK_API_BASE_URL', 'https://api.deepseek.com/chat/completions')
+        self.base_url = getattr(settings, 'DEEPSEEK_API_BASE_URL', 'https://api.deepseek.com/v1')
         self.name = "DeepSeek"
     
     def _get_api_key(self, model: str) -> Optional[str]:
         return getattr(settings, 'DEEPSEEK_API_KEY', None)
     
+    def _prepare_payload(self, message: str, history: List[Dict], config: Dict) -> Dict:
+        """准备OpenAI兼容的请求载荷"""
+        # 构建消息历史
+        messages = self._build_messages(message, history)
+        
+        payload = {
+            'model': config.get('model', 'deepseek-chat'),
+            'messages': messages,
+            'temperature': config.get('temperature', 0.6),
+            'max_tokens': config.get('max_tokens', 2000),
+            'top_p': config.get('top_p', 0.7),
+        }
+        
+        return payload
+    
     def _extract_response_content(self, response_data: Dict) -> Dict:
-        """从DeepSeek API响应中提取内容"""
+        """从OpenAI兼容响应中提取内容"""
         if 'choices' not in response_data or len(response_data['choices']) == 0:
             raise Exception("DeepSeek API响应格式错误")
         
