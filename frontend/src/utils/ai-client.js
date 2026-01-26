@@ -12,8 +12,7 @@ class AIClient {
       'deepseek': new DeepSeekProvider(),
       'qwen': new QwenProvider(),
       'kimi': new KimiProvider(),
-      'doubao': new DouBaoProvider(),
-      'bailian': new BaiLianProvider()
+      'doubao': new DouBaoProvider()
     }
     
     // 默认配置

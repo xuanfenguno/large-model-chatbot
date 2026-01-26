@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录测试页面</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #409eff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #66b1ff;
+        }
+        button:disabled {
+            background-color: #a0cfff;
+            cursor: not-allowed;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 4px;
+            word-wrap: break-word;
+        }
+        .success {
+            background-color: #f0f9eb;
+            border: 1px solid #c2e7b0;
+            color: #67c23a;
+        }
+        .error {
+            background-color: #fef0f0;
+            border: 1px solid #fbc4c4;
+            color: #f56c6c;
+        }
+        .info {
+            background-color: #ecf5ff;
+            border: 1px solid #b3d8ff;
+            color: #409eff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>登录API测试页面</h1>
+        <p>这个页面可以帮助您测试登录API是否正常工作，绕过前端Vue应用的复杂性。</p>
+        
+        <div class="form-group">
+            <label for="username">用户名:</label>
+            <input type="text" id="username" value="admin" placeholder="输入用户名">
+        </div>
+        
+        <div class="form-group">
+            <label for="password">密码:</label>
+            <input type="password" id="password" value="admin123" placeholder="输入密码">
+        </div>
+        
+        <button id="loginBtn" onclick="testLogin()">测试登录</button>
+        <button onclick="clearStorage()">清除本地存储</button>
+        
+        <div id="result"></div>
+    </div>
+
+    <script>
+        function showResult(message, type = 'info') {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = `<strong>${type.toUpperCase()}:</strong> ${message}`;
+            resultDiv.className = `result ${type}`;
+        }
+
+        function clearStorage() {
+            localStorage.clear();
+            sessionStorage.clear();
+            showResult('本地存储已清除', 'info');
+        }
+
+        async function testLogin() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const loginBtn = document.getElementById('loginBtn');
+            
+            if (!username || !password) {
+                showResult('请输入用户名和密码', 'error');
+                return;
+            }
+
+            loginBtn.disabled = true;
+            loginBtn.textContent = '登录中...';
+
+            try {
+                showResult('正在发送登录请求...', 'info');
+
+                const response = await fetch('http://127.0.0.1:8085/api/v1/login/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        username: username,
+                        password: password
+                    })
+                });
+
+                showResult(`服务器响应状态: ${response.status}`, 'info');
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    // 登录成功
+                    showResult(`
+                        <strong>登录成功!</strong><br>
+                        用户名: ${data.username}<br>
+                        邮箱: ${data.email}<br>
+                        访问令牌长度: ${data.access ? data.access.length : 'N/A'}<br>
+                        刷新令牌长度: ${data.refresh ? data.refresh.length : 'N/A'}<br>
+                        <br>
+                        <strong>令牌已保存到本地存储</strong>
+                    `, 'success');
+
+                    // 保存到本地存储
+                    localStorage.setItem('token', data.access);
+                    localStorage.setItem('user', JSON.stringify({
+                        username: data.username,
+                        email: data.email
+                    }));
+
+                    // 设置请求头
+                    localStorage.setItem('authHeader', `Bearer ${data.access}`);
+                } else {
+                    // 登录失败
+                    showResult(`
+                        <strong>登录失败</strong><br>
+                        状态码: ${response.status}<br>
+                        错误信息: ${JSON.stringify(data)}
+                    `, 'error');
+                }
+            } catch (error) {
+                showResult(`
+                    <strong>请求失败</strong><br>
+                    错误信息: ${error.message}<br>
+                    可能原因:<br>
+                    - 前端服务器未运行<br>
+                    - 网络连接问题<br>
+                    - CORS配置问题
+                `, 'error');
+            } finally {
+                loginBtn.disabled = false;
+                loginBtn.textContent = '测试登录';
+            }
+        }
+
+        // 页面加载时显示存储信息
+        window.onload = function() {
+            const token = localStorage.getItem('token');
+            const user = localStorage.getItem('user');
+            
+            if (token) {
+                document.getElementById('result').innerHTML = `
+                    <div class="result info">
+                        <strong>本地存储信息:</strong><br>
+                        令牌长度: ${token.length}<br>
+                        用户信息: ${user || '无'}
+                    </div>
+                `;
+            }
+        };
+    </script>
+</body>
+</html>

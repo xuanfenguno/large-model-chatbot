@@ -126,6 +126,23 @@ class UnifiedAIApi {
    */
   async getAvailableModels() {
     try {
+      // 首先尝试从后端API获取模型列表
+      try {
+        const response = await service.get('/v1/models/')
+        if (response.data && Array.isArray(response.data)) {
+          // 转换后端返回的数据格式以适应前端需求
+          return response.data.map(model => ({
+            id: model.id,
+            name: model.name,
+            provider: model.provider,
+            available: true
+          }))
+        }
+      } catch (backendError) {
+        console.warn('从后端获取模型列表失败，尝试使用客户端方法:', backendError)
+      }
+      
+      // 如果后端API失败，则回退到原有的客户端方法
       return await this.client.getAvailableModels()
     } catch (error) {
       console.error('获取模型列表失败:', error)

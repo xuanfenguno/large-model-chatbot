@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Conversation, Message
+from .models import Conversation, Message, PasswordResetToken
 
 
 class MessageSerializer(serializers.ModelSerializer):
@@ -30,3 +30,12 @@ class ConversationSerializer(serializers.ModelSerializer):
         if last_msg:
             return last_msg.content[:50] if len(last_msg.content) > 50 else last_msg.content
         return ''
+
+
+class PasswordResetTokenSerializer(serializers.ModelSerializer):
+    """密码重置令牌序列化器"""
+    
+    class Meta:
+        model = PasswordResetToken
+        fields = ['id', 'user', 'token', 'created_at', 'expires_at', 'is_expired']
+        read_only_fields = ['id', 'created_at', 'is_expired']

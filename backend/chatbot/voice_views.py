@@ -6,10 +6,23 @@ from django.contrib.auth.models import User
 import json
 import uuid
 from datetime import datetime, timedelta
+import asyncio
+import redis
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
+from .models import VoiceCallRecord
 
 # 存储通话状态的临时存储（生产环境应使用Redis）
 active_calls = {}
 call_signaling = {}
+
+# 尝试连接Redis，如果不可用则使用内存存储
+try:
+    redis_client = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
+    redis_available = True
+except:
+    redis_available = False
+    print("Redis unavailable, using in-memory storage")
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -31,6 +44,13 @@ def initiate_call(request):
         # 实际项目中应该检查用户的在线状态
         
         # 创建通话记录
+        call_record = VoiceCallRecord.objects.create(
+            call_id=call_id,
+            caller=request.user,
+            callee=target_user,
+            status='pending'
+        )
+        
         call_data = {
             'call_id': call_id,
             'caller_id': request.user.id,
@@ -46,8 +66,17 @@ def initiate_call(request):
         
         active_calls[call_id] = call_data
         
-        # 这里应该通过WebSocket通知目标用户
-        # 简化实现：返回通话信息
+        # 通过WebSocket通知目标用户
+        channel_layer = get_channel_layer()
+        if channel_layer:
+            async_to_sync(channel_layer.group_send)(
+                f"user_{target_user_id}",
+                {
+                    "type": "voice.call.incoming",
+                    "call_id": call_id,
+                    "caller_username": request.user.username
+                }
+            )
         
         return Response({
             'call_id': call_id,
@@ -84,7 +113,25 @@ def answer_call(request):
         call_data['status'] = 'accepted'
         call_data['accepted_at'] = datetime.now().isoformat()
         
-        # 这里应该通过WebSocket通知发起方
+        # 更新通话记录
+        try:
+            call_record = VoiceCallRecord.objects.get(call_id=call_id)
+            call_record.status = 'accepted'
+            call_record.accepted_at = datetime.now()
+            call_record.save()
+        except VoiceCallRecord.DoesNotExist:
+            pass  # 如果记录不存在，继续执行
+        
+        # 通过WebSocket通知发起方
+        channel_layer = get_channel_layer()
+        if channel_layer:
+            async_to_sync(channel_layer.group_send)(
+                f"user_{call_data['caller_id']}",
+                {
+                    "type": "voice.call.accepted",
+                    "call_id": call_id
+                }
+            )
         
         return Response({
             'call_id': call_id,
@@ -121,7 +168,25 @@ def reject_call(request):
         call_data['status'] = 'rejected'
         call_data['ended_at'] = datetime.now().isoformat()
         
-        # 这里应该通过WebSocket通知发起方
+        # 更新通话记录
+        try:
+            call_record = VoiceCallRecord.objects.get(call_id=call_id)
+            call_record.status = 'rejected'
+            call_record.ended_at = datetime.now()
+            call_record.save()
+        except VoiceCallRecord.DoesNotExist:
+            pass  # 如果记录不存在，继续执行
+        
+        # 通过WebSocket通知发起方
+        channel_layer = get_channel_layer()
+        if channel_layer:
+            async_to_sync(channel_layer.group_send)(
+                f"user_{call_data['caller_id']}",
+                {
+                    "type": "voice.call.rejected",
+                    "call_id": call_id
+                }
+            )
         
         return Response({
             'call_id': call_id,
@@ -166,7 +231,38 @@ def end_call(request):
         call_data['status'] = 'ended'
         call_data['ended_at'] = datetime.now().isoformat()
         
-        # 这里应该通过WebSocket通知对方
+        # 更新通话记录
+        try:
+            call_record = VoiceCallRecord.objects.get(call_id=call_id)
+            call_record.status = 'ended'
+            call_record.ended_at = datetime.now()
+            if call_record.accepted_at:
+                call_record.duration = int((ended_time - call_record.accepted_at).total_seconds())
+            call_record.save()
+        except VoiceCallRecord.DoesNotExist:
+            pass  # 如果记录不存在，继续执行
+        
+        # 通过WebSocket通知对方
+        channel_layer = get_channel_layer()
+        if channel_layer:
+            # 通知发起方
+            if request.user.id != call_data['caller_id']:
+                async_to_sync(channel_layer.group_send)(
+                    f"user_{call_data['caller_id']}",
+                    {
+                        "type": "voice.call.ended",
+                        "call_id": call_id
+                    }
+                )
+            # 通知被叫方
+            if request.user.id != call_data['target_user_id']:
+                async_to_sync(channel_layer.group_send)(
+                    f"user_{call_data['target_user_id']}",
+                    {
+                        "type": "voice.call.ended",
+                        "call_id": call_id
+                    }
+                )
         
         # 清理通话数据（保留一段时间供查询）
         # 实际项目中应该将通话记录保存到数据库
@@ -247,7 +343,24 @@ def signaling(request):
         
         call_signaling[call_id].append(signaling_entry)
         
-        # 这里应该通过WebSocket将信令转发给对应用户
+        # 通过WebSocket将信令转发给对应用户
+        channel_layer = get_channel_layer()
+        if channel_layer:
+            # 确定接收方ID
+            recipient_id = (
+                call_data['target_user_id'] if request.user.id == call_data['caller_id'] 
+                else call_data['caller_id']
+            )
+            
+            async_to_sync(channel_layer.group_send)(
+                f"user_{recipient_id}",
+                {
+                    "type": f"webrtc.{signal_type}",
+                    "call_id": call_id,
+                    "data": signal_data,
+                    "sender_id": request.user.id
+                }
+            )
         
         return Response({
             'status': 'signaling_sent',
@@ -298,6 +411,87 @@ def get_signaling(request):
         return Response({
             'error': f'获取信令失败: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_call_history(request):
+    """获取通话历史记录"""
+    try:
+        # 获取用户的所有通话记录，按时间倒序排列
+        call_records = VoiceCallRecord.objects.filter(
+            models.Q(caller=request.user) | models.Q(callee=request.user)
+        ).order_by('-initiated_at')
+        
+        # 序列化数据
+        records_data = []
+        for record in call_records:
+            records_data.append({
+                'call_id': record.call_id,
+                'caller': {
+                    'id': record.caller.id,
+                    'username': record.caller.username
+                },
+                'callee': {
+                    'id': record.callee.id,
+                    'username': record.callee.username
+                },
+                'status': record.status,
+                'initiated_at': record.initiated_at.isoformat() if record.initiated_at else None,
+                'accepted_at': record.accepted_at.isoformat() if record.accepted_at else None,
+                'ended_at': record.ended_at.isoformat() if record.ended_at else None,
+                'duration': record.call_duration,
+                'is_caller': record.caller.id == request.user.id
+            })
+        
+        return Response({
+            'records': records_data,
+            'total': len(records_data)
+        })
+        
+    except Exception as e:
+        return Response({
+            'error': f'获取通话历史失败: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_active_calls(request):
+    """获取当前活跃通话"""
+    try:
+        # 获取用户参与的活跃通话
+        active_records = VoiceCallRecord.objects.filter(
+            models.Q(caller=request.user) | models.Q(callee=request.user),
+            status__in=['pending', 'accepted']
+        ).order_by('-initiated_at')
+        
+        active_calls_data = []
+        for record in active_records:
+            active_calls_data.append({
+                'call_id': record.call_id,
+                'caller': {
+                    'id': record.caller.id,
+                    'username': record.caller.username
+                },
+                'callee': {
+                    'id': record.callee.id,
+                    'username': record.callee.username
+                },
+                'status': record.status,
+                'initiated_at': record.initiated_at.isoformat() if record.initiated_at else None,
+                'is_caller': record.caller.id == request.user.id
+            })
+        
+        return Response({
+            'active_calls': active_calls_data,
+            'total': len(active_calls_data)
+        })
+        
+    except Exception as e:
+        return Response({
+            'error': f'获取活跃通话失败: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 # 清理过期通话的定时任务（简化实现）
 def cleanup_expired_calls():

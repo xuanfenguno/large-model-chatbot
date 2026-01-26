@@ -36,21 +36,24 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'corsheaders',
-    'drf_yasg',
+    'channels',
+    'django_ratelimit',
+    'defender',
     'chatbot',
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'csp.middleware.CSPMiddleware',  # 内容安全策略中间件
     # 统一错误处理中间件
-    'chatbot.middleware.ErrorHandlingMiddleware',
+    'chatbot.middleware.ErrorHandlingMiddleware.ErrorHandlingMiddleware',
     # 性能监控中间件
     'config.middleware.performance.PerformanceMiddleware',
 ]
@@ -304,3 +307,90 @@ GITHUB_CONFIG = {
     'CLIENT_SECRET': os.getenv('GITHUB_CLIENT_SECRET', 'your_github_client_secret'),
     'REDIRECT_URI': os.getenv('GITHUB_REDIRECT_URI', 'http://127.0.0.1:8000/api/v1/auth/github/callback/'),
 }
+
+# Channels配置
+ASGI_APPLICATION = 'config.asgi.application'
+
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            "hosts": [('127.0.0.1', 6379)],
+        },
+    },
+}
+
+# 作为备用，如果Redis不可用，则使用内存层
+try:
+    import redis
+    # 测试Redis连接
+    redis_client = redis.Redis(host='127.0.0.1', port=6379, db=0)
+    redis_client.ping()
+except:
+    # 如果Redis不可用，使用内存层
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels.layers.InMemoryChannelLayer'
+        }
+    }
+
+# API限流配置
+RATELIMIT_ENABLE = True
+RATELIMIT_VIEW_RATE = '100/m'  # 每分钟100次请求
+
+# 内容安全策略(CSP)配置
+CSP_DEFAULT_SRC = ("'self'",)
+CSP_SCRIPT_SRC = ("'self'", "'unsafe-inline'", "cdnjs.cloudflare.com", "cdn.jsdelivr.net")
+CSP_STYLE_SRC = ("'self'", "'unsafe-inline'", "cdnjs.cloudflare.com", "cdn.jsdelivr.net")
+CSP_IMG_SRC = ("'self'", "data:", "blob:", "*")
+CSP_FONT_SRC = ("'self'", "fonts.gstatic.com", "cdnjs.cloudflare.com")
+CSP_CONNECT_SRC = ("'self'", "ws:", "wss:")
+CSP_FRAME_ANCESTORS = ("'none'",)  # 防止点击劫持
+CSP_OBJECT_SRC = ("'none'",)
+
+# Django Defender配置（防止暴力破解）
+DEFENDER_LOGIN_FAILURE_LIMIT = 5  # 5次失败后锁定
+DEFENDER_LOCKOUT_TIME = 300  # 锁定5分钟
+DEFENDER_USE_CELERY = False  # 不使用Celery
+DEFENDER_CACHE_PREFIX = 'defender'
+DEFENDER_LOCKOUT_BY_IP_ONLY = True  # 仅按IP锁定
+
+# 缓存配置 - 为django-ratelimit提供支持
+try:
+    import redis
+    # 测试Redis连接
+    redis_client = redis.Redis(host='127.0.0.1', port=6379, db=1)
+    redis_client.ping()
+    
+    # 如果Redis可用，使用Redis缓存
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+            'LOCATION': 'redis://127.0.0.1:6379/1',
+            'OPTIONS': {
+                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            }
+        }
+    }
+except:
+    # 如果Redis不可用，使用内存缓存（这会导致django-ratelimit警告）
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'unique-snowflake',
+        }
+    }
+
+# 其他安全设置
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = 'DENY'  # 防止iframe嵌套
+SECURE_SSL_REDIRECT = False  # 开发环境不强制HTTPS
+SESSION_COOKIE_SECURE = False  # 开发环境不强制HTTPS
+CSRF_COOKIE_SECURE = False  # 开发环境不强制HTTPS
+SECURE_HSTS_SECONDS = 31536000  # 一年HSTS
+SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+SECURE_HSTS_PRELOAD = True
+
+# 抑制django-ratelimit的警告（仅在开发环境）
+SILENCED_SYSTEM_CHECKS = ['django_ratelimit.E003', 'django_ratelimit.W001']

@@ -111,35 +111,6 @@
                 <span class="form-tip">选择您最常用的AI模型</span>
               </el-form-item>
               
-              <el-form-item label="通用API密钥">
-                <el-input
-                  v-model="aiSettings.apiKey"
-                  type="password"
-                  placeholder="请输入通用API密钥"
-                  show-password
-                />
-                <span class="form-tip">适用于大多数模型的通用密钥</span>
-              </el-form-item>
-              
-              <!-- 各模型API密钥 -->
-              <el-form-item label="DeepSeek密钥">
-                <el-input
-                  v-model="aiSettings.apiKeys['deepseek-v3']"
-                  type="password"
-                  placeholder="请输入DeepSeek API密钥"
-                  show-password
-                />
-              </el-form-item>
-              
-              <el-form-item label="GPT密钥">
-                <el-input
-                  v-model="aiSettings.apiKeys['gpt-4']"
-                  type="password"
-                  placeholder="请输入OpenAI API密钥"
-                  show-password
-                />
-              </el-form-item>
-              
               <el-form-item label="温度设置">
                 <el-slider
                   v-model="aiSettings.temperature"
@@ -423,6 +394,100 @@
               </div>
             </template>
             
+            <el-form :model="toolsSettings" label-width="120px">
+              <!-- API密钥配置 -->
+              <el-form-item label="通用API密钥">
+                <el-input
+                  v-model="toolsSettings.apiKey"
+                  type="password"
+                  placeholder="请输入通用API密钥"
+                  show-password
+                />
+                <span class="form-tip">适用于大多数模型的通用密钥</span>
+              </el-form-item>
+              
+              <!-- 各模型API密钥 -->
+              <el-form-item label="DeepSeek密钥">
+                <el-input
+                  v-model="toolsSettings.apiKeys['deepseek-v3']"
+                  type="password"
+                  placeholder="请输入DeepSeek API密钥"
+                  show-password
+                />
+              </el-form-item>
+              
+              <el-form-item label="GPT密钥">
+                <el-input
+                  v-model="toolsSettings.apiKeys['gpt-4']"
+                  type="password"
+                  placeholder="请输入OpenAI API密钥"
+                  show-password
+                />
+              </el-form-item>
+              
+              <el-form-item label="Claude密钥">
+                <el-input
+                  v-model="toolsSettings.apiKeys['claude']"
+                  type="password"
+                  placeholder="请输入Anthropic Claude API密钥"
+                  show-password
+                />
+              </el-form-item>
+              
+              <el-form-item label="文心一言密钥">
+                <el-input
+                  v-model="toolsSettings.apiKeys['wenxin']"
+                  type="password"
+                  placeholder="请输入百度文心一言 API密钥"
+                  show-password
+                />
+              </el-form-item>
+              
+              <el-form-item label="通义千问密钥">
+                <el-input
+                  v-model="toolsSettings.apiKeys['qwen']"
+                  type="password"
+                  placeholder="请输入阿里通义千问 API密钥"
+                  show-password
+                />
+              </el-form-item>
+              
+              <el-form-item label="通义千问VL-Max密钥">
+                <el-input
+                  v-model="toolsSettings.apiKeys['qwen-vl-max']"
+                  type="password"
+                  placeholder="请输入通义千问VL-Max API密钥"
+                  show-password
+                />
+              </el-form-item>
+              
+              <el-form-item label="通义千问VL-Plus密钥">
+                <el-input
+                  v-model="toolsSettings.apiKeys['qwen-vl-plus']"
+                  type="password"
+                  placeholder="请输入通义千问VL-Plus API密钥"
+                  show-password
+                />
+              </el-form-item>
+              
+              <el-form-item label="通义千问Audio-Turbo密钥">
+                <el-input
+                  v-model="toolsSettings.apiKeys['qwen-audio-turbo']"
+                  type="password"
+                  placeholder="请输入通义千问Audio-Turbo API密钥"
+                  show-password
+                />
+              </el-form-item>
+              
+              <el-form-item>
+                <el-button type="primary" @click="saveToolsSettings">保存API设置</el-button>
+                <el-button @click="testAIConnection" type="success">测试连接</el-button>
+                <el-button @click="resetToolsSettings">重置</el-button>
+              </el-form-item>
+            </el-form>
+            
+            <div class="tools-separator"></div>
+            
             <div class="tools-container">
               <!-- 导入导出设置 -->
               <div class="tool-section">
@@ -574,6 +639,22 @@ const privacySettings = reactive({
   deleteAfter: '30d'
 })
 
+// 工具设置表单
+const toolsSettings = reactive({
+  apiKey: '',
+  apiKeys: {
+    'deepseek-v3': '',
+    'gpt-4': '',
+    'gpt-3.5': '',
+    'claude': '',
+    'wenxin': '',
+    'qwen': '',
+    'llama': '',
+    'zhipu': '',
+    'xinghuo': ''
+  }
+})
+
 // 处理菜单选择
 const handleMenuSelect = (index) => {
   router.push({ 
@@ -592,6 +673,10 @@ const initSettingsData = () => {
   
   // AI设置
   Object.assign(aiSettings, settings.ai)
+  
+  // 工具设置 - 从AI设置中加载API密钥
+  toolsSettings.apiKey = settings.ai.apiKey || ''
+  Object.assign(toolsSettings.apiKeys, settings.ai.apiKeys)
   
   // 偏好设置
   Object.assign(preferences, settings.preferences)
@@ -765,6 +850,36 @@ const resetPrivacySettings = () => {
   settingsStore.resetSettings('privacy')
   Object.assign(privacySettings, settingsStore.settings.privacy)
   ElMessage.success('隐私设置已重置')
+}
+
+// 保存工具设置
+const saveToolsSettings = () => {
+  saving.value = true
+  try {
+    // 更新设置存储中的AI设置
+    const updatedAISettings = {
+      ...settingsStore.settings.ai,
+      apiKey: toolsSettings.apiKey,
+      apiKeys: {
+        ...settingsStore.settings.ai.apiKeys,
+        ...toolsSettings.apiKeys
+      }
+    }
+    settingsStore.updateAISettings(updatedAISettings)
+    ElMessage.success('API设置保存成功')
+  } catch (error) {
+    ElMessage.error('保存失败')
+  } finally {
+    saving.value = false
+  }
+}
+
+// 重置工具设置
+const resetToolsSettings = () => {
+  const defaultAISettings = settingsStore.getDefaultSettings().ai
+  toolsSettings.apiKey = defaultAISettings.apiKey
+  Object.assign(toolsSettings.apiKeys, defaultAISettings.apiKeys)
+  ElMessage.success('API设置已重置')
 }
 
 // 测试AI连接
@@ -1030,6 +1145,10 @@ const loadSettings = () => {
   
   // AI设置
   Object.assign(aiSettings, settings.ai)
+  
+  // 工具设置 - 从AI设置中加载API密钥
+  toolsSettings.apiKey = settings.ai.apiKey || ''
+  Object.assign(toolsSettings.apiKeys, settings.ai.apiKeys)
   
   // 偏好设置
   Object.assign(preferences, settings.preferences)
@@ -1722,5 +1841,11 @@ onMounted(() => {
   .settings-info {
     grid-template-columns: 1fr;
   }
+}
+
+.tools-separator {
+  height: 1px;
+  background-color: #ebeef5;
+  margin: 20px 0;
 }
 </style>

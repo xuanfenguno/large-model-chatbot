@@ -1,0 +1,98 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Sensitive files
+.env
+.env.local
+.env.dev
+.env.production
+.env.test
+*.env
+config/.env
+secrets/
+credentials.json
+*.pem
+*.key
+
+# Database
+*.sqlite3
+*.sqlite3-journal
+
+# Logs
+logs/
+*.log
+
+# Coverage
+.coverage
+htmlcov/
+.tox/
+
+# Node modules
+node_modules/
+
+# Compiled
+*.exe
+*.dll
+*.class
+*.o
+*.a
+*.dylib
+
+# Backup files
+*.bak
+*.tmp
+*~
+
+# Local configuration files
+local_settings.py
+.settings/
+
+# Django specific
+*.pot
+*.pyo
+manage.py
+db.sqlite3
+media/
+staticfiles/
+.env
+
+# Backend specific sensitive files
+.env
+config/.env
+config/secrets.py
+private.key
+secret.key

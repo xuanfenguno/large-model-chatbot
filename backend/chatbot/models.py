@@ -89,6 +89,16 @@ class UserProfile(models.Model):
     """用户配置文件，扩展Django内置User模型"""
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile', verbose_name='用户')
     phone = models.CharField(max_length=15, blank=True, null=True, verbose_name='手机号')
+    
+    # API密钥配置
+    openai_api_key = models.TextField(blank=True, null=True, verbose_name='OpenAI API密钥')
+    deepseek_api_key = models.TextField(blank=True, null=True, verbose_name='DeepSeek API密钥')
+    qwen_api_key = models.TextField(blank=True, null=True, verbose_name='通义千问API密钥')
+    gemini_api_key = models.TextField(blank=True, null=True, verbose_name='Gemini API密钥')
+    kimi_api_key = models.TextField(blank=True, null=True, verbose_name='Kimi API密钥')
+    doubao_api_key = models.TextField(blank=True, null=True, verbose_name='豆包API密钥')
+    qwen_code_api_key = models.TextField(blank=True, null=True, verbose_name='通义千问代码API密钥')
+    
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
     
@@ -99,6 +109,43 @@ class UserProfile(models.Model):
 
     def __str__(self):
         return f"{self.user.username}的配置"
+
+
+class VoiceCallRecord(models.Model):
+    """语音通话记录模型"""
+    STATUS_CHOICES = [
+        ('pending', '等待接听'),
+        ('accepted', '已接听'),
+        ('rejected', '已拒绝'),
+        ('ended', '已结束'),
+        ('missed', '未接听'),
+    ]
+
+    call_id = models.CharField(max_length=100, unique=True, verbose_name='通话ID')
+    caller = models.ForeignKey(User, on_delete=models.CASCADE, related_name='outgoing_calls', verbose_name='主叫用户')
+    callee = models.ForeignKey(User, on_delete=models.CASCADE, related_name='incoming_calls', verbose_name='被叫用户')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', verbose_name='通话状态')
+    initiated_at = models.DateTimeField(auto_now_add=True, verbose_name='发起时间')
+    accepted_at = models.DateTimeField(null=True, blank=True, verbose_name='接听时间')
+    ended_at = models.DateTimeField(null=True, blank=True, verbose_name='结束时间')
+    duration = models.IntegerField(default=0, verbose_name='通话时长(秒)')
+    caller_device_info = models.JSONField(null=True, blank=True, verbose_name='主叫设备信息')
+    callee_device_info = models.JSONField(null=True, blank=True, verbose_name='被叫设备信息')
+
+    class Meta:
+        verbose_name = '语音通话记录'
+        verbose_name_plural = '语音通话记录'
+        ordering = ['-initiated_at']
+
+    def __str__(self):
+        return f"{self.caller.username} -> {self.callee.username} ({self.status})"
+
+    @property
+    def call_duration(self):
+        """计算通话时长"""
+        if self.accepted_at and self.ended_at:
+            return int((self.ended_at - self.accepted_at).total_seconds())
+        return 0
 
 
 @receiver(post_save, sender=User)

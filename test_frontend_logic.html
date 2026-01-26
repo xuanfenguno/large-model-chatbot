@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>前端模型API测试</title>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+</head>
+<body>
+    <h1>前端模型API测试</h1>
+    <button onclick="testBackendAPI()">测试后端API</button>
+    <button onclick="testFrontendLogic()">模拟前端逻辑</button>
+    <div id="result"></div>
+
+    <script>
+        // 模拟前端的service请求
+        async function callBackendAPI() {
+            try {
+                const response = await axios.get('http://127.0.0.1:8000/api/v1/models/');
+                return response.data;
+            } catch (error) {
+                console.error('后端API调用错误:', error);
+                throw error;
+            }
+        }
+
+        async function testBackendAPI() {
+            try {
+                const models = await callBackendAPI();
+                const alibabaModels = models.filter(model => model.provider === 'Alibaba');
+                
+                document.getElementById('result').innerHTML = `
+                    <h3>后端API返回 ${models.length} 个模型:</h3>
+                    <h4>阿里巴巴模型 (${alibabaModels.length} 个):</h4>
+                    <ul>
+                        ${alibabaModels.map(model => 
+                            `<li><strong>${model.id}</strong>: ${model.name}</li>`
+                        ).join('')}
+                    </ul>
+                `;
+            } catch (error) {
+                document.getElementById('result').innerHTML = `<p>后端API错误: ${error.message}</p>`;
+            }
+        }
+
+        // 模拟前端的getAvailableModels函数逻辑
+        async function simulateFrontendLogic() {
+            try {
+                // 首先尝试从后端API获取模型列表
+                const response = await axios.get('http://127.0.0.1:8000/api/v1/models/');
+                if (response.data && Array.isArray(response.data)) {
+                    // 转换后端返回的数据格式以适应前端需求
+                    const models = response.data.map(model => ({
+                        id: model.id,
+                        name: model.name,
+                        provider: model.provider,
+                        available: true
+                    }));
+
+                    // 按提供商分组模型
+                    const providers = {};
+                    models.forEach(model => {
+                        if (!providers[model.provider]) {
+                            providers[model.provider] = [];
+                        }
+                        providers[model.provider].push(model);
+                    });
+
+                    const modelGroups = Object.keys(providers).map(provider => ({
+                        label: provider,
+                        models: providers[provider]
+                    }));
+
+                    document.getElementById('result').innerHTML = `
+                        <h3>模拟前端逻辑结果:</h3>
+                        <h4>共 ${models.length} 个模型，分为 ${modelGroups.length} 个提供商组:</h4>
+                        <ul>
+                            ${modelGroups.map(group => 
+                                `<li><strong>${group.label}</strong> (${group.models.length} 个):
+                                    <ul>
+                                        ${group.models.map(model => 
+                                            `<li><strong>${model.id}</strong>: ${model.name}</li>`
+                                        ).join('')}
+                                    </ul>
+                                </li>`
+                            ).join('')}
+                        </ul>
+                    `;
+                }
+            } catch (error) {
+                document.getElementById('result').innerHTML = `<p>模拟前端逻辑错误: ${error.message}</p>`;
+            }
+        }
+
+        function testFrontendLogic() {
+            simulateFrontendLogic();
+        }
+    </script>
+</body>
+</html>

@@ -1,7 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import ConversationViewSet, MessageViewSet, login_view, register_view, health_check, available_models, request_password_reset, reset_password, reset_password_test, function_router
-from .voice_views import initiate_call, answer_call, reject_call, end_call, get_call_status, signaling, get_signaling
+from .views import ConversationViewSet, MessageViewSet, login_view, register_view, health_check, available_models, request_password_reset, reset_password, reset_password_test, function_router, stream_chat
+from .voice_views import initiate_call, answer_call, reject_call, end_call, get_call_status, signaling, get_signaling, get_call_history, get_active_calls
 
 router = DefaultRouter()
 router.register(r'conversations', ConversationViewSet, basename='conversation')
@@ -19,6 +19,8 @@ urlpatterns = [
     path('password/reset/test/', reset_password_test, name='reset-password-test'),
     # 功能路由API
     path('function-router/', function_router, name='function-router'),
+    # 流式聊天API
+    path('stream-chat/', stream_chat, name='stream-chat'),
     # 语音通话API
     path('voice/initiate/', initiate_call, name='initiate-call'),
     path('voice/answer/', answer_call, name='answer-call'),
@@ -27,4 +29,6 @@ urlpatterns = [
     path('voice/status/', get_call_status, name='call-status'),
     path('voice/signaling/', signaling, name='signaling'),
     path('voice/signaling/get/', get_signaling, name='get-signaling'),
+    path('voice/history/', get_call_history, name='call-history'),
+    path('voice/active/', get_active_calls, name='active-calls'),
 ]
