@@ -22,9 +22,33 @@ export const useChatStore = defineStore('chat', () => {
       })
       conversations.value = response.data
     } catch (error) {
+      console.error('获取会话列表失败:', error)
+      let errorMessage = '获取会话列表失败'
+      
+      if (error.response) {
+        // 服务器响应了错误状态码
+        const { status, data } = error.response
+        if (status === 401) {
+          errorMessage = '用户未登录或登录已过期，请重新登录'
+        } else if (status === 403) {
+          errorMessage = '您没有权限访问会话列表'
+        } else if (data && data.error) {
+          errorMessage = data.error
+        } else {
+          errorMessage = `服务器错误 (${status})`
+        }
+      } else if (error.request) {
+        // 请求已发出但没有收到响应
+        errorMessage = '网络连接失败，请检查网络连接'
+      } else {
+        // 其他错误
+        errorMessage = error.message || '未知错误'
+      }
+      
       ElMessage({
-        message: '获取会话列表失败',
-        type: 'error'
+        message: errorMessage,
+        type: 'error',
+        duration: 5000
       })
     }
   }
@@ -83,6 +107,9 @@ export const useChatStore = defineStore('chat', () => {
   const sendMessage = async (content, image = null, model = null) => {
     isLoading.value = true
 
+    // 初始化aiMessage变量，以防在定义前发生错误
+    let aiMessage = null
+
     try {
       // 如果没有选择会话，自动创建新会话
       if (!selectedConversationId.value) {
@@ -112,7 +139,7 @@ export const useChatStore = defineStore('chat', () => {
       messages.value.push(userMessage)
       
       // 创建AI回复的占位消息
-      const aiMessage = {
+      aiMessage = {
         id: Date.now() + 1,
         role: 'assistant',
         content: '',
@@ -172,13 +199,15 @@ export const useChatStore = defineStore('chat', () => {
 
     } catch (error) {
       // 处理错误
-      const aiIndex = messages.value.findIndex(msg => msg.id === aiMessage.id)
-      if (aiIndex !== -1) {
-        messages.value[aiIndex] = {
-          ...aiMessage,
-          content: error.message || '抱歉，消息发送失败。请稍后重试。',
-          is_loading: false,
-          error: true
+      if (aiMessage) {
+        const aiIndex = messages.value.findIndex(msg => msg.id === aiMessage.id)
+        if (aiIndex !== -1) {
+          messages.value[aiIndex] = {
+            ...aiMessage,
+            content: error.message || '抱歉，消息发送失败。请稍后重试。',
+            is_loading: false,
+            error: true
+          }
         }
       }
       
@@ -191,6 +220,9 @@ export const useChatStore = defineStore('chat', () => {
   // 流式发送消息（支持实时显示）
   const sendMessageStream = async (content, model = null) => {
     isStreaming.value = true
+
+    // 初始化aiMessage变量，以防在定义前发生错误
+    let aiMessage = null
 
     try {
       // 如果没有选择会话，自动创建新会话
@@ -219,7 +251,7 @@ export const useChatStore = defineStore('chat', () => {
       messages.value.push(userMessage)
       
       // 创建AI回复的占位消息
-      const aiMessage = {
+      aiMessage = {
         id: Date.now() + 1,
         role: 'assistant',
         content: '',
@@ -284,14 +316,16 @@ export const useChatStore = defineStore('chat', () => {
       )
 
     } catch (error) {
-      const aiIndex = messages.value.findIndex(msg => msg.id === aiMessage.id)
-      if (aiIndex !== -1) {
-        messages.value[aiIndex] = {
-          ...aiMessage,
-          content: error.message || '抱歉，流式消息发送失败。',
-          is_loading: false,
-          is_streaming: false,
-          error: true
+      if (aiMessage) {
+        const aiIndex = messages.value.findIndex(msg => msg.id === aiMessage.id)
+        if (aiIndex !== -1) {
+          messages.value[aiIndex] = {
+            ...aiMessage,
+            content: error.message || '抱歉，流式消息发送失败。',
+            is_loading: false,
+            is_streaming: false,
+            error: true
+          }
         }
       }
     } finally {

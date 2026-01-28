@@ -30,7 +30,6 @@
           </div>
           <div class="conversation-content">
             <div class="conversation-title">{{ conversation.title }}</div>
-            <div class="conversation-time">{{ formatTime(conversation.updated_at) }}</div>
             <div class="conversation-mode">
               <el-tag size="small" :type="getModeTagType(conversation.mode)">
                 {{ getModeText(conversation.mode) }}
@@ -117,37 +116,73 @@
           <!-- 左侧：AI API选择器 -->
           <div class="chat-header-left">
             <div class="ai-api-selector">
-              <el-select v-model="selectedModel" placeholder="选择AI模型" size="default" class="ai-model-select" @change="handleModelChange" :loading="modelStatus === 'connecting'">
-                <el-option v-for="model in flatModels" :key="model.id" :label="model.name" :value="model.id" :disabled="!model.available">
-                  <div class="model-option" :class="{ selected: selectedModel === model.id }">
-                    <div class="model-icon-left">
-                      <div class="model-icon">
-                        {{ getModelIcon(model.provider) }}
-                      </div>
-                    </div>
-                    <div class="model-content">
-                      <div class="model-header">
-                        <span class="model-name">{{ model.name }}</span>
-                        <div class="model-badges">
-                          <el-tag v-if="model.tag" :type="model.tagType" size="small" class="model-tag">
-                            {{ model.tag }}
-                          </el-tag>
-                          <div v-if="model.available" class="status-indicator available"></div>
-                          <div v-else class="status-indicator unavailable"></div>
+              <el-select v-model="selectedModel" placeholder="选择AI模型" size="default" class="ai-model-select" @change="handleModelChange" :loading="modelStatus === 'connecting'" filterable>
+                <el-option-group
+                  v-for="group in modelGroups"
+                  :key="group.label"
+                  :label="group.label"
+                >
+                  <el-option
+                    v-for="model in group.models"
+                    :key="model.id"
+                    :label="model.name"
+                    :value="model.id"
+                    :disabled="!model.available"
+                  >
+                    <div class="model-option" :class="{ selected: selectedModel === model.id }">
+                      <div class="model-icon-left">
+                        <div class="model-icon">
+                          {{ getModelIcon(model.provider) }}
                         </div>
                       </div>
-                      <div class="model-description">
-                        <span class="provider">{{ model.provider }}</span>
-                        <span v-if="model.description" class="description">{{ model.description }}</span>
+                      <div class="model-content">
+                        <div class="model-header">
+                          <span class="model-name">{{ model.name }}</span>
+                          <div class="model-badges">
+                            <el-tag v-if="model.tag" :type="model.tagType" size="small" class="model-tag">
+                              {{ model.tag }}
+                            </el-tag>
+                            <div v-if="model.available" class="status-indicator available"></div>
+                            <div v-else class="status-indicator unavailable"></div>
+                          </div>
+                        </div>
+                        <div class="model-meta">
+                          <span class="provider">{{ model.provider }}</span>
+                          <el-tag 
+                            v-for="capability in model.capabilities.slice(0, 3)" 
+                            :key="capability" 
+                            size="small" 
+                            type="info" 
+                            class="capability-tag"
+                          >
+                            {{ capability }}
+                          </el-tag>
+                          <el-tag 
+                            v-if="model.pricing" 
+                            size="small" 
+                            type="warning" 
+                            class="pricing-tag"
+                          >
+                            ¥{{ (model.pricing.input + model.pricing.output).toFixed(2) }}/1M tokens
+                          </el-tag>
+                          <el-tag 
+                            v-if="model.performance" 
+                            size="small" 
+                            :type="getPerformanceTagType(model.performance.speed)"
+                            class="performance-tag"
+                          >
+                            {{ model.performance.speed }}
+                          </el-tag>
+                        </div>
+                      </div>
+                      <div class="model-arrow">
+                        <el-icon :size="16" color="#94a3b8">
+                          <ArrowRight />
+                        </el-icon>
                       </div>
                     </div>
-                    <div class="model-arrow">
-                      <el-icon :size="16" color="#94a3b8">
-                        <ArrowRight />
-                      </el-icon>
-                    </div>
-                  </div>
-                </el-option>
+                  </el-option>
+                </el-option-group>
               </el-select>
  
               <!-- 模型状态指示器 -->
@@ -193,14 +228,14 @@
                 <!-- 语音通话按钮 -->
                 <el-button 
                   v-if="chatMode === 'voice'"
-                  type="primary" 
+                  :type="isVoiceCallActive ? 'danger' : 'primary'"
                   size="small"
                   class="voice-call-button"
-                  @click="initiateVoiceCall"
-                  :disabled="isVoiceCallActive"
+                  @click="isVoiceCallActive ? forceEndVoiceCall() : initiateVoiceCall()"
+                  :disabled="false"
                 >
                   <el-icon><Phone /></el-icon>
-                  <span>{{ isVoiceCallActive ? '通话中' : '发起通话' }}</span>
+                  <span>{{ isVoiceCallActive ? '结束通话' : '发起通话' }}</span>
                 </el-button>
               </div>
             </div>
@@ -312,7 +347,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick, onMounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useChatStore } from '@/stores/chat'
@@ -362,16 +397,21 @@ const loadAvailableModels = async () => {
   try {
     const availableModels = await aiApi.getAvailableModels()
     
-    // 按提供商分组模型
-    const providers = {}
+    // 按组分组模型
+    const groups = {}
     availableModels.forEach(model => {
-      if (!providers[model.provider]) {
-        providers[model.provider] = []
+      const groupName = model.group || '通用'
+      if (!groups[groupName]) {
+        groups[groupName] = []
       }
-      providers[model.provider].push({
+      groups[groupName].push({
         id: model.id,
         name: model.name,
         provider: model.provider,
+        group: model.group,
+        capabilities: model.capabilities || [],
+        pricing: model.pricing || {},
+        performance: model.performance || {},
         tag: model.tag || '',
         tagType: model.tagType || 'info',
         icon: model.icon || '',
@@ -381,9 +421,9 @@ const loadAvailableModels = async () => {
     })
     
     // 转换为模型组格式
-    modelGroups.value = Object.keys(providers).map(provider => ({
-      label: provider,
-      models: providers[provider]
+    modelGroups.value = Object.keys(groups).map(groupName => ({
+      label: groupName,
+      models: groups[groupName]
     }))
     
     // 设置默认模型
@@ -398,21 +438,43 @@ const loadAvailableModels = async () => {
     
   } catch (error) {
     console.error('加载模型列表失败:', error)
+    // 提供用户友好的错误通知
+    let errorMessage = '加载模型列表失败'
+    if (error.response) {
+      const statusCode = error.response.status
+      switch (statusCode) {
+        case 401:
+          errorMessage = '认证失败，请重新登录'
+          break
+        case 403:
+          errorMessage = '权限不足，无法获取模型列表'
+          break
+        case 500:
+          errorMessage = '服务器内部错误，加载模型列表失败'
+          break
+        default:
+          errorMessage = `服务器错误 (${statusCode})，加载模型列表失败`
+      }
+    } else if (error.request) {
+      errorMessage = '网络连接失败，无法加载模型列表'
+    } else {
+      errorMessage = error.message || '加载模型列表时发生未知错误'
+    }
+    
     // 使用默认的模型列表作为后备
     modelGroups.value = [
       {
-        label: '开源模型',
+        label: '高性能',
         models: [
-          { id: 'deepseek-chat', name: 'DeepSeek Chat', provider: 'DeepSeek', tag: '推荐', tagType: 'success', available: true },
-          { id: 'qwen-max', name: '通义千问 Max', provider: '阿里云', tag: '中文', tagType: 'info', available: true }
+          { id: 'gpt-4', name: 'GPT-4', provider: 'OpenAI', group: '高性能', tag: '智能', tagType: 'success', available: true },
+          { id: 'claude-3-opus', name: 'Claude 3 Opus', provider: 'Anthropic', group: '高性能', tag: '安全', tagType: 'warning', available: true }
         ]
       },
       {
-        label: '商业模型',
+        label: '高效能',
         models: [
-          { id: 'gpt-4', name: 'GPT-4', provider: 'OpenAI', tag: '智能', tagType: 'success', available: true },
-          { id: 'gpt-3.5', name: 'GPT-3.5', provider: 'OpenAI', tag: '快速', tagType: 'info', available: true },
-          { id: 'claude-3', name: 'Claude 3', provider: 'Anthropic', tag: '安全', tagType: 'warning', available: true }
+          { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo', provider: 'OpenAI', group: '高效能', tag: '快速', tagType: 'info', available: true },
+          { id: 'gpt-4o-mini', name: 'GPT-4o Mini', provider: 'OpenAI', group: '高效能', tag: '经济', tagType: 'info', available: true }
         ]
       }
     ]
@@ -566,7 +628,48 @@ const handleSendMessage = async () => {
       await speakText(response)
     }
   } catch (error) {
-    ElMessage.error('发送消息失败')
+    console.error('发送消息失败:', error)
+    
+    // 根据错误类型提供更具体的错误信息
+    let errorMessage = '发送消息失败'
+    if (error.response) {
+      // 服务器返回了错误状态码
+      const statusCode = error.response.status
+      switch (statusCode) {
+        case 401:
+          errorMessage = '认证失败，请重新登录'
+          break
+        case 403:
+          errorMessage = '权限不足，无法发送消息'
+          break
+        case 429:
+          errorMessage = '请求过于频繁，请稍后再试'
+          break
+        case 500:
+          errorMessage = '服务器内部错误，请稍后再试'
+          break
+        case 502:
+          errorMessage = '服务器暂时不可用，请稍后再试'
+          break
+        case 503:
+          errorMessage = '服务器繁忙，请稍后再试'
+          break
+        default:
+          errorMessage = `服务器错误 (${statusCode})，请稍后再试`
+      }
+    } else if (error.request) {
+      // 请求已发出但没有收到响应
+      errorMessage = '网络连接失败，请检查网络连接'
+    } else {
+      // 其他错误
+      errorMessage = error.message || '发送消息时发生未知错误'
+    }
+    
+    ElMessage.error({
+      message: errorMessage,
+      duration: 3000,
+      showClose: true
+    })
   } finally {
     isSending.value = false
   }
@@ -632,19 +735,96 @@ const getModelIcon = (provider) => {
   return iconMap[provider] || provider.charAt(0).toUpperCase()
 }
 
+// 根据性能速度获取标签类型
+const getPerformanceTagType = (speed) => {
+  if (speed === 'very_fast') return 'success'
+  if (speed === 'fast') return 'success'
+  if (speed === 'medium') return 'warning'
+  if (speed === 'slow') return 'danger'
+  return 'info'
+}
+
 // 处理模型切换
 const handleModelChange = async (modelId) => {
   console.log('模型已切换到:', modelId)
   
-  // 更新模型状态为连接中
+  // 检查当前对话是否有历史消息
+  if (messages.value && messages.value.length > 0) {
+    try {
+      const result = await ElMessageBox.confirm(
+        `您即将切换到 ${modelId} 模型。当前对话中的消息将继续使用之前的模型上下文，是否需要开启新对话以使用新模型？`,
+        '模型切换提醒',
+        {
+          confirmButtonText: '开启新对话',
+          cancelButtonText: '继续当前对话',
+          type: 'warning'
+        }
+      )
+      
+      // 用户选择开启新对话
+      if (result === 'confirm') {
+        // 更新模型状态为连接中
+        modelStatus.value = 'connecting'
+        
+        try {
+          // 验证模型是否可用
+          const availableModels = await aiApi.getAvailableModels()
+          const selectedModelObj = availableModels.find(m => m.id === modelId)
+          
+          if (!selectedModelObj || !selectedModelObj.available) {
+            throw new Error('所选模型当前不可用')
+          }
+          
+          // 更新配置管理器中的默认模型
+          configManager.setDefaultModel(modelId)
+          
+          // 更新设置存储
+          const settingsStore = useSettingsStore()
+          settingsStore.updateAISettings({ defaultModel: modelId })
+          
+          // 更新模型状态为已连接
+          modelStatus.value = 'connected'
+          
+          // 开启新对话
+          await handleNewChat()
+          
+          // 显示模型统计信息
+          const stats = aiApi.getStats()
+          const modelName = modelGroups.value.flatMap(g => g.models).find(m => m.id === modelId)?.name
+          ElMessage.success({
+            message: `已切换到 ${modelName} 模型并开启新对话 (总调用: ${stats.client.totalCalls})`,
+            duration: 3000
+          })
+          
+          console.log('模型切换成功，当前模型:', modelId)
+        } catch (error) {
+          modelStatus.value = 'error'
+          ElMessage.error(`模型切换失败: ${error.message}`)
+          
+          // 恢复到之前的模型
+          const previousModel = configManager.getDefaultModel()
+          selectedModel.value = previousModel
+          
+          console.error('模型切换错误:', error)
+        }
+        
+        return // 提前返回，不再执行后续逻辑
+      }
+    } catch (cancelError) {
+      // 用户选择继续当前对话或取消，继续执行下面的常规切换逻辑
+      console.log('用户选择继续当前对话')
+    }
+  }
+  
+  // 更新模型状态为连接中（对于不需要新开对话的情况）
   modelStatus.value = 'connecting'
   
   try {
     // 验证模型是否可用
     const availableModels = await aiApi.getAvailableModels()
-    const selectedModel = availableModels.find(m => m.id === modelId)
+    const selectedModelObj = availableModels.find(m => m.id === modelId)
     
-    if (!selectedModel || !selectedModel.available) {
+    if (!selectedModelObj || !selectedModelObj.available) {
       throw new Error('所选模型当前不可用')
     }
     
@@ -669,7 +849,35 @@ const handleModelChange = async (modelId) => {
     console.log('模型切换成功，当前模型:', modelId)
   } catch (error) {
     modelStatus.value = 'error'
-    ElMessage.error(`模型切换失败: ${error.message}`)
+    
+    // 提供更友好的错误消息
+    let errorMessage = '模型切换失败'
+    if (error.response) {
+      const statusCode = error.response.status
+      switch (statusCode) {
+        case 401:
+          errorMessage = '认证失败，请重新登录后再试'
+          break
+        case 403:
+          errorMessage = '权限不足，无法切换模型'
+          break
+        case 500:
+          errorMessage = '服务器内部错误，模型切换失败'
+          break
+        default:
+          errorMessage = `服务器错误 (${statusCode})，模型切换失败`
+      }
+    } else if (error.request) {
+      errorMessage = '网络连接失败，请检查网络连接'
+    } else {
+      errorMessage = error.message || '模型切换时发生未知错误'
+    }
+    
+    ElMessage.error({
+      message: errorMessage,
+      duration: 3000,
+      showClose: true
+    })
     
     // 恢复到之前的模型
     const previousModel = configManager.getDefaultModel()
@@ -765,14 +973,25 @@ const initiateVoiceCall = async () => {
 }
 
 // 结束语音通话
-const endVoiceCall = () => {
-  isVoiceCallActive.value = false
-  
+const endVoiceCall = async () => {
   // 实际项目中应该在这里关闭WebSocket连接
-  if (voiceCallRef.value) {
-    voiceCallRef.value.endCall()
+  if (voiceCallRef.value && typeof voiceCallRef.value.endCall === 'function') {
+    try {
+      await voiceCallRef.value.endCall()
+    } catch (error) {
+      console.error('结束通话时出错:', error)
+    }
   }
   
+  // 确保通话状态被更新，无论组件调用是否成功
+  isVoiceCallActive.value = false
+  
+  ElMessage.info('通话已结束')
+}
+
+// 强制结束语音通话（直接更新状态而不依赖组件方法）
+const forceEndVoiceCall = () => {
+  isVoiceCallActive.value = false
   ElMessage.info('通话已结束')
 }
 
@@ -793,7 +1012,7 @@ const getModeText = (mode) => {
     'voice': '语音',
     'video': '视频'
   }
-  return textMap[mode] || '未知'
+  return textMap[mode] || '文字'
 }
 
 // 处理语音数据
@@ -867,9 +1086,8 @@ const checkAuth = () => {
   })
   
   if (!isAuthenticated) {
-    console.log('页面级认证失败，跳转到登录页面')
-    ElMessage.warning('请先登录')
-    router.push('/login')
+    console.log('页面级认证失败，但仍允许访问')
+    // 不再强制跳转到登录页面，而是允许访问但功能受限
     return false
   }
   
@@ -927,19 +1145,22 @@ const setupTokenRefresh = () => {
 const loadData = async () => {
   // 先检查认证状态，但不阻止页面渲染
   const authResult = checkAuth()
-  if (!authResult) {
-    console.log('认证检查失败，但允许页面继续渲染')
-    // 认证失败时不阻止页面渲染，但显示提示信息
-    ElMessage.warning('请先登录以使用完整功能')
-    return
-  }
   
   try {
-    await chatStore.fetchConversations()
-    await loadModels() // 加载模型列表
+    // 即使未认证也尝试加载模型列表（这些可能不需要认证）
+    await loadModels()
+    
+    // 只有在认证通过时才加载会话列表
+    if (authResult) {
+      await chatStore.fetchConversations()
+    } else {
+      // 未认证时清空会话列表
+      chatStore.conversations = []
+      console.log('未认证用户，会话列表已清空')
+    }
   } catch (error) {
     console.error('加载数据失败:', error)
-    ElMessage.error('加载对话列表失败')
+    ElMessage.error('加载数据失败')
   }
 }
 
@@ -975,7 +1196,7 @@ onMounted(async () => {
   try {
     const settingsStore = useSettingsStore()
     const aiSettings = settingsStore.aiSettings
-    if (aiSettings.defaultModel) {
+    if (aiSettings && aiSettings.defaultModel) {
       selectedModel.value = aiSettings.defaultModel
     }
   } catch (error) {
@@ -1043,18 +1264,19 @@ const goToProfile = () => {
 .conversations-list {
   flex: 1;
   overflow-y: auto;
-  padding: 0.5rem;
+  padding: 0.25rem;
 }
 
 .conversation-item {
   display: flex;
   align-items: center;
-  padding: 0.75rem;
-  margin-bottom: 0.5rem;
+  padding: 0.3rem 0.5rem;
+  margin-bottom: 0.15rem;
   background: #f8f9fa;
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.3s ease;
+  min-height: 40px;
 }
 
 .conversation-item:hover {
@@ -1070,41 +1292,71 @@ const goToProfile = () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   background: #667eea;
   border-radius: 50%;
   color: white;
-  margin-right: 0.75rem;
+  margin-right: 0.5rem;
   flex-shrink: 0;
 }
 
 .conversation-content {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .conversation-title {
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   font-weight: 500;
   color: #303133;
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.1rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.conversation-time {
-  font-size: 0.75rem;
-  color: #909399;
-}
+
 
 .conversation-mode {
-  margin-top: 0.25rem;
+  margin-top: 0.1rem;
 }
 
 .conversation-actions {
-  margin-left: 0.5rem;
+  margin-left: 0.25rem;
+  display: flex;
+  align-items: center;
+}
+
+.conversation-actions .el-button {
+  padding: 2px 4px;
+  min-height: auto;
+}
+
+/* 模型分组相关样式 */
+.model-group {
+  margin-bottom: 1rem;
+}
+
+.model-group-header {
+  display: flex;
+  align-items: center;
+  margin: 0.5rem 0;
+  padding: 0.25rem 0.5rem;
+  background: #f0f2f5;
+  border-radius: 4px;
+}
+
+.model-tag {
+  margin-right: 0.5rem;
+}
+
+.conv-count {
+  font-size: 0.75rem;
+  color: #909399;
 }
 
 /* 左侧栏底部设置区域 */
@@ -1393,13 +1645,10 @@ const goToProfile = () => {
 }
 
 .ai-model-select :deep(.el-select-dropdown) {
-  border: 1px solid #e2e8f0;
-  border-top: 1px solid #f8fafc;
-  border-bottom: 1px solid #e2e8f0;
+  border: none;
   box-shadow: 
     0 2px 4px rgba(0, 0, 0, 0.05),
-    0 8px 24px rgba(0, 0, 0, 0.1),
-    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    0 8px 24px rgba(0, 0, 0, 0.1);
   border-radius: 12px;
   overflow: hidden;
   min-width: 380px !important;
@@ -1430,7 +1679,6 @@ const goToProfile = () => {
   cursor: pointer;
   margin: 0;
   border: none;
-  border-bottom: 1px solid #e2e8f0;
   width: 100%;
   box-sizing: border-box;
   background: transparent;
@@ -1439,7 +1687,7 @@ const goToProfile = () => {
 }
 
 .model-option:not(:last-child) {
-  margin-bottom: 1px;
+  margin-bottom: 0;
 }
 
 .model-option:last-child {
@@ -1448,8 +1696,6 @@ const goToProfile = () => {
 
 .model-option:hover {
   background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-  border-bottom-color: #cbd5e1;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
 .model-option.selected {
@@ -1460,7 +1706,6 @@ const goToProfile = () => {
 
 .model-option.selected {
   background: #ffffff !important;
-  border-left: 4px solid #0284c7 !important;
 }
 
 .model-option.selected .model-name {
@@ -1473,21 +1718,7 @@ const goToProfile = () => {
   color: #374151 !important;
 }
 
-.model-option::before {
-  content: '';
-  position: absolute;
-  top: -1px;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent 0%, #f1f5f9 20%, #f1f5f9 80%, transparent 100%);
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
 
-.model-option:hover::before {
-  opacity: 1;
-}
 
 .model-option:disabled {
   opacity: 0.5;
@@ -1806,7 +2037,7 @@ const goToProfile = () => {
 .apple-sidebar .conversation-item {
   background: rgba(255, 255, 255, 0.6);
   border-radius: 12px;
-  margin: 8px 0;
+  margin: 4px 0;
   border: 1px solid rgba(255, 255, 255, 0.4);
   transition: all 0.3s ease;
 }
@@ -1842,11 +2073,11 @@ const goToProfile = () => {
   border-radius: 12px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
   backdrop-filter: blur(20px);
+  border-radius: 12px;
 }
-
 .apple-chat-area .el-select-dropdown {
   background: rgba(255, 255, 255, 0.9);
-  border: 1px solid rgba(255, 255, 255, 0.6);
+  border: none;
   border-radius: 12px;
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
   backdrop-filter: blur(30px);
@@ -2388,18 +2619,16 @@ const goToProfile = () => {
   
   .ai-model-select :deep(.el-select-dropdown) {
     background: #1e293b;
-    border: 1px solid #334155;
+    border: none;
   }
   
   .ai-model-select :deep(.el-select-group__title) {
     background: linear-gradient(135deg, #334155 0%, #1e293b 100%);
     color: #cbd5e1;
-    border-bottom-color: #475569;
   }
   
   .model-option:hover {
     background: linear-gradient(135deg, #334155 0%, #1e293b 100%);
-    border-color: #475569;
   }
   
   .model-option.selected {
@@ -2410,7 +2639,6 @@ const goToProfile = () => {
   
   .model-option.selected {
     background: #1e293b !important;
-    border-left: 4px solid #38bdf8 !important;
   }
   
   .model-option.selected .model-name {
@@ -2464,5 +2692,20 @@ const goToProfile = () => {
 
 .user-avatar-float:hover .user-avatar {
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+}
+
+/* 模型选择器中的元信息样式 */
+.model-meta {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.capability-tag,
+.pricing-tag,
+.performance-tag {
+  font-size: 10px;
+  margin-right: 2px;
 }
 </style>

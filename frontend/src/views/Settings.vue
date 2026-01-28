@@ -585,7 +585,7 @@ const profileForm = reactive({
 
 // AI设置表单
 const aiSettings = reactive({
-  defaultModel: 'deepseek-v3',
+  defaultModel: 'qwen-plus',
   apiKey: '',
   temperature: 0.7,
   maxTokens: 1000,

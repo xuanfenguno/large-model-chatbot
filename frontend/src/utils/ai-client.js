@@ -330,7 +330,13 @@ class OpenAIProvider {
   }
 
   _getApiKey(keyName) {
-    const apiKey = localStorage.getItem(keyName)
+    // 首先尝试从 localStorage 获取（保持原有功能）
+    let apiKey = localStorage.getItem(keyName)
+    
+    // 如果 localStorage 中没有，使用硬编码的密钥（仅针对 QWEN_API_KEY）
+    if (!apiKey && keyName === 'QWEN_API_KEY') {
+      apiKey = 'sk-f3fa5090eb8547ce8a7aa2236c9d1997'  // 您的 Qwen API 密钥
+    }
     
     if (!apiKey) {
       throw new Error(`请配置${keyName}`)
@@ -405,7 +411,13 @@ class DeepSeekProvider {
   }
 
   _getApiKey(keyName) {
-    const apiKey = localStorage.getItem(keyName)
+    // 首先尝试从 localStorage 获取（保持原有功能）
+    let apiKey = localStorage.getItem(keyName)
+    
+    // 如果 localStorage 中没有，使用硬编码的密钥（仅针对 QWEN_API_KEY）
+    if (!apiKey && keyName === 'QWEN_API_KEY') {
+      apiKey = 'sk-f3fa5090eb8547ce8a7aa2236c9d1997'  // 您的 Qwen API 密钥
+    }
     
     if (!apiKey) {
       throw new Error(`请配置${keyName}`)
@@ -566,7 +578,13 @@ class QwenProvider {
   }
   
   _getApiKey(keyName) {
-    const apiKey = localStorage.getItem(keyName) || process.env[keyName]
+    // 首先尝试从 localStorage 获取（保持原有功能）
+    let apiKey = localStorage.getItem(keyName)
+    
+    // 如果 localStorage 中没有，使用硬编码的密钥（仅针对 QWEN_API_KEY）
+    if (!apiKey && keyName === 'QWEN_API_KEY') {
+      apiKey = 'sk-f3fa5090eb8547ce8a7aa2236c9d1997'  // 您的 Qwen API 密钥
+    }
     
     if (!apiKey) {
       throw new Error(`请配置${keyName}`)

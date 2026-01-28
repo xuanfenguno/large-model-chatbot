@@ -1194,82 +1194,82 @@ def available_models(request):
     # OpenAI 模型
     if user_api_keys.get('openai'):
         available_models_list.extend([
-            {'id': 'gpt-3.5-turbo', 'name': 'GPT-3.5 Turbo', 'provider': 'OpenAI', 'available': True},
-            {'id': 'gpt-4', 'name': 'GPT-4', 'provider': 'OpenAI', 'available': True},
-            {'id': 'gpt-4-turbo', 'name': 'GPT-4 Turbo', 'provider': 'OpenAI', 'available': True},
-            {'id': 'gpt-4o', 'name': 'GPT-4o', 'provider': 'OpenAI', 'available': True},
-            {'id': 'gpt-4o-mini', 'name': 'GPT-4o Mini', 'provider': 'OpenAI', 'available': True},
+            {'id': 'gpt-4o', 'name': 'GPT-4o', 'provider': 'OpenAI', 'group': 'High-End', 'available': True, 'capabilities': ['text', 'vision', 'audio'], 'pricing': {'input': 5.0, 'output': 15.0}, 'performance': {'speed': 'fast', 'accuracy': 'very_high'}},
+            {'id': 'gpt-4o-mini', 'name': 'GPT-4o Mini', 'provider': 'OpenAI', 'group': 'Efficient', 'available': True, 'capabilities': ['text', 'vision', 'audio'], 'pricing': {'input': 0.15, 'output': 0.6}, 'performance': {'speed': 'fast', 'accuracy': 'high'}},
+            {'id': 'gpt-4-turbo', 'name': 'GPT-4 Turbo', 'provider': 'OpenAI', 'group': 'High-End', 'available': True, 'capabilities': ['text', 'vision'], 'pricing': {'input': 10.0, 'output': 30.0}, 'performance': {'speed': 'medium', 'accuracy': 'very_high'}},
+            {'id': 'gpt-4', 'name': 'GPT-4', 'provider': 'OpenAI', 'group': 'High-End', 'available': True, 'capabilities': ['text'], 'pricing': {'input': 30.0, 'output': 60.0}, 'performance': {'speed': 'slow', 'accuracy': 'very_high'}},
+            {'id': 'gpt-3.5-turbo', 'name': 'GPT-3.5 Turbo', 'provider': 'OpenAI', 'group': 'Basic', 'available': True, 'capabilities': ['text'], 'pricing': {'input': 0.5, 'output': 1.5}, 'performance': {'speed': 'fast', 'accuracy': 'medium'}},
         ])
     
     # Google Gemini 模型
     if user_api_keys.get('gemini'):
         available_models_list.extend([
-            {'id': 'gemini-pro', 'name': 'Gemini Pro', 'provider': 'Google', 'available': True},
-            {'id': 'gemini-1.5-pro', 'name': 'Gemini 1.5 Pro', 'provider': 'Google', 'available': True},
-            {'id': 'gemini-1.5-flash', 'name': 'Gemini 1.5 Flash', 'provider': 'Google', 'available': True},
+            {'id': 'gemini-1.5-pro', 'name': 'Gemini 1.5 Pro', 'provider': 'Google', 'group': 'High-End', 'available': True, 'capabilities': ['text', 'vision', 'audio', 'code', 'multimodal'], 'pricing': {'input': 3.5, 'output': 10.5}, 'performance': {'speed': 'medium', 'accuracy': 'very_high'}},
+            {'id': 'gemini-1.5-flash', 'name': 'Gemini 1.5 Flash', 'provider': 'Google', 'group': 'Efficient', 'available': True, 'capabilities': ['text', 'vision', 'audio', 'code', 'multimodal'], 'pricing': {'input': 0.35, 'output': 1.05}, 'performance': {'speed': 'fast', 'accuracy': 'high'}},
+            {'id': 'gemini-pro', 'name': 'Gemini Pro', 'provider': 'Google', 'group': 'Mid-Range', 'available': True, 'capabilities': ['text', 'vision'], 'pricing': {'input': 0.5, 'output': 1.5}, 'performance': {'speed': 'medium', 'accuracy': 'high'}},
         ])
     
     # 阿里通义千问系列
     if user_api_keys.get('qwen') or user_api_keys.get('qwen_code'):
         available_models_list.extend([
-            {'id': 'qwen-max', 'name': '通义千问Max', 'provider': 'Alibaba', 'available': True},
-            {'id': 'qwen-plus', 'name': '通义千问Plus', 'provider': 'Alibaba', 'available': True},
-            {'id': 'qwen-turbo', 'name': '通义千问Turbo', 'provider': 'Alibaba', 'available': True},
-            {'id': 'qwen-coder', 'name': '通义千问Coder', 'provider': 'Alibaba', 'available': True},
-            {'id': 'qwen-math', 'name': '通义千问Math', 'provider': 'Alibaba', 'available': True},
-            {'id': 'qwen-vl-max', 'name': '通义千问VL-Max', 'provider': 'Alibaba', 'available': True},  # 视觉语言模型
-            {'id': 'qwen-vl-plus', 'name': '通义千问VL-Plus', 'provider': 'Alibaba', 'available': True},  # 视觉语言模型
-            {'id': 'qwen-audio-turbo', 'name': '通义千问Audio-Turbo', 'provider': 'Alibaba', 'available': True},  # 音频模型
-            {'id': 'qwen_coder_plus', 'name': '通义千问Coder+', 'provider': 'Alibaba', 'available': True},
-            {'id': 'qwen_code_interpreter', 'name': '通义千问Code Interpreter', 'provider': 'Alibaba', 'available': True}
+            {'id': 'qwen-max', 'name': '通义千问Max', 'provider': 'Alibaba', 'group': 'High-End', 'available': True, 'capabilities': ['text', 'reasoning'], 'pricing': {'input': 0.14, 'output': 0.28}, 'performance': {'speed': 'medium', 'accuracy': 'very_high'}},
+            {'id': 'qwen-plus', 'name': '通义千问Plus', 'provider': 'Alibaba', 'group': 'Mid-Range', 'available': True, 'capabilities': ['text', 'reasoning'], 'pricing': {'input': 0.04, 'output': 0.12}, 'performance': {'speed': 'fast', 'accuracy': 'high'}},
+            {'id': 'qwen-turbo', 'name': '通义千问Turbo', 'provider': 'Alibaba', 'group': 'Efficient', 'available': True, 'capabilities': ['text'], 'pricing': {'input': 0.014, 'output': 0.028}, 'performance': {'speed': 'fast', 'accuracy': 'medium'}},
+            {'id': 'qwen-coder', 'name': '通义千问Coder', 'provider': 'Alibaba', 'group': 'Specialized', 'available': True, 'capabilities': ['code'], 'pricing': {'input': 0.04, 'output': 0.12}, 'performance': {'speed': 'medium', 'accuracy': 'high'}},
+            {'id': 'qwen-math', 'name': '通义千问Math', 'provider': 'Alibaba', 'group': 'Specialized', 'available': True, 'capabilities': ['math'], 'pricing': {'input': 0.04, 'output': 0.12}, 'performance': {'speed': 'medium', 'accuracy': 'very_high'}},
+            {'id': 'qwen-vl-max', 'name': '通义千问VL-Max', 'provider': 'Alibaba', 'group': 'Vision', 'available': True, 'capabilities': ['vision', 'text'], 'pricing': {'input': 0.14, 'output': 0.28}, 'performance': {'speed': 'medium', 'accuracy': 'very_high'}},  # 视觉语言模型
+            {'id': 'qwen-vl-plus', 'name': '通义千问VL-Plus', 'provider': 'Alibaba', 'group': 'Vision', 'available': True, 'capabilities': ['vision', 'text'], 'pricing': {'input': 0.04, 'output': 0.12}, 'performance': {'speed': 'fast', 'accuracy': 'high'}},  # 视觉语言模型
+            {'id': 'qwen-audio-turbo', 'name': '通义千问Audio-Turbo', 'provider': 'Alibaba', 'group': 'Audio', 'available': True, 'capabilities': ['audio', 'text'], 'pricing': {'input': 0.04, 'output': 0.12}, 'performance': {'speed': 'fast', 'accuracy': 'high'}},  # 音频模型
+            {'id': 'qwen_coder_plus', 'name': '通义千问Coder+', 'provider': 'Alibaba', 'group': 'Specialized', 'available': True, 'capabilities': ['code'], 'pricing': {'input': 0.04, 'output': 0.12}, 'performance': {'speed': 'medium', 'accuracy': 'high'}},
+            {'id': 'qwen_code_interpreter', 'name': '通义千问Code Interpreter', 'provider': 'Alibaba', 'group': 'Specialized', 'available': True, 'capabilities': ['code', 'execution'], 'pricing': {'input': 0.04, 'output': 0.12}, 'performance': {'speed': 'medium', 'accuracy': 'high'}},
         ])
     
     # DeepSeek
     if user_api_keys.get('deepseek'):
         available_models_list.extend([
-            {'id': 'deepseek-chat', 'name': 'DeepSeek Chat', 'provider': 'DeepSeek', 'available': True},
-            {'id': 'deepseek-coder', 'name': 'DeepSeek Coder', 'provider': 'DeepSeek', 'available': True},
+            {'id': 'deepseek-chat', 'name': 'DeepSeek Chat', 'provider': 'DeepSeek', 'group': 'General', 'available': True, 'capabilities': ['text'], 'pricing': {'input': 0.14, 'output': 0.28}, 'performance': {'speed': 'fast', 'accuracy': 'high'}},
+            {'id': 'deepseek-coder', 'name': 'DeepSeek Coder', 'provider': 'DeepSeek', 'group': 'Specialized', 'available': True, 'capabilities': ['code'], 'pricing': {'input': 0.14, 'output': 0.28}, 'performance': {'speed': 'fast', 'accuracy': 'very_high'}},
         ])
     
     # 月之暗面(Kimi)
     if user_api_keys.get('kimi'):
         available_models_list.extend([
-            {'id': 'kimi-large', 'name': 'Kimi Large', 'provider': 'Moonshot', 'available': True},
+            {'id': 'kimi-large', 'name': 'Kimi Large', 'provider': 'Moonshot', 'group': 'High-End', 'available': True, 'capabilities': ['text', 'reasoning'], 'pricing': {'input': 12.0, 'output': 12.0}, 'performance': {'speed': 'slow', 'accuracy': 'very_high'}},
         ])
     
     # 豆包
     if user_api_keys.get('doubao'):
         available_models_list.extend([
-            {'id': 'doubao-pro', 'name': '豆包Pro', 'provider': 'ByteDance', 'available': True},
+            {'id': 'doubao-pro', 'name': '豆包Pro', 'provider': 'ByteDance', 'group': 'General', 'available': True, 'capabilities': ['text', 'multimodal'], 'pricing': {'input': 0.5, 'output': 0.5}, 'performance': {'speed': 'fast', 'accuracy': 'high'}},
         ])
     
     # 其他模型（如果全局配置中有API密钥）
     if settings.LLM_CONFIG.get('ANTHROPIC_API_KEY'):
         available_models_list.extend([
-            {'id': 'claude-3-haiku', 'name': 'Claude 3 Haiku', 'provider': 'Anthropic', 'available': True},
-            {'id': 'claude-3-sonnet', 'name': 'Claude 3 Sonnet', 'provider': 'Anthropic', 'available': True},
-            {'id': 'claude-3-opus', 'name': 'Claude 3 Opus', 'provider': 'Anthropic', 'available': True},
-            {'id': 'claude-3-5-sonnet', 'name': 'Claude 3.5 Sonnet', 'provider': 'Anthropic', 'available': True},
+            {'id': 'claude-3-5-sonnet', 'name': 'Claude 3.5 Sonnet', 'provider': 'Anthropic', 'group': 'High-End', 'available': True, 'capabilities': ['text', 'coding', 'reasoning'], 'pricing': {'input': 3.0, 'output': 15.0}, 'performance': {'speed': 'medium', 'accuracy': 'very_high'}},
+            {'id': 'claude-3-opus', 'name': 'Claude 3 Opus', 'provider': 'Anthropic', 'group': 'High-End', 'available': True, 'capabilities': ['text', 'coding', 'reasoning'], 'pricing': {'input': 15.0, 'output': 75.0}, 'performance': {'speed': 'slow', 'accuracy': 'very_high'}},
+            {'id': 'claude-3-sonnet', 'name': 'Claude 3 Sonnet', 'provider': 'Anthropic', 'group': 'Mid-Range', 'available': True, 'capabilities': ['text', 'coding', 'reasoning'], 'pricing': {'input': 3.0, 'output': 15.0}, 'performance': {'speed': 'medium', 'accuracy': 'very_high'}},
+            {'id': 'claude-3-haiku', 'name': 'Claude 3 Haiku', 'provider': 'Anthropic', 'group': 'Efficient', 'available': True, 'capabilities': ['text', 'coding', 'reasoning'], 'pricing': {'input': 0.8, 'output': 4.0}, 'performance': {'speed': 'fast', 'accuracy': 'high'}},
         ])
     
     if settings.LLM_CONFIG.get('BAIDU_API_KEY'):
         available_models_list.extend([
-            {'id': 'ernie-bot-4.5', 'name': '文心一言4.5', 'provider': 'Baidu', 'available': True},
-            {'id': 'ernie-bot-4', 'name': '文心一言4', 'provider': 'Baidu', 'available': True},
+            {'id': 'ernie-bot-4.5', 'name': '文心一言4.5', 'provider': 'Baidu', 'group': 'Mid-Range', 'available': True, 'capabilities': ['text', 'reasoning'], 'pricing': {'input': 0.12, 'output': 0.12}, 'performance': {'speed': 'medium', 'accuracy': 'high'}},
+            {'id': 'ernie-bot-4', 'name': '文心一言4', 'provider': 'Baidu', 'group': 'Basic', 'available': True, 'capabilities': ['text'], 'pricing': {'input': 0.08, 'output': 0.08}, 'performance': {'speed': 'medium', 'accuracy': 'medium'}},
         ])
     
     if settings.LLM_CONFIG.get('IFLYTEK_API_KEY'):
         available_models_list.extend([
-            {'id': 'spark-max', 'name': '讯飞星火Max', 'provider': 'iFlytek', 'available': True},
-            {'id': 'spark-pro', 'name': '讯飞星火Pro', 'provider': 'iFlytek', 'available': True},
-            {'id': 'spark-lite', 'name': '讯飞星火Lite', 'provider': 'iFlytek', 'available': True},
+            {'id': 'spark-max', 'name': '讯飞星火Max', 'provider': 'iFlytek', 'group': 'High-End', 'available': True, 'capabilities': ['text', 'reasoning'], 'pricing': {'input': 0.05, 'output': 0.05}, 'performance': {'speed': 'slow', 'accuracy': 'very_high'}},
+            {'id': 'spark-pro', 'name': '讯飞星火Pro', 'provider': 'iFlytek', 'group': 'Mid-Range', 'available': True, 'capabilities': ['text', 'reasoning'], 'pricing': {'input': 0.02, 'output': 0.02}, 'performance': {'speed': 'medium', 'accuracy': 'high'}},
+            {'id': 'spark-lite', 'name': '讯飞星火Lite', 'provider': 'iFlytek', 'group': 'Efficient', 'available': True, 'capabilities': ['text'], 'pricing': {'input': 0.008, 'output': 0.008}, 'performance': {'speed': 'fast', 'accuracy': 'medium'}},
         ])
     
     if settings.LLM_CONFIG.get('ZHIPU_API_KEY'):
         available_models_list.extend([
-            {'id': 'glm-4', 'name': 'GLM-4', 'provider': 'ZhipuAI', 'available': True},
-            {'id': 'glm-4-air', 'name': 'GLM-4 Air', 'provider': 'ZhipuAI', 'available': True},
-            {'id': 'glm-4-flash', 'name': 'GLM-4 Flash', 'provider': 'ZhipuAI', 'available': True},
+            {'id': 'glm-4', 'name': 'GLM-4', 'provider': 'ZhipuAI', 'group': 'High-End', 'available': True, 'capabilities': ['text', 'reasoning'], 'pricing': {'input': 0.1, 'output': 0.1}, 'performance': {'speed': 'medium', 'accuracy': 'very_high'}},
+            {'id': 'glm-4-air', 'name': 'GLM-4 Air', 'provider': 'ZhipuAI', 'group': 'Mid-Range', 'available': True, 'capabilities': ['text', 'reasoning'], 'pricing': {'input': 0.05, 'output': 0.05}, 'performance': {'speed': 'fast', 'accuracy': 'high'}},
+            {'id': 'glm-4-flash', 'name': 'GLM-4 Flash', 'provider': 'ZhipuAI', 'group': 'Efficient', 'available': True, 'capabilities': ['text'], 'pricing': {'input': 0.01, 'output': 0.01}, 'performance': {'speed': 'very_fast', 'accuracy': 'medium'}},
         ])
     
     return Response(available_models_list)

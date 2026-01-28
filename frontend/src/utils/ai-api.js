@@ -18,6 +18,7 @@ class UnifiedAIApi {
     
     // 缓存机制
     this.cache = new Map()
+    this.cacheTimestamps = new Map() // 存储缓存时间戳
     this.cacheDuration = 5 * 60 * 1000 // 5分钟
   }
 
@@ -56,8 +57,10 @@ class UnifiedAIApi {
       // 缓存结果
       if (result.success && fullOptions.enableCache) {
         this.cache.set(cacheKey, result)
+        this.cacheTimestamps.set(cacheKey, Date.now())
         setTimeout(() => {
           this.cache.delete(cacheKey)
+          this.cacheTimestamps.delete(cacheKey)
         }, this.cacheDuration)
       }
       
@@ -125,28 +128,74 @@ class UnifiedAIApi {
    * @returns {Promise<Array>} 模型列表
    */
   async getAvailableModels() {
+    const cacheKey = 'available_models'
+    
+    // 检查缓存
+    if (this._isCacheValid(cacheKey)) {
+      return this.cache.get(cacheKey)
+    }
+    
     try {
       // 首先尝试从后端API获取模型列表
       try {
         const response = await service.get('/v1/models/')
         if (response.data && Array.isArray(response.data)) {
           // 转换后端返回的数据格式以适应前端需求
-          return response.data.map(model => ({
+          const models = response.data.map(model => ({
             id: model.id,
             name: model.name,
             provider: model.provider,
-            available: true
+            group: model.group,
+            capabilities: model.capabilities || [],
+            pricing: model.pricing || {},
+            performance: model.performance || {},
+            available: model.available !== undefined ? model.available : true
           }))
+          
+          // 缓存结果
+          this.cache.set(cacheKey, models)
+          this.cacheTimestamps.set(cacheKey, Date.now())
+          setTimeout(() => {
+            this.cache.delete(cacheKey)
+            this.cacheTimestamps.delete(cacheKey)
+          }, this.cacheDuration)
+          
+          return models
         }
       } catch (backendError) {
         console.warn('从后端获取模型列表失败，尝试使用客户端方法:', backendError)
       }
       
       // 如果后端API失败，则回退到原有的客户端方法
-      return await this.client.getAvailableModels()
+      const models = await this.client.getAvailableModels()
+      
+      // 缓存结果
+      this.cache.set(cacheKey, models)
+      this.cacheTimestamps.set(cacheKey, Date.now())
+      setTimeout(() => {
+        this.cache.delete(cacheKey)
+        this.cacheTimestamps.delete(cacheKey)
+      }, this.cacheDuration)
+      
+      return models
     } catch (error) {
       console.error('获取模型列表失败:', error)
-      return []
+      // 返回默认模型列表作为后备
+      const defaultModels = [
+        { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo', provider: 'OpenAI', available: true },
+        { id: 'gpt-4', name: 'GPT-4', provider: 'OpenAI', available: true },
+        { id: 'claude-3-haiku', name: 'Claude 3 Haiku', provider: 'Anthropic', available: true }
+      ]
+      
+      // 缓存结果
+      this.cache.set(cacheKey, defaultModels)
+      this.cacheTimestamps.set(cacheKey, Date.now())
+      setTimeout(() => {
+        this.cache.delete(cacheKey)
+        this.cacheTimestamps.delete(cacheKey)
+      }, this.cacheDuration)
+      
+      return defaultModels
     }
   }
 
@@ -210,7 +259,16 @@ class UnifiedAIApi {
    * @returns {boolean} 是否有效
    */
   _isCacheValid(cacheKey) {
-    return this.cache.has(cacheKey)
+    if (!this.cache.has(cacheKey)) {
+      return false
+    }
+    
+    const timestamp = this.cacheTimestamps.get(cacheKey)
+    if (!timestamp) {
+      return false
+    }
+    
+    return (Date.now() - timestamp) < this.cacheDuration
   }
 
   /**
@@ -232,6 +290,7 @@ class UnifiedAIApi {
    */
   clearCache() {
     this.cache.clear()
+    this.cacheTimestamps.clear()
   }
 
   /**

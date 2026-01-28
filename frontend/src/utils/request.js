@@ -1,6 +1,7 @@
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
+import { refreshToken } from '@/stores/auth'
 
 // 创建axios实例（优化超时和配置）
 const service = axios.create({

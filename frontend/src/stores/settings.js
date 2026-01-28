@@ -14,7 +14,7 @@ export const useSettingsStore = defineStore('settings', () => {
     
     // AI模型设置
     ai: {
-      defaultModel: 'deepseek-v3',
+      defaultModel: 'qwen-plus',
       apiKey: '',
       temperature: 0.7,
       maxTokens: 1000,

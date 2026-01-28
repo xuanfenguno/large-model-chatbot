@@ -18,14 +18,14 @@ class AIConfigManager {
       // API密钥配置（只保留国内模型）
       apiKeys: {
         DEEPSEEK_API_KEY: '',
-        QWEN_API_KEY: 'sk-68a322b84bc449b395e27a7dc4df7d64',
+        QWEN_API_KEY: 'sk-f3fa5090eb8547ce8a7aa2236c9d1997',
         KIMI_API_KEY: '',
         DOUBAO_API_KEY: '',
         BAILIAN_API_KEY: ''
       },
       
       // 模型默认配置
-      defaultModel: 'deepseek-chat',
+      defaultModel: 'qwen-plus',
       
       // 模型参数配置（只保留国内模型）
       modelConfigs: {
@@ -327,6 +327,33 @@ class AIConfigManager {
   }
 
   /**
+   * 获取模型偏好设置
+   * @returns {Object} 偏好设置
+   */
+  getPreferences() {
+    // 默认偏好设置
+    const defaultPreferences = {
+      preferredCapabilities: [],
+      preferredProviders: [],
+      preferredModels: []
+    };
+    
+    // 从配置中获取偏好设置，如果没有则使用默认值
+    const preferences = this.config.preferences || defaultPreferences;
+    
+    return { ...defaultPreferences, ...preferences };
+  }
+
+  /**
+   * 设置模型偏好设置
+   * @param {Object} preferences - 偏好设置
+   */
+  setPreferences(preferences) {
+    this.config.preferences = { ...this.config.preferences, ...preferences };
+    this.saveConfig();
+  }
+
+  /**
    * 获取配置摘要
    * @returns {Object} 配置摘要
    */
@@ -401,6 +428,16 @@ export function useAIConfig() {
     // 获取支持的提供商
     getSupportedProviders() {
       return aiConfigManager.getSupportedProviders()
+    },
+    
+    // 获取偏好设置
+    getPreferences() {
+      return aiConfigManager.getPreferences()
+    },
+    
+    // 设置偏好设置
+    setPreferences(preferences) {
+      aiConfigManager.setPreferences(preferences)
     }
   }
 }

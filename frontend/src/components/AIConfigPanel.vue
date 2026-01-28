@@ -25,8 +25,6 @@
           <el-button size="small" @click="resetStats">重置统计</el-button>
           <el-button size="small" @click="clearCache">清除缓存</el-button>
         </div>
-        
-        <el-divider />
       </div>
 
       <!-- API密钥配置 -->
@@ -74,19 +72,54 @@
         
         <el-form :model="modelConfig" label-width="120px">
           <el-form-item label="默认模型">
-            <el-select v-model="modelConfig.defaultModel" placeholder="请选择默认模型">
-              <el-option
-                v-for="model in availableModels"
-                :key="model.id"
-                :label="model.name"
-                :value="model.id"
-                :disabled="!model.available"
+            <el-select v-model="modelConfig.defaultModel" placeholder="请选择默认模型" filterable>
+              <el-option-group
+                v-for="group in groupedModels"
+                :key="group.label"
+                :label="group.label"
               >
-                <span>{{ model.name }}</span>
-                <span style="float: right; color: #8492a6; font-size: 13px">
-                  {{ model.provider }}
-                </span>
-              </el-option>
+                <el-option
+                  v-for="model in group.options"
+                  :key="model.id"
+                  :label="model.name"
+                  :value="model.id"
+                  :disabled="!model.available"
+                >
+                  <div class="model-option">
+                    <div class="model-info">
+                      <span class="model-name">{{ model.name }}</span>
+                      <span class="model-provider">({{ model.provider }})</span>
+                    </div>
+                    <div class="model-meta">
+                      <el-tag 
+                        v-for="capability in (model.capabilities ? model.capabilities.slice(0, 3) : [])" 
+                        :key="capability" 
+                        size="small" 
+                        type="info" 
+                        class="capability-tag"
+                      >
+                        {{ capability }}
+                      </el-tag>
+                      <el-tag 
+                        v-if="model.pricing" 
+                        size="small" 
+                        type="warning" 
+                        class="pricing-tag"
+                      >
+                        ¥{{ (model.pricing.input + model.pricing.output).toFixed(2) }}/1M tokens
+                      </el-tag>
+                      <el-tag 
+                        v-if="model.performance" 
+                        size="small" 
+                        :type="getPerformanceTagType(model.performance.speed)"
+                        class="performance-tag"
+                      >
+                        {{ model.performance.speed }}
+                      </el-tag>
+                    </div>
+                  </div>
+                </el-option>
+              </el-option-group>
             </el-select>
           </el-form-item>
 
@@ -119,6 +152,19 @@
               show-stops
             />
             <span class="slider-value">{{ modelConfig.topP }}</span>
+          </el-form-item>
+          
+          <el-form-item label="模型偏好">
+            <div class="preference-section">
+              <el-checkbox-group v-model="modelConfig.preferredCapabilities">
+                <el-checkbox label="text" border>文本处理</el-checkbox>
+                <el-checkbox label="vision" border>视觉理解</el-checkbox>
+                <el-checkbox label="audio" border>音频处理</el-checkbox>
+                <el-checkbox label="coding" border>代码生成</el-checkbox>
+                <el-checkbox label="reasoning" border>逻辑推理</el-checkbox>
+                <el-checkbox label="multimodal" border>多模态</el-checkbox>
+              </el-checkbox-group>
+            </div>
           </el-form-item>
         </el-form>
 
@@ -197,7 +243,8 @@ const modelConfig = reactive({
   defaultModel: '',
   temperature: 0.6,
   maxTokens: 2000,
-  topP: 0.7
+  topP: 0.7,
+  preferredCapabilities: []  // 新增：模型偏好设置
 })
 
 const globalConfig = reactive({
@@ -226,6 +273,12 @@ const loadConfig = async () => {
   const modelCfg = configManager.getModelConfig(defaultModel)
   Object.assign(modelConfig, { defaultModel, ...modelCfg })
   
+  // 加载模型偏好设置
+  const preferences = configManager.getPreferences()
+  if (preferences.preferredCapabilities) {
+    modelConfig.preferredCapabilities = preferences.preferredCapabilities
+  }
+  
   // 加载全局配置
   const globalCfg = configManager.getGlobalConfig()
   Object.assign(globalConfig, globalCfg)
@@ -238,10 +291,42 @@ const loadConfig = async () => {
 const loadModels = async () => {
   try {
     availableModels.value = await aiApi.getAvailableModels()
+    groupModelsByProvider()
   } catch (error) {
     console.error('加载模型列表失败:', error)
     availableModels.value = []
+    groupModelsByProvider()
   }
+}
+
+// 按提供商分组模型
+const groupedModels = ref([])
+
+const groupModelsByProvider = () => {
+  // 按组分组模型
+  const groups = {}
+  availableModels.value.forEach(model => {
+    const groupName = model.group || 'Other'
+    if (!groups[groupName]) {
+      groups[groupName] = []
+    }
+    groups[groupName].push(model)
+  })
+
+  // 转换为选项组格式
+  groupedModels.value = Object.keys(groups).map(groupName => ({
+    label: groupName,
+    options: groups[groupName]
+  }))
+}
+
+// 根据性能速度获取标签类型
+const getPerformanceTagType = (speed) => {
+  if (speed === 'very_fast') return 'success'
+  if (speed === 'fast') return 'success'
+  if (speed === 'medium') return 'warning'
+  if (speed === 'slow') return 'danger'
+  return 'info'
 }
 
 // 更新统计信息
@@ -300,6 +385,12 @@ const saveModelConfig = () => {
       maxTokens: modelConfig.maxTokens,
       topP: modelConfig.topP
     })
+    
+    // 保存模型偏好设置
+    configManager.setPreferences({
+      preferredCapabilities: modelConfig.preferredCapabilities
+    })
+    
     ElMessage.success('模型配置保存成功')
   } catch (error) {
     ElMessage.error('保存失败: ' + error.message)
@@ -391,7 +482,50 @@ const openWebsite = (url) => {
 h3 {
   color: #303133;
   margin-bottom: 15px;
-  border-left: 4px solid #409eff;
-  padding-left: 10px;
+}
+
+/* 模型选择器样式 */
+.model-option {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.model-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.model-name {
+  font-weight: bold;
+  margin-bottom: 2px;
+}
+
+.model-provider {
+  font-size: 12px;
+  color: #909399;
+}
+
+.model-meta {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  min-width: 150px;
+}
+
+.capability-tag,
+.pricing-tag,
+.performance-tag {
+  margin-left: 4px;
+  font-size: 10px;
+}
+
+.preference-section {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 </style>
