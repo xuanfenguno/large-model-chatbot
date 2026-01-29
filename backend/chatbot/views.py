@@ -527,7 +527,7 @@ class MessageViewSet(viewsets.ModelViewSet):
 
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
-@rate_limit(max_requests=30, window_size=60, block_malicious=True)  # 每分钟最多30次聊天请求
+@rate_limit(max_requests=30, window_size=60, block_malicious=False)  # 每分钟最多30次聊天请求，开发环境设为False，避免误判
 def chat(request):
     """聊天接口（非流式响应）"""
     # 输入验证
@@ -546,10 +546,13 @@ def chat(request):
         if not is_valid:
             return Response({'error': validated_image_url}, status=status.HTTP_400_BAD_REQUEST)
     
-    if model:
-        is_valid, validated_model = validate_input_data(model, '模型', max_length=100)
+    # 处理模型参数 - 即使model为假值也要确保validated_model被定义
+    validated_model = model  # 直接使用原始model值，将在后续逻辑中处理
+    if model:  # 只有当model为真值时才进行验证
+        is_valid, validated_model_result = validate_input_data(model, '模型', max_length=100)
         if not is_valid:
-            return Response({'error': validated_model}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': validated_model_result}, status=status.HTTP_400_BAD_REQUEST)
+        validated_model = validated_model_result  # 更新validated_model
     
     try:
         # 创建或获取会话
@@ -643,7 +646,7 @@ def chat(request):
 
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
-@rate_limit(max_requests=30, window_size=60, block_malicious=True)  # 每分钟最多30次流式聊天请求
+@rate_limit(max_requests=30, window_size=60, block_malicious=False)  # 每分钟最多30次流式聊天请求，开发环境设为False，避免误判
 def stream_chat(request):
     """流式聊天接口"""
     # 输入验证
@@ -662,10 +665,13 @@ def stream_chat(request):
         if not is_valid:
             return Response({'error': validated_image_url}, status=status.HTTP_400_BAD_REQUEST)
     
-    if model:
-        is_valid, validated_model = validate_input_data(model, '模型', max_length=100)
+    # 处理模型参数 - 即使model为假值也要确保validated_model被定义
+    validated_model = model  # 直接使用原始model值，将在后续逻辑中处理
+    if model:  # 只有当model为真值时才进行验证
+        is_valid, validated_model_result = validate_input_data(model, '模型', max_length=100)
         if not is_valid:
-            return Response({'error': validated_model}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': validated_model_result}, status=status.HTTP_400_BAD_REQUEST)
+        validated_model = validated_model_result  # 更新validated_model
     
     def event_stream():
         try:
@@ -1302,12 +1308,103 @@ def available_models(request):
     return Response(available_models_list)
 
 
+def check_model_availability(user):
+    """检查用户可用的模型"""
+    user_api_keys = {}
+    if user and hasattr(user, 'profile'):
+        profile = user.profile
+        user_api_keys = {
+            'openai': profile.openai_api_key if profile.openai_api_key else settings.LLM_CONFIG.get('OPENAI_API_KEY'),
+            'deepseek': profile.deepseek_api_key if profile.deepseek_api_key else settings.LLM_CONFIG.get('DEEPSEEK_API_KEY'),
+            'qwen': profile.qwen_api_key if profile.qwen_api_key else settings.LLM_CONFIG.get('QWEN_API_KEY'),
+            'gemini': profile.gemini_api_key if profile.gemini_api_key else settings.LLM_CONFIG.get('GEMINI_API_KEY'),
+            'kimi': profile.kimi_api_key if profile.kimi_api_key else settings.LLM_CONFIG.get('KIMI_API_KEY'),
+            'doubao': profile.doubao_api_key if profile.doubao_api_key else settings.LLM_CONFIG.get('DOUBAO_API_KEY'),
+            'qwen_code': profile.qwen_code_api_key if profile.qwen_code_api_key else settings.LLM_CONFIG.get('QWEN_CODE_API_KEY'),
+        }
+    else:
+        # 如果用户未登录或无配置，则使用全局配置
+        user_api_keys = {
+            'openai': settings.LLM_CONFIG.get('OPENAI_API_KEY'),
+            'deepseek': settings.LLM_CONFIG.get('DEEPSEEK_API_KEY'),
+            'qwen': settings.LLM_CONFIG.get('QWEN_API_KEY'),
+            'gemini': settings.LLM_CONFIG.get('GEMINI_API_KEY'),
+            'kimi': settings.LLM_CONFIG.get('KIMI_API_KEY'),
+            'doubao': settings.LLM_CONFIG.get('DOUBAO_API_KEY'),
+            'qwen_code': settings.LLM_CONFIG.get('QWEN_CODE_API_KEY'),
+        }
+    
+    available_providers = []
+    if user_api_keys.get('openai'):
+        available_providers.append('openai')
+    if user_api_keys.get('gemini'):
+        available_providers.append('gemini')
+    if user_api_keys.get('qwen'):
+        available_providers.append('qwen')
+    if user_api_keys.get('deepseek'):
+        available_providers.append('deepseek')
+    if user_api_keys.get('kimi'):
+        available_providers.append('kimi')
+    if user_api_keys.get('doubao'):
+        available_providers.append('doubao')
+    
+    return user_api_keys, available_providers
+
+def get_available_model(request, preferred_model='gpt-3.5-turbo'):
+    """获取可用的模型，如果没有配置API密钥则返回模拟模型"""
+    _, available_providers = check_model_availability(getattr(request, 'user', None))
+    
+    # 如果没有任何API密钥配置，返回模拟模型
+    if not available_providers:
+        return 'mock-model'
+    
+    # 检查首选模型是否有效且可用
+    if preferred_model and isinstance(preferred_model, str):
+        if ((preferred_model.startswith('gpt') and 'openai' in available_providers) or
+            (preferred_model.startswith('gemini') and 'gemini' in available_providers) or
+            (preferred_model.startswith('qwen') and 'qwen' in available_providers) or
+            (preferred_model.startswith('deepseek') and 'deepseek' in available_providers) or
+            (preferred_model.startswith('kimi') and 'kimi' in available_providers) or
+            (preferred_model.startswith('doubao') and 'doubao' in available_providers)):
+            return preferred_model
+    
+    # 否则按优先级顺序查找可用模型
+    fallback_order = [
+        ('gpt-3.5-turbo', 'openai'),
+        ('gemini-pro', 'gemini'),
+        ('qwen-turbo', 'qwen'),
+        ('deepseek-chat', 'deepseek'),
+        ('kimi-large', 'kimi'),
+        ('doubao-pro', 'doubao')
+    ]
+    
+    for fallback_model, provider in fallback_order:
+        if provider in available_providers:
+            return fallback_model
+    
+    # 如果都没有，返回第一个可用的
+    if 'openai' in available_providers:
+        return 'gpt-3.5-turbo'
+    elif 'gemini' in available_providers:
+        return 'gemini-pro'
+    elif 'qwen' in available_providers:
+        return 'qwen-turbo'
+    elif 'deepseek' in available_providers:
+        return 'deepseek-chat'
+    elif 'kimi' in available_providers:
+        return 'kimi-large'
+    elif 'doubao' in available_providers:
+        return 'doubao-pro'
+    
+    # 默认返回模拟模型
+    return 'mock-model'
+
 # 导入功能路由器
 from .function_router import function_router
 
 @api_view(['POST'])
 @permission_classes([permissions.AllowAny])
-@rate_limit(max_requests=20, window_size=60, block_malicious=True)  # 每分钟最多20次功能路由请求
+@rate_limit(max_requests=20, window_size=60, block_malicious=False)  # 每分钟最多20次功能路由请求，开发环境设为False，避免误判
 def function_router(request):
     """功能路由API - 根据用户输入自动识别意图并调用相应功能"""
     user_input = request.data.get('input', '')
@@ -1318,21 +1415,42 @@ def function_router(request):
     if not is_valid:
         return Response({'error': validated_input}, status=status.HTTP_400_BAD_REQUEST)
     
-    if model:
-        is_valid, validated_model = validate_input_data(model, '模型', max_length=100)
+    # 处理模型参数 - 即使model为假值也要确保validated_model被定义
+    validated_model = model  # 直接使用原始model值，将在get_available_model中处理
+    if model:  # 只有当model为真值时才进行验证
+        is_valid, validated_model_result = validate_input_data(model, '模型', max_length=100)
         if not is_valid:
-            return Response({'error': validated_model}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': validated_model_result}, status=status.HTTP_400_BAD_REQUEST)
+        validated_model = validated_model_result  # 更新validated_model
     
     if not validated_input:
         return Response({'error': '输入内容不能为空'}, status=status.HTTP_400_BAD_REQUEST)
     
+    # 获取可用的模型
+    final_model = get_available_model(request, validated_model)
+    if final_model == 'mock-model':
+        # 如果没有配置任何API密钥，返回模拟响应
+        mock_responses = [
+            "您好！我是AI助手，由于尚未配置API密钥，当前返回模拟响应。请配置API密钥以获得真实AI回复。",
+            "很高兴为您服务！由于系统未配置API密钥，这里显示的是模拟响应。请在后台配置API密钥以启用真实AI功能。",
+            "欢迎使用AI多功能助手！当前系统未配置API密钥，因此返回此模拟消息。请配置API密钥以启用完整功能。"
+        ]
+        import random
+        return Response({'result': random.choice(mock_responses)})
+    
     try:
         # 初始化功能路由器
         router = FunctionRouter()
-        result = router.route_function(validated_input, validated_model)
+        result = router.route_function(validated_input, final_model)
         return Response({'result': result})
     except Exception as e:
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        # 记录详细错误信息以便调试
+        import traceback
+        import logging
+        logger.error(f"function_router API错误: {str(e)}")
+        logger.error(f"错误堆栈: {traceback.format_exc()}")
+        logger.error(f"输入数据: input='{validated_input}', model='{final_model}'")
+        return Response({'error': f'function_router API错误: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['POST'])

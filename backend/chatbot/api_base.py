@@ -147,7 +147,7 @@ class OpenAIApi(BaseAIApi):
         self.name = "OpenAI"
     
     def _get_api_key(self, model: str) -> Optional[str]:
-        return getattr(settings, 'OPENAI_API_KEY', None)
+        return getattr(settings, 'OPENAI_API_KEY', None) or settings.LLM_CONFIG.get('OPENAI_API_KEY')
     
     def _prepare_headers(self, api_key: str) -> Dict[str, str]:
         """准备OpenAI API请求头"""
@@ -194,7 +194,7 @@ class GoogleGeminiApi(BaseAIApi):
         self.name = "Google Gemini"
     
     def _get_api_key(self, model: str) -> Optional[str]:
-        return getattr(settings, 'GEMINI_API_KEY', None)
+        return getattr(settings, 'GEMINI_API_KEY', None) or settings.LLM_CONFIG.get('GEMINI_API_KEY')
     
     def send_message(self, message: str, config: Dict) -> Dict:
         """重写发送消息方法以适配Gemini API格式"""
@@ -279,7 +279,7 @@ class MoonshotKimiApi(BaseAIApi):
         self.name = "Moonshot Kimi"
     
     def _get_api_key(self, model: str) -> Optional[str]:
-        return getattr(settings, 'MOONSHOT_API_KEY', None)
+        return getattr(settings, 'MOONSHOT_API_KEY', None) or settings.LLM_CONFIG.get('KIMI_API_KEY')
     
     def _prepare_payload(self, message: str, history: List[Dict], config: Dict) -> Dict:
         """准备OpenAI兼容的请求载荷"""
@@ -320,7 +320,7 @@ class DoubaoApi(BaseAIApi):
     
     def _get_api_key(self, model: str) -> Optional[str]:
         # 豆包API通常使用不同的认证方式，这里简化处理
-        return getattr(settings, 'DOUBAO_API_KEY', None)
+        return getattr(settings, 'DOUBAO_API_KEY', None) or settings.LLM_CONFIG.get('DOUBAO_API_KEY')
     
     def send_message(self, message: str, config: Dict) -> Dict:
         """重写发送消息方法以适配豆包API格式"""
@@ -338,7 +338,39 @@ class QwenApi(BaseAIApi):
         self.name = "Qwen"
     
     def _get_api_key(self, model: str) -> Optional[str]:
-        return getattr(settings, 'QWEN_API_KEY', None)
+        return getattr(settings, 'QWEN_API_KEY', None) or settings.LLM_CONFIG.get('QWEN_API_KEY')
+    
+    def send_message(self, message: str, config: Dict) -> Dict:
+        """重写发送消息方法以适配Qwen OpenAI兼容API格式"""
+        # 验证配置
+        self._validate_config(config)
+        
+        # 获取API密钥
+        api_key = self._get_api_key(config.get('model'))
+        if not api_key:
+            raise Exception(f"未配置{self.name} API密钥")
+        
+        # 准备请求参数
+        headers = self._prepare_headers(api_key)
+        payload = self._prepare_payload(
+            message=message,
+            history=config.get('history', []),
+            config=config
+        )
+        
+        # 对于OpenAI兼容API，需要在基础URL后添加/chat/completions端点
+        url = f"{self.base_url.rstrip('/')}/chat/completions"
+        
+        # 发送请求
+        response_data = self._make_request(
+            url=url,
+            headers=headers,
+            payload=payload,
+            timeout=config.get('timeout', 30)
+        )
+        
+        # 提取响应内容
+        return self._extract_response_content(response_data)
     
     def _prepare_headers(self, api_key: str) -> Dict[str, str]:
         """使用标准的OpenAI API头部格式"""
@@ -386,7 +418,7 @@ class DeepSeekApi(BaseAIApi):
         self.name = "DeepSeek"
     
     def _get_api_key(self, model: str) -> Optional[str]:
-        return getattr(settings, 'DEEPSEEK_API_KEY', None)
+        return getattr(settings, 'DEEPSEEK_API_KEY', None) or settings.LLM_CONFIG.get('DEEPSEEK_API_KEY')
     
     def _prepare_payload(self, message: str, history: List[Dict], config: Dict) -> Dict:
         """准备OpenAI兼容的请求载荷"""

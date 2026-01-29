@@ -1,12 +1,12 @@
 from django.core.management.base import BaseCommand
-from ...middleware.rate_limit import clear_blacklisted_ips
+from chatbot.middleware.rate_limit import BLACKLISTED_IPS
 
 class Command(BaseCommand):
-    help = '清除IP黑名单中的所有IP地址'
+    help = 'Clear all IPs from the blacklist'
 
     def handle(self, *args, **options):
-        self.stdout.write('正在清除IP黑名单...')
-        clear_blacklisted_ips()
+        count = len(BLACKLISTED_IPS)
+        BLACKLISTED_IPS.clear()
         self.stdout.write(
-            self.style.SUCCESS('成功清除IP黑名单和相关缓存记录！')
+            self.style.SUCCESS(f'Successfully cleared {count} IPs from the blacklist')
         )

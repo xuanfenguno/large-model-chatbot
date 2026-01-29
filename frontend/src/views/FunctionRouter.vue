@@ -108,15 +108,8 @@
       <!-- 右侧内容区域 -->
       <main class="content-area">
         <div class="main-container">
-          <!-- 顶部功能栏 -->
+          <!-- 顶部功能栏 - 已移除功能标题 -->
           <div class="top-control-bar">
-            <div class="function-header" v-if="activeFunction !== 'auto'">
-              <div class="function-title-line">
-                <h2 class="function-title">{{ getFunctionName(activeFunction) }}</h2>
-                <span class="function-separator">|</span>
-                <p class="function-description">{{ getFunctionDescription(activeFunction) }}</p>
-              </div>
-            </div>
           </div>
           
           <!-- 聊天区域 -->
@@ -563,10 +556,12 @@ onMounted(() => {
 .function-control-bar .function-title-line {
   display: flex;
   align-items: center;
-  gap: 12px;
-  flex-wrap: nowrap;  /* 禁止换行，强制同一行显示 */
-  height: 32px;
-  line-height: 32px;
+  gap: 8px;  /* 减小间隔 */
+  flex-wrap: nowrap;
+  height: 24px;
+  line-height: 24px;
+  position: relative;  /* 相对定位 */
+  left: 0;            /* 明确指定位置 */
 }
 
 .function-control-bar .function-title {
@@ -804,12 +799,14 @@ onMounted(() => {
 
 /* 功能标题区域 */
 .function-header {
-  padding: 40px 0 28px;
-  text-align: center;
+  padding: 16px 24px;
+  text-align: left;
   border-bottom: 1px solid #f1f5f9;
-  margin-bottom: 24px;
+  margin-bottom: 16px;
   border-radius: 20px 20px 0 0;
   background: linear-gradient(135deg, #f8fafc, #ffffff);
+  width: fit-content;  /* 紧凑宽度 */
+  float: left;         /* 浮动到左侧 */
 }
 
 .function-title {
@@ -1065,7 +1062,7 @@ onMounted(() => {
 /* 顶部控制栏 */
 .top-control-bar {
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;  /* 左对齐 */
   align-items: center;
   padding: 6px 20px;
   background: rgba(248, 250, 252, 0.9);
@@ -1077,9 +1074,13 @@ onMounted(() => {
   margin: 0 auto;
 }
 
-.function-header {
+.main-container .function-header {
   flex: 0 0 auto;
   min-width: 0;
+  text-align: left;
+  width: auto;
+  float: none;
+  display: block;
 }
 
 .function-title-line {
@@ -1088,6 +1089,7 @@ onMounted(() => {
   gap: 4px;
   height: 24px;
   max-width: 400px;
+  justify-content: flex-start;  /* 左对齐 */
 }
 
 .function-title {
@@ -1124,6 +1126,7 @@ onMounted(() => {
   flex-direction: column;
   flex: 1;
   height: calc(100vh - 180px);
+  position: relative; /* 为子元素绝对定位提供参考 */
 }
 
 /* 消息区域 */
@@ -1135,6 +1138,7 @@ onMounted(() => {
   flex-direction: column;
   gap: 16px;
   max-height: calc(100vh - 280px);
+  padding-bottom: 80px; /* 为底部输入区域留出空间 */
 }
 
 /* 自动识别提示 */
@@ -1304,6 +1308,13 @@ onMounted(() => {
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-top: 1px solid rgba(255, 255, 255, 0.4);
+  position: absolute;  /* 绝对定位 */
+  bottom: 0;          /* 固定在底部 */
+  left: 0;
+  right: 0;
+  z-index: 10;        /* 确保在适当层级 */
+  width: auto;        /* 自适应宽度 */
+  margin: 0 20px 10px 20px;  /* 左右留边距，更明显地靠左 */
 }
 
 .input-wrapper {

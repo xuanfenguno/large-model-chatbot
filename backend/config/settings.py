@@ -196,6 +196,17 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 if DEBUG:
     # 开发环境下允许所有来源
     CORS_ALLOW_ALL_ORIGINS = True
+    # 也可以指定特定的源
+    CORS_ALLOWED_ORIGINS = [
+        "http://127.0.0.1:8091",  # 前端开发服务器
+        "http://localhost:8091",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:8080", 
+        "http://127.0.0.1:8080",
+        # 在生产环境中添加实际的前端域名
+        # "https://yourdomain.com",
+    ]
 else:
     # 生产环境下指定允许的域名
     CORS_ALLOWED_ORIGINS = [

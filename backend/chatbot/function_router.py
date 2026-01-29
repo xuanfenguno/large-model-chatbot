@@ -6,6 +6,7 @@ import re
 from datetime import datetime
 from typing import Dict, List, Optional
 from .api_base import OpenAIApi, GoogleGeminiApi, MoonshotKimiApi, QwenApi, DeepSeekApi
+from .enhanced_api import EnhancedApiWrapper
 
 
 class FunctionRouter:
@@ -95,21 +96,8 @@ class FunctionRouter:
         默认聊天处理
         """
         # 根据模型类型选择对应的API实现
-        if model.startswith('gpt'):
-            api_instance = OpenAIApi()
-        elif model.startswith('gemini'):
-            api_instance = GoogleGeminiApi()
-        elif model.startswith('kimi'):
-            api_instance = MoonshotKimiApi()
-        elif model.startswith('qwen-code') or model.startswith('qwen_coder'):
-            api_instance = QwenApi()
-        elif model.startswith('deepseek'):
-            api_instance = DeepSeekApi()
-        elif model.startswith('qwen'):
-            api_instance = QwenApi()
-        else:
-            # 默认使用OpenAI API
-            api_instance = OpenAIApi()
+        # 使用增强的API包装器来创建API实例，自动处理API密钥缺失情况
+        api_instance = EnhancedApiWrapper.create_api_instance(model)
         
         try:
             config = {
@@ -165,20 +153,8 @@ class FunctionRouter:
                 prompt = f"请讲一个笑话：{user_input}"
         
         # 使用AI API生成笑话
-        if model.startswith('gpt'):
-            api_instance = OpenAIApi()
-        elif model.startswith('gemini'):
-            api_instance = GoogleGeminiApi()
-        elif model.startswith('kimi'):
-            api_instance = MoonshotKimiApi()
-        elif model.startswith('qwen-code') or model.startswith('qwen_coder'):
-            api_instance = QwenApi()
-        elif model.startswith('deepseek'):
-            api_instance = DeepSeekApi()
-        elif model.startswith('qwen'):
-            api_instance = QwenApi()
-        else:
-            api_instance = OpenAIApi()
+        # 使用增强的API包装器来创建API实例，自动处理API密钥缺失情况
+        api_instance = EnhancedApiWrapper.create_api_instance(model)
         
         try:
             config = {
@@ -220,20 +196,8 @@ class FunctionRouter:
             prompt = f"请讲一个有趣的故事：{user_input}"
         
         # 使用AI API生成故事
-        if model.startswith('gpt'):
-            api_instance = OpenAIApi()
-        elif model.startswith('gemini'):
-            api_instance = GoogleGeminiApi()
-        elif model.startswith('kimi'):
-            api_instance = MoonshotKimiApi()
-        elif model.startswith('qwen-code') or model.startswith('qwen_coder'):
-            api_instance = QwenApi()
-        elif model.startswith('deepseek'):
-            api_instance = DeepSeekApi()
-        elif model.startswith('qwen'):
-            api_instance = QwenApi()
-        else:
-            api_instance = OpenAIApi()
+        # 使用增强的API包装器来创建API实例，自动处理API密钥缺失情况
+        api_instance = EnhancedApiWrapper.create_api_instance(model)
         
         try:
             config = {
@@ -258,19 +222,25 @@ class FunctionRouter:
         中文语义理解处理（准确率高达90%）
         """
         # 使用AI进行高级中文语义理解
-        if model.startswith('qwen'):  # 优先使用通义千问进行中文处理
-            api_instance = QwenApi()
+        prompt = f"""
+        请对以下中文文本进行深入的语义理解和分析，准确率达到90%以上：
+        
+        输入文本：{user_input}
+        
+        请提供：
+        1. 文本的主要含义
+        2. 情感倾向（正面/负面/中性）
+        3. 关键实体识别
+        4. 语义关系分析
+        5. 可能的隐含意义
+        """
+        
+        # 根据输入调整模型选择，优先使用适合的功能模型
+        if model.startswith('qwen'):
             model = 'qwen-max'  # 使用更强的中文模型
-        elif model.startswith('gpt'):
-            api_instance = OpenAIApi()
-        elif model.startswith('gemini'):
-            api_instance = GoogleGeminiApi()
-        elif model.startswith('kimi'):
-            api_instance = MoonshotKimiApi()
-        elif model.startswith('deepseek'):
-            api_instance = DeepSeekApi()
-        else:
-            api_instance = QwenApi()  # 默认使用通义千问处理中文
+        
+        # 使用增强的API包装器来创建API实例，自动处理API密钥缺失情况
+        api_instance = EnhancedApiWrapper.create_api_instance(model)
         
         prompt = f"""
         请对以下中文文本进行深入的语义理解和分析，准确率达到90%以上：
@@ -336,20 +306,8 @@ class FunctionRouter:
         if any(word in user_input for word in ['详细', '预报', '明天', '后天', '一周', '趋势']):
             prompt = f"请提供关于{city}的详细天气预报信息：{user_input}"
             
-            if model.startswith('gpt'):
-                api_instance = OpenAIApi()
-            elif model.startswith('gemini'):
-                api_instance = GoogleGeminiApi()
-            elif model.startswith('kimi'):
-                api_instance = MoonshotKimiApi()
-            elif model.startswith('qwen-code') or model.startswith('qwen_coder'):
-                api_instance = QwenApi()
-            elif model.startswith('deepseek'):
-                api_instance = DeepSeekApi()
-            elif model.startswith('qwen'):
-                api_instance = QwenApi()
-            else:
-                api_instance = OpenAIApi()
+            # 使用增强的API包装器来创建API实例，自动处理API密钥缺失情况
+            api_instance = EnhancedApiWrapper.create_api_instance(model)
             
             try:
                 config = {
@@ -401,20 +359,8 @@ class FunctionRouter:
         # 使用AI处理复杂的数学问题
         prompt = f"请帮我计算：{user_input}。请给出详细的解题步骤和最终答案。"
         
-        if model.startswith('gpt'):
-            api_instance = OpenAIApi()
-        elif model.startswith('gemini'):
-            api_instance = GoogleGeminiApi()
-        elif model.startswith('kimi'):
-            api_instance = MoonshotKimiApi()
-        elif model.startswith('qwen-code') or model.startswith('qwen_coder'):
-            api_instance = QwenApi()
-        elif model.startswith('deepseek'):
-            api_instance = DeepSeekApi()
-        elif model.startswith('qwen'):
-            api_instance = QwenApi()
-        else:
-            api_instance = OpenAIApi()
+        # 使用增强的API包装器来创建API实例，自动处理API密钥缺失情况
+        api_instance = EnhancedApiWrapper.create_api_instance(model)
         
         try:
             config = {
@@ -440,20 +386,11 @@ class FunctionRouter:
         """
         prompt = f"请作为百科全书回答以下问题，提供全面、准确的信息：{user_input}"
         
-        if model.startswith('gpt'):
-            api_instance = OpenAIApi()
-        elif model.startswith('gemini'):
-            api_instance = GoogleGeminiApi()
-        elif model.startswith('kimi'):
-            api_instance = MoonshotKimiApi()
-        elif model.startswith('qwen-code') or model.startswith('qwen_coder'):
-            api_instance = QwenApi()
-        elif model.startswith('deepseek'):
-            api_instance = DeepSeekApi()
-        elif model.startswith('qwen'):
-            api_instance = QwenApi()
-        else:
-            api_instance = OpenAIApi()
+        # 使用增强的API包装器来创建API实例，自动处理API密钥缺失情况
+        api_instance = EnhancedApiWrapper.create_api_instance(model)
+        
+        # 使用增强的API包装器来创建API实例，自动处理API密钥缺失情况
+        api_instance = EnhancedApiWrapper.create_api_instance(model)
         
         try:
             config = {
@@ -486,20 +423,8 @@ class FunctionRouter:
         else:
             prompt = f"请创作一首诗：{user_input}"
         
-        if model.startswith('gpt'):
-            api_instance = OpenAIApi()
-        elif model.startswith('gemini'):
-            api_instance = GoogleGeminiApi()
-        elif model.startswith('kimi'):
-            api_instance = MoonshotKimiApi()
-        elif model.startswith('qwen-code') or model.startswith('qwen_coder'):
-            api_instance = QwenApi()
-        elif model.startswith('deepseek'):
-            api_instance = DeepSeekApi()
-        elif model.startswith('qwen'):
-            api_instance = QwenApi()
-        else:
-            api_instance = OpenAIApi()
+        # 使用增强的API包装器来创建API实例，自动处理API密钥缺失情况
+        api_instance = EnhancedApiWrapper.create_api_instance(model)
         
         try:
             config = {
@@ -535,20 +460,8 @@ class FunctionRouter:
         """
         prompt = f"请将以下内容进行翻译：{user_input}。请识别源语言并翻译为目标语言（通常是中文和英文互译）。"
         
-        if model.startswith('gpt'):
-            api_instance = OpenAIApi()
-        elif model.startswith('gemini'):
-            api_instance = GoogleGeminiApi()
-        elif model.startswith('kimi'):
-            api_instance = MoonshotKimiApi()
-        elif model.startswith('qwen-code') or model.startswith('qwen_coder'):
-            api_instance = QwenApi()
-        elif model.startswith('deepseek'):
-            api_instance = DeepSeekApi()
-        elif model.startswith('qwen'):
-            api_instance = QwenApi()
-        else:
-            api_instance = OpenAIApi()
+        # 使用增强的API包装器来创建API实例，自动处理API密钥缺失情况
+        api_instance = EnhancedApiWrapper.create_api_instance(model)
         
         try:
             config = {
@@ -574,25 +487,12 @@ class FunctionRouter:
         """
         prompt = f"请作为编程专家回答以下问题，提供代码示例和技术指导：{user_input}"
         
-        if model.startswith('gpt'):
-            api_instance = OpenAIApi()
-        elif model.startswith('gemini'):
-            api_instance = GoogleGeminiApi()
-        elif model.startswith('kimi'):
-            api_instance = MoonshotKimiApi()
-        elif model.startswith('qwen-code') or model.startswith('qwen_coder'):
-            # 如果是代码相关的问题，优先使用通义千问代码模型
-            if 'code' in model or 'Coder' in model or 'coder' in model:
-                api_instance = QwenApi()
-                model = 'qwen-code-coder'  # 使用专门的代码模型
-            else:
-                api_instance = QwenApi()
-        elif model.startswith('deepseek'):
-            api_instance = DeepSeekApi()
-        elif model.startswith('qwen'):
-            api_instance = QwenApi()
-        else:
-            api_instance = OpenAIApi()
+        # 根据输入调整模型选择，优先使用适合的功能模型
+        if 'code' in model or 'Coder' in model or 'coder' in model:
+            model = 'qwen-code-coder'  # 使用专门的代码模型
+        
+        # 使用增强的API包装器来创建API实例，自动处理API密钥缺失情况
+        api_instance = EnhancedApiWrapper.create_api_instance(model)
         
         try:
             config = {
@@ -618,20 +518,8 @@ class FunctionRouter:
         """
         prompt = f"请提供关于以下问题的生活建议和实用指导：{user_input}"
         
-        if model.startswith('gpt'):
-            api_instance = OpenAIApi()
-        elif model.startswith('gemini'):
-            api_instance = GoogleGeminiApi()
-        elif model.startswith('kimi'):
-            api_instance = MoonshotKimiApi()
-        elif model.startswith('qwen-code') or model.startswith('qwen_coder'):
-            api_instance = QwenApi()
-        elif model.startswith('deepseek'):
-            api_instance = DeepSeekApi()
-        elif model.startswith('qwen'):
-            api_instance = QwenApi()
-        else:
-            api_instance = OpenAIApi()
+        # 使用增强的API包装器来创建API实例，自动处理API密钥缺失情况
+        api_instance = EnhancedApiWrapper.create_api_instance(model)
         
         try:
             config = {
@@ -672,20 +560,8 @@ class FunctionRouter:
         # 使用AI生成模拟新闻
         prompt = f"请提供关于以下主题的最新新闻信息：{user_input}。如果是日常查询，请提供一些有趣的知识或今日关注点。"
         
-        if model.startswith('gpt'):
-            api_instance = OpenAIApi()
-        elif model.startswith('gemini'):
-            api_instance = GoogleGeminiApi()
-        elif model.startswith('kimi'):
-            api_instance = MoonshotKimiApi()
-        elif model.startswith('qwen-code') or model.startswith('qwen_coder'):
-            api_instance = QwenApi()
-        elif model.startswith('deepseek'):
-            api_instance = DeepSeekApi()
-        elif model.startswith('qwen'):
-            api_instance = QwenApi()
-        else:
-            api_instance = OpenAIApi()
+        # 使用增强的API包装器来创建API实例，自动处理API密钥缺失情况
+        api_instance = EnhancedApiWrapper.create_api_instance(model)
         
         try:
             config = {
@@ -723,20 +599,8 @@ class FunctionRouter:
         """
         prompt = f"请提供温暖的情感支持和心理疏导：{user_input}。请用温柔、鼓励的语气回应。"
         
-        if model.startswith('gpt'):
-            api_instance = OpenAIApi()
-        elif model.startswith('gemini'):
-            api_instance = GoogleGeminiApi()
-        elif model.startswith('kimi'):
-            api_instance = MoonshotKimiApi()
-        elif model.startswith('qwen-code') or model.startswith('qwen_coder'):
-            api_instance = QwenApi()
-        elif model.startswith('deepseek'):
-            api_instance = DeepSeekApi()
-        elif model.startswith('qwen'):
-            api_instance = QwenApi()
-        else:
-            api_instance = OpenAIApi()
+        # 使用增强的API包装器来创建API实例，自动处理API密钥缺失情况
+        api_instance = EnhancedApiWrapper.create_api_instance(model)
         
         try:
             config = {
@@ -815,18 +679,15 @@ class FunctionRouter:
             # 使用AI提供游戏体验
             prompt = f"让我们玩一个游戏：{user_input}。请选择合适的游戏类型并提供游戏规则和互动。"
             
-            if model.startswith('gpt'):
-                api_instance = OpenAIApi()
-            elif model.startswith('gemini'):
+            # 使用增强的API包装器来创建API实例，自动处理API密钥缺失情况
+            api_instance = EnhancedApiWrapper.create_api_instance(model)
+            
+            if model.startswith('gemini'):
                 api_instance = GoogleGeminiApi()
-            elif model.startswith('kimi'):
-                api_instance = MoonshotKimiApi()
-            elif model.startswith('qwen-code') or model.startswith('qwen_coder'):
-                api_instance = QwenApi()
-            elif model.startswith('deepseek'):
-                api_instance = DeepSeekApi()
             elif model.startswith('qwen'):
                 api_instance = QwenApi()
+            elif model.startswith('kimi'):
+                api_instance = MoonshotKimiApi()
             else:
                 api_instance = OpenAIApi()
             
@@ -854,20 +715,8 @@ class FunctionRouter:
         """
         prompt = f"请作为老师或教育专家，对以下学习问题提供指导：{user_input}。请提供清晰的解释和实用的学习建议。"
         
-        if model.startswith('gpt'):
-            api_instance = OpenAIApi()
-        elif model.startswith('gemini'):
-            api_instance = GoogleGeminiApi()
-        elif model.startswith('kimi'):
-            api_instance = MoonshotKimiApi()
-        elif model.startswith('qwen-code') or model.startswith('qwen_coder'):
-            api_instance = QwenApi()
-        elif model.startswith('deepseek'):
-            api_instance = DeepSeekApi()
-        elif model.startswith('qwen'):
-            api_instance = QwenApi()
-        else:
-            api_instance = OpenAIApi()
+        # 使用增强的API包装器来创建API实例，自动处理API密钥缺失情况
+        api_instance = EnhancedApiWrapper.create_api_instance(model)
         
         try:
             config = {
@@ -907,20 +756,8 @@ class FunctionRouter:
         """
         prompt = f"请提供关于以下健康问题的专业建议：{user_input}。请注意，这仅供参考，不能替代专业医疗建议。"
         
-        if model.startswith('gpt'):
-            api_instance = OpenAIApi()
-        elif model.startswith('gemini'):
-            api_instance = GoogleGeminiApi()
-        elif model.startswith('kimi'):
-            api_instance = MoonshotKimiApi()
-        elif model.startswith('qwen-code') or model.startswith('qwen_coder'):
-            api_instance = QwenApi()
-        elif model.startswith('deepseek'):
-            api_instance = DeepSeekApi()
-        elif model.startswith('qwen'):
-            api_instance = QwenApi()
-        else:
-            api_instance = OpenAIApi()
+        # 使用增强的API包装器来创建API实例，自动处理API密钥缺失情况
+        api_instance = EnhancedApiWrapper.create_api_instance(model)
         
         try:
             config = {
@@ -960,20 +797,8 @@ class FunctionRouter:
         """
         prompt = f"请提供关于以下金融理财问题的专业建议：{user_input}。请注意，这仅供参考，投资有风险。"
         
-        if model.startswith('gpt'):
-            api_instance = OpenAIApi()
-        elif model.startswith('gemini'):
-            api_instance = GoogleGeminiApi()
-        elif model.startswith('kimi'):
-            api_instance = MoonshotKimiApi()
-        elif model.startswith('qwen-code') or model.startswith('qwen_coder'):
-            api_instance = QwenApi()
-        elif model.startswith('deepseek'):
-            api_instance = DeepSeekApi()
-        elif model.startswith('qwen'):
-            api_instance = QwenApi()
-        else:
-            api_instance = OpenAIApi()
+        # 使用增强的API包装器来创建API实例，自动处理API密钥缺失情况
+        api_instance = EnhancedApiWrapper.create_api_instance(model)
         
         try:
             config = {
