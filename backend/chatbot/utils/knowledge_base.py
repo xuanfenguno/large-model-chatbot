@@ -47,8 +47,17 @@ class KnowledgeBaseManager:
                     metadata={"hnsw:space": "cosine"}
                 )
                 
-                # 初始化嵌入模型
-                self.embeddings = SentenceTransformer('all-MiniLM-L6-v2')
+                # 初始化嵌入模型 - 添加超时和错误处理
+                try:
+                    import socket
+                    socket.setdefaulttimeout(10)  # 设置10秒超时
+                    self.embeddings = SentenceTransformer('all-MiniLM-L6-v2')
+                    socket.setdefaulttimeout(None)  # 恢复默认超时
+                except Exception as e:
+                    logger.warning(f"Failed to load embedding model, ChromaDB will be disabled: {e}")
+                    self.client = None
+                    self.collection = None
+                    return
                 
                 # 初始化文本分割器（简单的按长度分割）
                 pass  # 我们将使用简单的字符串分割，不需要初始化text_splitter
@@ -172,7 +181,14 @@ class RealTimeDataSource:
     实时数据源处理器
     """
     def __init__(self):
-        self.kb_manager = KnowledgeBaseManager()
+        self._kb_manager = None
+    
+    @property
+    def kb_manager(self):
+        """延迟初始化的知识库管理器属性"""
+        if self._kb_manager is None:
+            self._kb_manager = KnowledgeBaseManager()
+        return self._kb_manager
     
     def sync_from_database(self):
         """
@@ -350,6 +366,27 @@ class RealTimeDataSource:
         return [result['content'] for result in results]
 
 
-# 全局实例
-knowledge_base_manager = KnowledgeBaseManager()
-real_time_source = RealTimeDataSource()
+# 全局实例 - 延迟初始化以避免启动时网络问题
+class LazyKnowledgeBaseManager:
+    """延迟初始化的知识库管理器"""
+    def __init__(self):
+        self._instance = None
+    
+    def __getattr__(self, name):
+        if self._instance is None:
+            self._instance = KnowledgeBaseManager()
+        return getattr(self._instance, name)
+
+class LazyRealTimeDataSource:
+    """延迟初始化的实时数据源"""
+    def __init__(self):
+        self._instance = None
+    
+    def __getattr__(self, name):
+        if self._instance is None:
+            self._instance = RealTimeDataSource()
+        return getattr(self._instance, name)
+
+# 全局实例（延迟初始化）
+knowledge_base_manager = LazyKnowledgeBaseManager()
+real_time_source = LazyRealTimeDataSource()

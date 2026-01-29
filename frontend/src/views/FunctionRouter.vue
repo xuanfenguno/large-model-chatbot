@@ -54,9 +54,6 @@
           <el-menu-item index="chat" class="menu-item">
             <span>聊天</span>
           </el-menu-item>
-          <el-menu-item index="joke" class="menu-item">
-            <span>笑话</span>
-          </el-menu-item>
           <el-menu-item index="story" class="menu-item">
             <span>故事</span>
           </el-menu-item>
@@ -124,13 +121,6 @@
           
           <!-- 聊天区域 -->
           <div class="chat-section">
-            <!-- 自动识别提示 -->
-            <div class="auto-identify-prompt">
-              <span class="auto-identify-title">自动识别</span>
-              <span class="auto-identify-separator">|</span>
-              <span class="auto-identify-description">AI自动识别您的需求并选择最适合的功能</span>
-            </div>
-            
             <!-- 消息显示区域 -->
             <div class="messages-area" ref="messagesAreaRef">
               <div 
@@ -247,7 +237,6 @@ const getFunctionName = (funcType) => {
   const funcNames = {
     auto: '自动识别',
     chat: '聊天',
-    joke: '笑话',
     story: '故事',
     chengyu: '成语接龙',
     encyclopedia: '百科全书',
@@ -273,7 +262,6 @@ const getFunctionDescription = (funcType) => {
   const descriptions = {
     auto: 'AI自动识别您的需求并选择最适合的功能',
     chat: '与AI进行自然对话，获取智能回答',
-    joke: '获取有趣的笑话，放松心情',
     story: '生成精彩的故事，激发想象力',
     chengyu: '参与成语接龙游戏，学习传统文化',
     encyclopedia: '查询各类知识，获取准确信息',
@@ -299,7 +287,6 @@ const getInputPlaceholder = (funcType) => {
   const placeholders = {
     auto: '请描述您的需求，AI将自动识别功能...',
     chat: '请输入您想聊的内容...',
-    joke: '请输入主题或直接获取笑话...',
     story: '请输入故事主题或要求...',
     chengyu: '请输入成语或开始接龙...',
     encyclopedia: '请输入您想查询的知识...',
@@ -746,7 +733,7 @@ onMounted(() => {
 .function-menu {
   border: none;
   flex: 1;
-  padding: 8px 12px;
+  padding: 8px 8px;
   overflow-y: auto;
   max-height: calc(100vh - 180px);
   border-radius: 16px;
@@ -762,6 +749,7 @@ onMounted(() => {
   border: 1px solid transparent;
   color: #475569;
   font-size: 0.95rem;
+  padding-left: 8px !important;
 }
 
 .menu-item:hover {
