@@ -52,6 +52,10 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'csp.middleware.CSPMiddleware',  # 内容安全策略中间件
+    # 自定义中间件 - 按顺序放置
+    'middleware.cache_middleware.QueryCountMiddleware',  # 查询计数中间件
+    'middleware.cache_middleware.PerformanceMonitoringMiddleware',  # 性能监控中间件
+    'middleware.cache_middleware.APICacheMiddleware',  # API缓存中间件
     # 统一错误处理中间件
     'chatbot.middleware.ErrorHandlingMiddleware.ErrorHandlingMiddleware',
     # 性能监控中间件
@@ -365,13 +369,36 @@ try:
     # 如果Redis可用，使用Redis缓存
     CACHES = {
         'default': {
-            'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+            'BACKEND': 'django_redis.cache.RedisCache',
             'LOCATION': 'redis://127.0.0.1:6379/1',
             'OPTIONS': {
                 'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-            }
+            },
+            'KEY_PREFIX': 'chatbot',
+            'TIMEOUT': 60 * 15  # 默认15分钟
+        },
+        'sessions': {
+            'BACKEND': 'django_redis.cache.RedisCache',
+            'LOCATION': 'redis://127.0.0.1:6379/2',
+            'OPTIONS': {
+                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            },
+            'KEY_PREFIX': 'chatbot_sessions',
+            'TIMEOUT': 60 * 60 * 24  # 24小时
+        },
+        'api_cache': {
+            'BACKEND': 'django_redis.cache.RedisCache',
+            'LOCATION': 'redis://127.0.0.1:6379/3',
+            'OPTIONS': {
+                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            },
+            'KEY_PREFIX': 'chatbot_api',
+            'TIMEOUT': 60 * 5  # 5分钟
         }
     }
+    # 设置默认会话后端为Redis
+    SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
+    SESSION_CACHE_ALIAS = 'sessions'
 except:
     # 如果Redis不可用，使用内存缓存（这会导致django-ratelimit警告）
     CACHES = {

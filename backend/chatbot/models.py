@@ -6,10 +6,10 @@ from datetime import datetime, timedelta
 
 class PasswordResetToken(models.Model):
     """密码重置令牌模型"""
-    user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='用户')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, db_index=True, verbose_name='用户')
     token = models.CharField(max_length=36, unique=True, verbose_name='重置令牌')
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
-    expires_at = models.DateTimeField(verbose_name='过期时间')
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True, verbose_name='创建时间')
+    expires_at = models.DateTimeField(db_index=True, verbose_name='过期时间')
     
     class Meta:
         verbose_name = '密码重置令牌'
@@ -34,12 +34,12 @@ class Conversation(models.Model):
         ('video', '视频通话'),
     )
     
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='conversations', verbose_name='用户')
-    title = models.CharField(max_length=255, verbose_name='会话标题')
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
-    updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
-    model = models.CharField(max_length=50, default='gpt-3.5-turbo', verbose_name='使用的模型')
-    mode = models.CharField(max_length=10, choices=CHAT_MODES, default='text', verbose_name='聊天模式')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='conversations', db_index=True, verbose_name='用户')
+    title = models.CharField(max_length=255, db_index=True, verbose_name='会话标题')
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True, verbose_name='创建时间')
+    updated_at = models.DateTimeField(auto_now=True, db_index=True, verbose_name='更新时间')
+    model = models.CharField(max_length=50, default='gpt-3.5-turbo', db_index=True, verbose_name='使用的模型')
+    mode = models.CharField(max_length=10, choices=CHAT_MODES, default='text', db_index=True, verbose_name='聊天模式')
 
     class Meta:
         verbose_name = '会话'
@@ -63,13 +63,13 @@ class Message(models.Model):
         ('video', '视频消息'),
     )
 
-    conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name='messages', verbose_name='会话')
-    role = models.CharField(max_length=10, choices=ROLE_CHOICES, verbose_name='角色')
-    message_type = models.CharField(max_length=10, choices=MESSAGE_TYPES, default='text', verbose_name='消息类型')
+    conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name='messages', db_index=True, verbose_name='会话')
+    role = models.CharField(max_length=10, choices=ROLE_CHOICES, db_index=True, verbose_name='角色')
+    message_type = models.CharField(max_length=10, choices=MESSAGE_TYPES, default='text', db_index=True, verbose_name='消息类型')
     content = models.TextField(verbose_name='内容')
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True, verbose_name='创建时间')
     image_url = models.URLField(max_length=2000, blank=True, null=True, verbose_name='图片URL')
-    is_read = models.BooleanField(default=False, verbose_name='是否已读')
+    is_read = models.BooleanField(default=False, db_index=True, verbose_name='是否已读')
     
     # 语音消息相关字段
     audio_file = models.FileField(upload_to='voice_messages/', blank=True, null=True, verbose_name='语音文件')
@@ -87,8 +87,8 @@ class Message(models.Model):
 
 class UserProfile(models.Model):
     """用户配置文件，扩展Django内置User模型"""
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile', verbose_name='用户')
-    phone = models.CharField(max_length=15, blank=True, null=True, verbose_name='手机号')
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile', db_index=True, verbose_name='用户')
+    phone = models.CharField(max_length=15, blank=True, null=True, db_index=True, verbose_name='手机号')
     
     # API密钥配置
     openai_api_key = models.TextField(blank=True, null=True, verbose_name='OpenAI API密钥')
@@ -99,8 +99,8 @@ class UserProfile(models.Model):
     doubao_api_key = models.TextField(blank=True, null=True, verbose_name='豆包API密钥')
     qwen_code_api_key = models.TextField(blank=True, null=True, verbose_name='通义千问代码API密钥')
     
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
-    updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True, verbose_name='创建时间')
+    updated_at = models.DateTimeField(auto_now=True, db_index=True, verbose_name='更新时间')
     
     class Meta:
         verbose_name = '用户配置'
@@ -121,13 +121,13 @@ class VoiceCallRecord(models.Model):
         ('missed', '未接听'),
     ]
 
-    call_id = models.CharField(max_length=100, unique=True, verbose_name='通话ID')
-    caller = models.ForeignKey(User, on_delete=models.CASCADE, related_name='outgoing_calls', verbose_name='主叫用户')
-    callee = models.ForeignKey(User, on_delete=models.CASCADE, related_name='incoming_calls', verbose_name='被叫用户')
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', verbose_name='通话状态')
-    initiated_at = models.DateTimeField(auto_now_add=True, verbose_name='发起时间')
-    accepted_at = models.DateTimeField(null=True, blank=True, verbose_name='接听时间')
-    ended_at = models.DateTimeField(null=True, blank=True, verbose_name='结束时间')
+    call_id = models.CharField(max_length=100, unique=True, db_index=True, verbose_name='通话ID')
+    caller = models.ForeignKey(User, on_delete=models.CASCADE, related_name='outgoing_calls', db_index=True, verbose_name='主叫用户')
+    callee = models.ForeignKey(User, on_delete=models.CASCADE, related_name='incoming_calls', db_index=True, verbose_name='被叫用户')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', db_index=True, verbose_name='通话状态')
+    initiated_at = models.DateTimeField(auto_now_add=True, db_index=True, verbose_name='发起时间')
+    accepted_at = models.DateTimeField(null=True, blank=True, db_index=True, verbose_name='接听时间')
+    ended_at = models.DateTimeField(null=True, blank=True, db_index=True, verbose_name='结束时间')
     duration = models.IntegerField(default=0, verbose_name='通话时长(秒)')
     caller_device_info = models.JSONField(null=True, blank=True, verbose_name='主叫设备信息')
     callee_device_info = models.JSONField(null=True, blank=True, verbose_name='被叫设备信息')
