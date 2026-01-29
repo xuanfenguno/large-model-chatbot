@@ -99,12 +99,14 @@ class KnowledgeBaseManager:
         搜索知识库
         """
         if not CHROMADB_AVAILABLE or self.collection is None:
-            logger.warning("ChromaDB not available, returning empty results")
+            logger.warning("ChromaDB not available, skipping search")
             return []
         
         try:
-            query_embedding = self.embeddings.embed_query(query)
+            # 生成查询嵌入
+            query_embedding = self.embeddings.encode([query]).tolist()[0]
             
+            # 执行相似性搜索
             results = self.collection.query(
                 query_embeddings=[query_embedding],
                 n_results=n_results
@@ -317,6 +319,25 @@ class RealTimeDataSource:
                     logger.info(f"Synchronized file to knowledge base: {file_path}")
             except Exception as e:
                 logger.error(f"Error reading file {file_path}: {e}")
+    
+    def add_document(self, doc_id: str, content: str, metadata: Dict = None):
+        """
+        添加文档到知识库
+        """
+        if not CHROMADB_AVAILABLE:
+            logger.warning("ChromaDB not available, skipping document addition")
+            return
+        
+        self.kb_manager.add_document(doc_id, content, metadata)
+    
+    def search(self, query: str, n_results: int = 5) -> List[Dict]:
+        """
+        搜索知识库
+        """
+        if not CHROMADB_AVAILABLE:
+            return []
+        
+        return self.kb_manager.search(query, n_results=n_results)
     
     def get_relevant_context(self, query: str, max_results: int = 5) -> List[str]:
         """
