@@ -14,3 +14,7 @@ channels-redis==4.1.0
 django-ratelimit==4.1.0
 django-csp==3.7
 django-defender>=0.9.8
+chromadb>=0.5.0
+sentence-transformers>=5.2.0
+langchain>=0.3.0
+langchain-community>=0.3.0

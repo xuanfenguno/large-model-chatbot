@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 
 # 导入功能路由器
 from .function_router import FunctionRouter
+from .utils.knowledge_base import real_time_source
 function_router = FunctionRouter()
 
 
@@ -690,13 +691,32 @@ def stream_chat(request):
             # 发送初始消息
             yield f"data: {json.dumps({'type': 'user_message', 'message': MessageSerializer(user_message).data})}\n\n"
             
+            # 查询知识库获取相关上下文
+            try:
+                knowledge_contexts = real_time_source.get_relevant_context(validated_message)
+                if knowledge_contexts:
+                    # 将知识库上下文添加到历史记录中
+                    knowledge_prompt = "根据以下最新信息回答问题：" + "\n".join(knowledge_contexts[:3])  # 最多使用3个相关文档
+                else:
+                    knowledge_prompt = ""
+            except Exception as e:
+                logger.warning(f"知识库查询失败: {str(e)}")
+                knowledge_prompt = ""
+            
             # 根据模型类型选择流式API
             if model.startswith('gpt'):
                 # OpenAI流式API
                 try:
+                    # 构建消息历史，包含知识库上下文
+                    history = [{"role": m['role'], "content": m['content']} for m in _build_history(conversation)]
+                    
+                    # 如果有知识库上下文，将其作为系统消息添加
+                    if knowledge_prompt:
+                        history.insert(0, {"role": "system", "content": knowledge_prompt})
+                    
                     response = openai.ChatCompletion.create(
                         model=model,
-                        messages=[{"role": m['role'], "content": m['content']} for m in _build_history(conversation)],
+                        messages=history,
                         max_tokens=2000,
                         temperature=0.6,
                         top_p=0.7,
@@ -734,8 +754,8 @@ def stream_chat(request):
             else:
                 # 对于其他模型，我们模拟流式响应
                 try:
-                    # 调用非流式API获取完整响应
-                    full_response = _call_ai_api_sync(conversation, user_message, model)
+                    # 调用非流式API获取完整响应，传递知识库上下文
+                    full_response = _call_ai_api_sync(conversation, user_message, model, knowledge_prompt)
                     
                     # 模拟流式发送（逐字发送）
                     words = full_response.split(' ')
@@ -817,7 +837,7 @@ def _build_history(conversation):
     return history
 
 
-def _call_ai_api_sync(conversation, user_message, model):
+def _call_ai_api_sync(conversation, user_message, model, knowledge_context=""):
     """同步调用AI API（复用现有逻辑）"""
     # 构建对话历史
     history = []
@@ -849,6 +869,13 @@ def _call_ai_api_sync(conversation, user_message, model):
     
     # 最多保留8条对话历史
     history = history_messages[-8:]
+    
+    # 如果有知识库上下文，将其作为系统消息添加到历史记录的开头
+    if knowledge_context:
+        history.insert(0, {
+            "role": "system",
+            "content": knowledge_context
+        })
     
     # 根据模型类型选择API（与原逻辑相同）
     if model.startswith('gpt'):

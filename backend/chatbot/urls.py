@@ -2,6 +2,13 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import ConversationViewSet, MessageViewSet, login_view, register_view, health_check, available_models, request_password_reset, reset_password, reset_password_test, function_router, stream_chat
 from .voice_views import initiate_call, answer_call, reject_call, end_call, get_call_status, signaling, get_signaling, get_call_history, get_active_calls
+from .views.knowledge_base_views import (
+    search_knowledge_base,
+    add_to_knowledge_base,
+    delete_from_knowledge_base,
+    sync_knowledge_base,
+    get_knowledge_base_stats
+)
 
 router = DefaultRouter()
 router.register(r'conversations', ConversationViewSet, basename='conversation')
@@ -31,4 +38,10 @@ urlpatterns = [
     path('voice/signaling/get/', get_signaling, name='get-signaling'),
     path('voice/history/', get_call_history, name='call-history'),
     path('voice/active/', get_active_calls, name='active-calls'),
+    # 知识库API
+    path('knowledge-base/search/', search_knowledge_base, name='search_knowledge_base'),
+    path('knowledge-base/add/', add_to_knowledge_base, name='add_to_knowledge_base'),
+    path('knowledge-base/delete/<str:doc_id>/', delete_from_knowledge_base, name='delete_from_knowledge_base'),
+    path('knowledge-base/sync/', sync_knowledge_base, name='sync_knowledge_base'),
+    path('knowledge-base/stats/', get_knowledge_base_stats, name='get_knowledge_base_stats'),
 ]
