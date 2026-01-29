@@ -11,14 +11,14 @@ import uuid
 
 logger = logging.getLogger(__name__)
 
+CHROMADB_AVAILABLE = False
+
 try:
     import chromadb
     from chromadb.config import Settings
-    from langchain.text_splitter import RecursiveCharacterTextSplitter
-    from langchain_community.embeddings import HuggingFaceEmbeddings
+    from sentence_transformers import SentenceTransformer
     CHROMADB_AVAILABLE = True
 except ImportError:
-    CHROMADB_AVAILABLE = False
     logger.warning("ChromaDB not available. Knowledge base functionality will be limited.")
 
 
@@ -48,19 +48,24 @@ class KnowledgeBaseManager:
                 )
                 
                 # 初始化嵌入模型
-                self.embeddings = HuggingFaceEmbeddings(
-                    model_name="sentence-transformers/all-MiniLM-L6-v2"
-                )
+                self.embeddings = SentenceTransformer('all-MiniLM-L6-v2')
                 
-                # 文本分割器
-                self.text_splitter = RecursiveCharacterTextSplitter(
-                    chunk_size=512,
-                    chunk_overlap=50,
-                    length_function=len,
-                )
+                # 初始化文本分割器（简单的按长度分割）
+                pass  # 我们将使用简单的字符串分割，不需要初始化text_splitter
             except Exception as e:
                 logger.error(f"Failed to initialize ChromaDB: {e}")
-                CHROMADB_AVAILABLE = False
+                # 不能在这里修改全局变量CHROMADB_AVAILABLE
+
+    def _split_text(self, text: str) -> List[str]:
+        """
+        分割文本为块
+        """
+        # 简单的文本分割
+        chunks = []
+        chunk_size = 512
+        for i in range(0, len(text), chunk_size):
+            chunks.append(text[i:i + chunk_size])
+        return chunks
 
     def add_document(self, doc_id: str, content: str, metadata: Dict = None):
         """
@@ -74,10 +79,10 @@ class KnowledgeBaseManager:
             metadata = {}
         
         # 分割文档
-        chunks = self.text_splitter.split_text(content)
+        chunks = self._split_text(content)
         
         # 为每个块生成嵌入
-        embeddings = [self.embeddings.embed_query(chunk) for chunk in chunks]
+        embeddings = self.embeddings.encode(chunks).tolist()
         
         # 添加到向量数据库
         self.collection.add(

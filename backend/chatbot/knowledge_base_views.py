@@ -8,7 +8,7 @@ from rest_framework import status
 from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
 import json
-from ..utils.knowledge_base import knowledge_base_manager, real_time_source
+from .utils.knowledge_base import knowledge_base_manager, real_time_source
 
 @csrf_exempt
 @api_view(['POST'])

@@ -2,7 +2,8 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import ConversationViewSet, MessageViewSet, login_view, register_view, health_check, available_models, request_password_reset, reset_password, reset_password_test, function_router, stream_chat
 from .voice_views import initiate_call, answer_call, reject_call, end_call, get_call_status, signaling, get_signaling, get_call_history, get_active_calls
-from .views.knowledge_base_views import (
+# Knowledge base views are now imported from their dedicated file
+from .knowledge_base_views import (
     search_knowledge_base,
     add_to_knowledge_base,
     delete_from_knowledge_base,
