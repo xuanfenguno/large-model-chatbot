@@ -14,6 +14,38 @@ export const useAuthStore = defineStore('auth', () => {
     console.log('isLoggedIn计算:', { token: !!token.value, user: !!user.value, result })
     return result
   })
+  
+  const accessToken = computed(() => token.value)
+  
+  // 获取用户信息（包含头像）
+  const fetchUserInfo = async () => {
+    if (!token.value) {
+      console.error('没有有效的token，无法获取用户信息')
+      return
+    }
+    
+    try {
+      const response = await service.get('/v1/user-info/', {
+        headers: {
+          Authorization: `Bearer ${accessToken.value}`
+        }
+      })
+      
+      if (response.data) {
+        // 更新用户信息，包括头像
+        user.value = {
+          ...user.value,
+          ...response.data
+        }
+        
+        // 保存到localStorage
+        localStorage.setItem('user', JSON.stringify(user.value))
+      }
+    } catch (error) {
+      console.error('获取用户信息失败:', error)
+      // 即使获取失败也不抛出错误，因为这不是关键操作
+    }
+  }
 
   const login = async (username, password) => {
     try {
@@ -85,6 +117,9 @@ export const useAuthStore = defineStore('auth', () => {
       localStorage.setItem('user', JSON.stringify({ username: usernameData, email: emailData || '' }))
 
       service.defaults.headers.Authorization = `Bearer ${newToken}`
+
+      // 登录成功后获取完整的用户信息（包括头像等）
+      await fetchUserInfo()
 
       console.log('登录成功，token已保存:', newToken)
       console.log('用户信息已保存:', { username: usernameData, email: emailData || '' })
@@ -225,6 +260,7 @@ export const useAuthStore = defineStore('auth', () => {
     login,
     register,
     logout,
+    fetchUserInfo,
     refreshToken: refreshTokenFn
   }
 })

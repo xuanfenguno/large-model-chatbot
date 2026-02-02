@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import ConversationViewSet, MessageViewSet, login_view, register_view, health_check, available_models, request_password_reset, reset_password, reset_password_test, function_router, stream_chat
+from .views import ConversationViewSet, MessageViewSet, login_view, register_view, health_check, available_models, request_password_reset, reset_password, reset_password_test, function_router, stream_chat, upload_avatar, get_user_info
 from .voice_views import initiate_call, answer_call, reject_call, end_call, get_call_status, signaling, get_signaling, get_call_history, get_active_calls
 # Knowledge base views are now imported from their dedicated file
 from .knowledge_base_views import (
@@ -45,4 +45,7 @@ urlpatterns = [
     path('knowledge-base/delete/<str:doc_id>/', delete_from_knowledge_base, name='delete_from_knowledge_base'),
     path('knowledge-base/sync/', sync_knowledge_base, name='sync_knowledge_base'),
     path('knowledge-base/stats/', get_knowledge_base_stats, name='get_knowledge_base_stats'),
+    # 头像上传和用户信息API
+    path('upload-avatar/', upload_avatar, name='upload-avatar'),
+    path('user-info/', get_user_info, name='get-user-info'),
 ]

@@ -90,7 +90,7 @@
                 @click="handleResetPasswordTest"
               >
                 <template #loading>
-                  <span class="loading-text">重置中...</span>
+                  <span class="loading-text">重置中</span>
                 </template>
                 <span class="btn-text">重置密码</span>
               </el-button>
@@ -387,6 +387,13 @@ const goBackToLogin = () => {
   flex-direction: column;
   align-items: center;
   width: 100%;
+}
+
+/* 当按钮处于加载状态时隐藏原始文本 */
+.el-button.is-loading .btn-text {
+  opacity: 0;
+  visibility: hidden;
+}
   max-width: 380px;  /* 限制最大宽度使内容更集中 */
   margin: 0 auto;    /* 居中对齐 */
 }

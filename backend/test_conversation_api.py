@@ -32,7 +32,8 @@ def test_conversation_api():
     
     # 生成JWT访问令牌
     access_token = AccessToken.for_user(user)
-    print(f"生成访问令牌: {access_token}")
+    # Removed sensitive token logging for security
+    # Access token generated successfully
     
     # 尝试通过API创建会话
     try:

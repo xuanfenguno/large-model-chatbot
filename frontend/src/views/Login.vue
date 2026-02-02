@@ -68,7 +68,7 @@
                   @click="handleLogin"
                 >
                   <template #loading>
-                    <span class="loading-text">登录中...</span>
+                    <span class="loading-text">登录中</span>
                   </template>
                   <span class="btn-text">登录</span>
                 </el-button>
@@ -145,7 +145,7 @@
                   @click="handleRegister"
                 >
                   <template #loading>
-                    <span class="loading-text">注册中...</span>
+                    <span class="loading-text">注册中</span>
                   </template>
                   <span class="btn-text">注册</span>
                 </el-button>
@@ -890,6 +890,12 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* 当按钮处于加载状态时隐藏原始文本 */
+.el-button.is-loading .btn-text {
+  opacity: 0;
+  visibility: hidden;
 }
 
 .form-footer {

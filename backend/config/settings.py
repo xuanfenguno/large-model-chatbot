@@ -22,7 +22,24 @@ SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-80e!v$n3m6*y39_#r-8
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
 
-ALLOWED_HOSTS = ['*']
+# 安全配置：根据环境设置ALLOWED_HOSTS
+if DEBUG:
+    # 开发环境允许本地地址
+    ALLOWED_HOSTS = [
+        'localhost',
+        '127.0.0.1',
+        '[::1]',
+        'backend',  # Docker容器名（如果使用Docker）
+    ]
+else:
+    # 生产环境应明确指定允许的主机
+    # 从环境变量中读取，如果没有则使用默认值
+    ALLOWED_HOSTS_ENV = os.getenv('ALLOWED_HOSTS', '')
+    if ALLOWED_HOSTS_ENV:
+        ALLOWED_HOSTS = ALLOWED_HOSTS_ENV.split(',')
+    else:
+        # 生产环境的默认配置 - 应在部署时覆盖
+        ALLOWED_HOSTS = ['.yourdomain.com', 'yourdomain.com']  # 替换为实际域名
 
 
 # Application definition
@@ -299,6 +316,8 @@ LLM_CONFIG = {
     'KIMI_API_KEY': os.getenv('KIMI_API_KEY'),
     'DOUBAO_API_KEY': os.getenv('DOUBAO_API_KEY'),
     'QWEN_CODE_API_KEY': os.getenv('QWEN_CODE_API_KEY'),
+    'DOUBAO_API_BASE_URL': os.getenv('DOUBAO_API_BASE_URL', 'https://ark.cn-beijing.volces.com/api/v3/chat/completions'),  # 豆包API基础URL
+    'DOUBAO_ENDPOINT_ID': os.getenv('DOUBAO_ENDPOINT_ID'),  # 豆包特定的端点ID（如果需要）
     'DEFAULT_MODEL': 'gemini-pro',  # 默认模型
 }
 
@@ -358,6 +377,10 @@ CSP_DEFAULT_SRC = ("'self'",)
 CSP_SCRIPT_SRC = ("'self'", "'unsafe-inline'", "cdnjs.cloudflare.com", "cdn.jsdelivr.net")
 CSP_STYLE_SRC = ("'self'", "'unsafe-inline'", "cdnjs.cloudflare.com", "cdn.jsdelivr.net")
 CSP_IMG_SRC = ("'self'", "data:", "blob:", "*")
+
+# 媒体文件配置
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 CSP_FONT_SRC = ("'self'", "fonts.gstatic.com", "cdnjs.cloudflare.com")
 CSP_CONNECT_SRC = ("'self'", "ws:", "wss:")
 CSP_FRAME_ANCESTORS = ("'none'",)  # 防止点击劫持
@@ -420,15 +443,24 @@ except:
     }
 
 # 其他安全设置
+if not DEBUG:
+    # 生产环境的安全设置
+    SECURE_SSL_REDIRECT = True  # 强制HTTPS
+    SESSION_COOKIE_SECURE = True  # 仅通过HTTPS传输cookie
+    CSRF_COOKIE_SECURE = True  # 仅通过HTTPS传输CSRF cookie
+    SECURE_HSTS_SECONDS = 31536000  # HSTS - 一年
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+else:
+    # 开发环境的安全设置
+    SECURE_SSL_REDIRECT = False  # 开发环境不强制HTTPS
+    SESSION_COOKIE_SECURE = False  # 开发环境不强制HTTPS
+    CSRF_COOKIE_SECURE = False  # 开发环境不强制HTTPS
+    SECURE_HSTS_SECONDS = 0  # 开发环境禁用HSTS
+
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'  # 防止iframe嵌套
-SECURE_SSL_REDIRECT = False  # 开发环境不强制HTTPS
-SESSION_COOKIE_SECURE = False  # 开发环境不强制HTTPS
-CSRF_COOKIE_SECURE = False  # 开发环境不强制HTTPS
-SECURE_HSTS_SECONDS = 31536000  # 一年HSTS
-SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-SECURE_HSTS_PRELOAD = True
 
 # 抑制django-ratelimit的警告（仅在开发环境）
 SILENCED_SYSTEM_CHECKS = ['django_ratelimit.E003', 'django_ratelimit.W001']

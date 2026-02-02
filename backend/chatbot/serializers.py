@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from .models import Conversation, Message, PasswordResetToken
+from django.contrib.auth.models import User
+from .models import Conversation, Message, PasswordResetToken, UserProfile
 
 
 class MessageSerializer(serializers.ModelSerializer):
@@ -39,3 +40,33 @@ class PasswordResetTokenSerializer(serializers.ModelSerializer):
         model = PasswordResetToken
         fields = ['id', 'user', 'token', 'created_at', 'expires_at', 'is_expired']
         read_only_fields = ['id', 'created_at', 'is_expired']
+
+
+class UserProfileSerializer(serializers.ModelSerializer):
+    """用户配置序列化器"""
+    avatar = serializers.ImageField(required=False, allow_null=True)
+    
+    class Meta:
+        model = UserProfile
+        fields = ['phone', 'avatar', 
+                 'openai_api_key', 'deepseek_api_key', 'qwen_api_key', 
+                 'gemini_api_key', 'kimi_api_key', 'doubao_api_key', 'qwen_code_api_key']
+        extra_kwargs = {
+            'openai_api_key': {'write_only': True},
+            'deepseek_api_key': {'write_only': True},
+            'qwen_api_key': {'write_only': True},
+            'gemini_api_key': {'write_only': True},
+            'kimi_api_key': {'write_only': True},
+            'doubao_api_key': {'write_only': True},
+            'qwen_code_api_key': {'write_only': True},
+        }
+
+
+class UserSerializer(serializers.ModelSerializer):
+    """用户序列化器（包含配置信息）"""
+    profile = UserProfileSerializer(read_only=True)
+    
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'date_joined', 'profile']
+        read_only_fields = ['id', 'date_joined']

@@ -1,6 +1,7 @@
 from django.shortcuts import render
 from rest_framework import viewsets, status, permissions, exceptions
-from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.decorators import action, api_view, permission_classes, parser_classes
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.contrib.auth.models import User
@@ -8,8 +9,8 @@ from django.http import JsonResponse, StreamingHttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from django.views.decorators.http import require_http_methods
-from .models import Conversation, Message, PasswordResetToken
-from .serializers import ConversationSerializer, MessageSerializer, PasswordResetTokenSerializer
+from .models import Conversation, Message, PasswordResetToken, UserProfile
+from .serializers import ConversationSerializer, MessageSerializer, PasswordResetTokenSerializer, UserSerializer
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
@@ -22,6 +23,8 @@ import json
 import requests
 import openai
 import logging
+from PIL import Image
+import os
 from .function_router import FunctionRouter
 from .middleware.rate_limit import rate_limit
 
@@ -345,16 +348,28 @@ class MessageViewSet(viewsets.ModelViewSet):
                 return "抱歉，豆包API密钥未配置。"
                 
             try:
-                headers = {
-                    'Authorization': f'Bearer {api_key}',
-                    'Content-Type': 'application/json'
-                }
+                # 检查是否提供了端点ID，这在豆包API中可能是必需的
+                endpoint_id = settings.LLM_CONFIG.get('DOUBAO_ENDPOINT_ID')
+                
+                if endpoint_id:
+                    # 如果有端点ID，使用特定格式的Authorization header
+                    headers = {
+                        'Authorization': f'Bearer {endpoint_id}.{api_key}',  # 特定格式的认证
+                        'Content-Type': 'application/json'
+                    }
+                else:
+                    # 否则尝试标准格式
+                    headers = {
+                        'Authorization': f'Bearer {api_key}',
+                        'Content-Type': 'application/json'
+                    }
                 
                 # 豆包API的URL和具体参数可能需要根据实际文档调整
-                url = settings.LLM_CONFIG.get('DOUBAO_API_BASE_URL', 'https://ark.cn-beijing.volces.com/api/v3/chat/completions')
+                url = settings.LLM_CONFIG.get('DOUBAO_API_BASE_URL', f'https://ark.cn-beijing.volces.com/api/v3/chat/completions')
                 
+                # 豆包API通常使用端点ID作为模型名称
                 data = {
-                    'model': model,
+                    'model': endpoint_id,  # 在豆包API中，模型通常是端点ID
                     'messages': history,
                     'max_tokens': 2000,
                     'temperature': 0.6,
@@ -1011,15 +1026,27 @@ def _call_ai_api_sync(conversation, user_message, model, knowledge_context=""):
             return "抱歉，豆包API密钥未配置。"
             
         try:
-            headers = {
-                'Authorization': f'Bearer {api_key}',
-                'Content-Type': 'application/json'
-            }
+            # 检查是否提供了端点ID，这在豆包API中可能是必需的
+            endpoint_id = settings.LLM_CONFIG.get('DOUBAO_ENDPOINT_ID')
             
-            url = settings.LLM_CONFIG.get('DOUBAO_API_BASE_URL', 'https://ark.cn-beijing.volces.com/api/v3/chat/completions')
+            if endpoint_id:
+                # 如果有端点ID，使用特定格式的Authorization header
+                headers = {
+                    'Authorization': f'Bearer {endpoint_id}.{api_key}',  # 特定格式的认证
+                    'Content-Type': 'application/json'
+                }
+            else:
+                # 否则尝试标准格式
+                headers = {
+                    'Authorization': f'Bearer {api_key}',
+                    'Content-Type': 'application/json'
+                }
             
+            url = settings.LLM_CONFIG.get('DOUBAO_API_BASE_URL', f'https://ark.cn-beijing.volces.com/api/v3/chat/completions')
+            
+            # 豆包API通常使用端点ID作为模型名称
             data = {
-                'model': model,
+                'model': endpoint_id,  # 在豆包API中，模型通常是端点ID
                 'messages': history,
                 'max_tokens': 2000,
                 'temperature': 0.6,
@@ -1270,8 +1297,9 @@ def available_models(request):
             {'id': 'kimi-large', 'name': 'Kimi Large', 'provider': 'Moonshot', 'group': 'High-End', 'available': True, 'capabilities': ['text', 'reasoning'], 'pricing': {'input': 12.0, 'output': 12.0}, 'performance': {'speed': 'slow', 'accuracy': 'very_high'}},
         ])
     
-    # 豆包
-    if user_api_keys.get('doubao'):
+    # 豆包 - API密钥配置即可，端点ID可选
+    doubao_api_key = user_api_keys.get('doubao')
+    if doubao_api_key:
         available_models_list.extend([
             {'id': 'doubao-pro', 'name': '豆包Pro', 'provider': 'ByteDance', 'group': 'General', 'available': True, 'capabilities': ['text', 'multimodal'], 'pricing': {'input': 0.5, 'output': 0.5}, 'performance': {'speed': 'fast', 'accuracy': 'high'}},
         ])
@@ -1556,8 +1584,8 @@ def request_password_reset(request):
         reset_link = f"{frontend_base_url}/forgot-password?token={reset_token}"
         
         # 模拟发送邮件
-        print(f"Password reset token for {user.email} ({user.username}): {reset_token}")
-        print(f"Reset link: {reset_link}")
+        # Removed sensitive information logging for security
+        # Password reset email sent to user
         
         # 在开发环境中返回重置链接，生产环境中会发送邮件
         return Response({
@@ -1646,5 +1674,103 @@ def reset_password_test(request):
     # 重置用户密码
     user.set_password(new_password)
     user.save()
-    
+
     return Response({'message': 'Password has been reset successfully'})
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+@parser_classes([MultiPartParser, FormParser])
+def upload_avatar(request):
+    """上传用户头像"""
+    try:
+        logger.info(f"收到头像上传请求，用户: {request.user.username if hasattr(request.user, 'username') else 'Unknown'}")
+        logger.info(f"请求FILES: {list(request.FILES.keys())}")
+        logger.info(f"请求META: Content-Type={request.content_type if hasattr(request, 'content_type') else 'Unknown'}")
+        
+        # 检查是否提供了文件
+        if 'avatar' not in request.FILES:
+            logger.error("请求中没有找到avatar文件")
+            return Response({'error': '请选择头像文件'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        avatar_file = request.FILES['avatar']
+        logger.info(f"接收到头像文件: {avatar_file.name}, 大小: {avatar_file.size} bytes")
+        
+        # 验证文件类型
+        allowed_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp']
+        file_extension = os.path.splitext(avatar_file.name)[1].lower()
+        
+        if file_extension not in allowed_extensions:
+            error_msg = f'不支持的文件格式: {file_extension}, 仅支持 JPG、PNG、GIF、WEBP 格式'
+            logger.error(error_msg)
+            return Response({'error': '不支持的文件格式，仅支持 JPG、PNG、GIF、WEBP 格式'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 验证文件大小 (最大 5MB)
+        if avatar_file.size > 5 * 1024 * 1024:
+            error_msg = f'文件过大: {avatar_file.size} bytes, 最大允许 5MB'
+            logger.error(error_msg)
+            return Response({'error': '文件大小不能超过 5MB'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 验证图片有效性 - 更安全的方式
+        try:
+            # 读取文件内容到内存以进行验证，避免修改原始文件指针
+            from io import BytesIO
+            # 创建文件的内存副本用于验证
+            temp_image = BytesIO(avatar_file.read())
+            img = Image.open(temp_image)
+            img.verify()  # 验证图片是否有效
+            
+            # 重置原始文件指针以供后续使用
+            avatar_file.seek(0)
+            logger.info("图片验证通过")
+        except Exception as e:
+            logger.error(f"图片验证失败: {str(e)}")
+            return Response({'error': '无效的图片文件'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 获取或创建用户配置
+        profile, created = UserProfile.objects.get_or_create(user=request.user)
+        logger.info(f"获取用户配置，创建新配置: {created}")
+        
+        # 保存头像
+        try:
+            old_avatar = profile.avatar.name if profile.avatar else None
+            profile.avatar = avatar_file
+            profile.save()
+            logger.info(f"头像保存成功: {profile.avatar.name}, 用户: {request.user.username}, 旧头像: {old_avatar}")
+        except Exception as save_error:
+            logger.error(f"保存头像时出错: {str(save_error)}")
+            return Response({'error': f'头像保存失败: {str(save_error)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        avatar_url = None
+        if profile.avatar and hasattr(profile.avatar, 'url'):
+            avatar_url = request.build_absolute_uri(profile.avatar.url)
+        
+        return Response({
+            'message': '头像上传成功',
+            'avatar_url': avatar_url
+        })
+        
+    except Exception as e:
+        logger.error(f"头像上传失败: {str(e)}", exc_info=True)
+        return Response({'error': f'头像上传失败: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def get_user_info(request):
+    """获取用户信息（包含头像）"""
+    try:
+        user_serializer = UserSerializer(request.user)
+        user_data = user_serializer.data
+        
+        # 添加头像URL到响应中
+        profile = getattr(request.user, 'profile', None)
+        if profile and profile.avatar:
+            user_data['avatar_url'] = request.build_absolute_uri(profile.avatar.url)
+        else:
+            user_data['avatar_url'] = None
+            
+        return Response(user_data)
+    except Exception as e:
+        logger.error(f"获取用户信息失败: {str(e)}")
+        return Response({'error': '获取用户信息失败'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

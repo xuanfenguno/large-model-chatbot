@@ -89,6 +89,7 @@ class UserProfile(models.Model):
     """用户配置文件，扩展Django内置User模型"""
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile', db_index=True, verbose_name='用户')
     phone = models.CharField(max_length=15, blank=True, null=True, db_index=True, verbose_name='手机号')
+    avatar = models.ImageField(upload_to='avatars/', blank=True, null=True, default='images/person.jpg', verbose_name='头像')
     
     # API密钥配置
     openai_api_key = models.TextField(blank=True, null=True, verbose_name='OpenAI API密钥')

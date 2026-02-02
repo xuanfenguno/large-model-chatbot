@@ -247,9 +247,20 @@
       <div class="messages-container" ref="messagesContainer">
         <div v-for="(message, index) in messages" :key="message.id" :class="['message-item', message.role]">
           <div class="message-avatar">
-            <el-icon :size="20">
-              <User />
-            </el-icon>
+            <template v-if="message.role === 'user'">
+              <!-- 用户头像 -->
+              <img v-if="userAvatarUrl" :src="userAvatarUrl" alt="User Avatar" class="avatar-img" />
+              <el-icon v-else :size="20">
+                <User />
+              </el-icon>
+            </template>
+            <template v-else>
+              <!-- AI头像 -->
+              <img v-if="aiAvatarUrl" :src="aiAvatarUrl" alt="AI Avatar" class="avatar-img" />
+              <el-icon v-else :size="20">
+                <ChatLineRound />
+              </el-icon>
+            </template>
           </div>
           <div class="message-content">
             <div class="message-header">
@@ -378,6 +389,10 @@ const models = ref([])
 const chatMode = ref('text') // 聊天模式：text, voice, video
 const modeSelectorRef = ref(null)
 const voiceControlsRef = ref(null)
+
+// 头像相关数据
+const userAvatarUrl = ref('')
+const aiAvatarUrl = ref('/images/robot-avatar.svg') // 默认机器人头像
 
 // 语音通话相关状态
 const isVoiceCallActive = ref(false)
@@ -1219,8 +1234,37 @@ onMounted(async () => {
   // 设置token自动刷新机制
   setupTokenRefresh()
   
+  // 获取用户头像
+  await loadUserAvatar()
+  
   console.log('Chat.vue 页面挂载完成')
 })
+
+// 加载用户头像
+const loadUserAvatar = async () => {
+  if (!authStore.isAuthenticated) {
+    return
+  }
+  
+  try {
+    const response = await fetch('/api/v1/user-info/', {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${authStore.accessToken}`,
+        'Content-Type': 'application/json'
+      }
+    })
+    
+    if (response.ok) {
+      const userData = await response.json()
+      if (userData.avatar_url) {
+        userAvatarUrl.value = userData.avatar_url
+      }
+    }
+  } catch (error) {
+    console.error('加载用户头像失败:', error)
+  }
+}
 
 // 跳转到个人资料页面
 const goToProfile = () => {
@@ -2303,6 +2347,22 @@ const goToProfile = () => {
   color: white;
   margin-right: 0.75rem;
   flex-shrink: 0;
+}
+
+.avatar-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid transparent;
+}
+
+.apple-chat-area .message-avatar {
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(10px);
 }
 
 .message-content {

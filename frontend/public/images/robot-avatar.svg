@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- 机器人主体 -->
+  <rect x="25" y="30" width="50" height="50" rx="10" fill="#409EFF"/>
+  
+  <!-- 机器人眼睛 -->
+  <circle cx="40" cy="45" r="5" fill="white"/>
+  <circle cx="60" cy="45" r="5" fill="white"/>
+  <circle cx="40" cy="45" r="2" fill="black"/>
+  <circle cx="60" cy="45" r="2" fill="black"/>
+  
+  <!-- 机器人嘴巴 -->
+  <rect x="40" y="60" width="20" height="3" rx="1.5" fill="white"/>
+  
+  <!-- 机器人天线 -->
+  <line x1="50" y1="30" x2="50" y2="20" stroke="#409EFF" stroke-width="3"/>
+  <circle cx="50" cy="18" r="4" fill="#E6A23C"/>
+</svg>
