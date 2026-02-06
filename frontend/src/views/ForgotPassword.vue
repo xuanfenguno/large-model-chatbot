@@ -114,7 +114,7 @@ import { ref, reactive, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft, User, Lock, Message } from '@element-plus/icons-vue'
-import axios from 'axios'
+import service from '@/utils/request'
 
 const router = useRouter()
 
@@ -280,7 +280,7 @@ const handleResetPasswordTest = async () => {
     const identifier = resetForm.username || resetForm.email
     
     // 直接调用重置密码接口，传入用户名/邮箱和新密码
-    const response = await axios.post('/api/v1/password/reset/test/', {
+    const response = await service.post('/password/reset/test/', {
       identifier: identifier,
       new_password: resetForm.newPassword,
       confirm_password: resetForm.confirmPassword
@@ -394,6 +394,8 @@ const goBackToLogin = () => {
   opacity: 0;
   visibility: hidden;
 }
+
+.form-wrapper {
   max-width: 380px;  /* 限制最大宽度使内容更集中 */
   margin: 0 auto;    /* 居中对齐 */
 }

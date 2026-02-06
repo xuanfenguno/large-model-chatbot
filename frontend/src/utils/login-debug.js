@@ -23,7 +23,7 @@ class LoginDebugger {
       const requestData = { username, password }
       console.log('📤 发送登录请求:', requestData)
       
-      const response = await service.post('/v1/login/', requestData, {
+      const response = await service.post('/login/', requestData, {
         timeout: 30000,
         _isLoginRequest: true
       })

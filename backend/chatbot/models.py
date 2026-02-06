@@ -1,4 +1,4 @@
-from django.db import models
+from django.db import models, IntegrityError
 from django.contrib.auth.models import User
 from django.db.models.signals import post_save
 from django.dispatch import receiver
@@ -153,7 +153,11 @@ class VoiceCallRecord(models.Model):
 def create_user_profile(sender, instance, created, **kwargs):
     """创建用户时自动创建用户配置"""
     if created:
-        UserProfile.objects.create(user=instance)
+        try:
+            UserProfile.objects.create(user=instance)
+        except IntegrityError:
+            # 如果由于并发请求导致重复创建，忽略错误
+            pass
 
 
 @receiver(post_save, sender=User)

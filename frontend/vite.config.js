@@ -10,14 +10,17 @@ export default defineConfig({
     }
   },
   server: {
-    port: 8084,
+    port: 5173,
     host: '127.0.0.1',
     open: false,
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:8080',
+        target: 'http://127.0.0.1:50000',  // 更新为实际的后端端口
         changeOrigin: true
       }
+    },
+    hmr: {
+      overlay: true
     }
   },
   build: {

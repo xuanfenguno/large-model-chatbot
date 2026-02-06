@@ -12,7 +12,8 @@ class AIClient {
       'deepseek': new DeepSeekProvider(),
       'qwen': new QwenProvider(),
       'kimi': new KimiProvider(),
-      'doubao': new DouBaoProvider()
+      'doubao': new DouBaoProvider(),
+      'backend': new BackendProvider() // 新增后端API提供者
     }
     
     // 默认配置
@@ -168,6 +169,9 @@ class AIClient {
       return this.providers.doubao
     } else if (modelId.startsWith('bailian')) {
       return this.providers.bailian
+    } else {
+      // 对于所有其他模型，使用后端API提供者以支持知识库功能
+      return this.providers.backend
     }
     
     throw new Error(`不支持的模型: ${modelId}`)
@@ -191,6 +195,209 @@ class AIClient {
       failedCalls: 0,
       averageResponseTime: 0
     }
+  }
+}
+
+/**
+ * 后端API提供商 - 通过后端API调用AI模型，支持知识库功能
+ */
+class BackendProvider {
+  constructor() {
+    this.name = 'Backend'
+  }
+
+  async sendMessage(message, config) {
+    return new Promise((resolve, reject) => {
+      const token = localStorage.getItem('token')
+      const history = config.history || []
+      
+      // 使用XMLHttpRequest处理SSE响应
+      const xhr = new XMLHttpRequest()
+      
+      xhr.open('POST', '/api/v1/stream-chat/', true) // 改为异步请求
+      xhr.setRequestHeader('Content-Type', 'application/json')
+      xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+      
+      let responseText = ''
+      let lastResponseLength = 0
+      
+      // 监听加载完成事件
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          // 处理剩余的响应文本
+          const newResponse = xhr.responseText.substring(lastResponseLength)
+          lastResponseLength = xhr.responseText.length
+          
+          // 解析SSE响应
+          const lines = newResponse.split('\n')
+          let lastContent = ''
+          let lastData = null
+          
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(line.slice(6))
+                if (data.content) {
+                  lastContent += data.content
+                }
+                if (data.status === 'completed' || data.error) {
+                  lastData = data
+                }
+              } catch (e) {
+                // 忽略解析错误
+              }
+            }
+          }
+          
+          if (lastData && lastData.error) {
+            reject(new Error(lastData.error))
+          } else {
+            resolve({
+              content: lastContent || '请求成功',
+              usage: {}
+            })
+          }
+        } else {
+          reject(new Error(`后端API错误: ${xhr.status}`))
+        }
+      }
+      
+      xhr.onerror = () => {
+        reject(new Error('网络错误'))
+      }
+      
+      xhr.send(JSON.stringify({
+        message: message,
+        model: config.model,
+        history: history,
+        conversation_id: config.conversation_id,
+        image_url: config.image_url
+      }))
+    })
+  }
+
+  async sendMessageStream(message, config, onChunk, onComplete) {
+    return new Promise((resolve, reject) => {
+      const token = localStorage.getItem('token')
+      const history = config.history || []
+      
+      // 使用XMLHttpRequest处理SSE响应，因为fetch API在某些情况下处理SSE有问题
+      const xhr = new XMLHttpRequest()
+      
+      xhr.open('POST', '/api/v1/stream-chat/', true)
+      xhr.setRequestHeader('Content-Type', 'application/json')
+      xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+      
+      let fullContent = ''
+      let buffer = ''
+      let processedLength = 0 // 跟踪已处理的响应长度
+      
+      // 监听 readyState 变化以处理SSE数据
+      xhr.onreadystatechange = () => {
+        if (xhr.readyState === 3 || xhr.readyState === 4) { // 正在接收数据或接收完成
+          const responseText = xhr.responseText
+          if (responseText.length > processedLength) {
+            const newChunk = responseText.substring(processedLength)
+            processedLength = responseText.length
+            
+            // 处理新接收到的数据块
+            const lines = newChunk.split('\n')
+            for (const line of lines) {
+              if (line.trim() && line.startsWith('data: ')) {
+                try {
+                  const data = JSON.parse(line.slice(6).trim())
+                  
+                  if (data.content) {
+                    const content = data.content
+                    fullContent += content
+                    
+                    if (onChunk) {
+                      onChunk(content)
+                    }
+                  } else if (data.status === 'completed') {
+                    // 完成时调用complete回调
+                    if (onComplete) {
+                      onComplete({
+                        success: true,
+                        content: fullContent,
+                        model: config.model
+                      })
+                    }
+                    resolve({
+                      success: true,
+                      content: fullContent,
+                      model: config.model
+                    })
+                    return
+                  } else if (data.error) {
+                    reject(new Error(data.error))
+                    return
+                  }
+                } catch (e) {
+                  // 忽略解析错误，但记录以便调试
+                  console.warn('SSE数据解析错误:', e, line)
+                }
+              }
+            }
+          }
+        }
+      }
+      
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          // 如果onload时还没有完成（即没有收到completed状态），则认为出错了
+          if (!fullContent) {
+            reject(new Error('未收到有效的AI响应'))
+          }
+        } else {
+          reject(new Error(`后端API错误: ${xhr.status}`))
+        }
+      }
+      
+      xhr.onerror = () => {
+        reject(new Error('网络错误'))
+      }
+      
+      xhr.send(JSON.stringify({
+        message: message,
+        model: config.model,
+        history: history,
+        conversation_id: config.conversation_id,
+        image_url: config.image_url
+      }))
+    })
+  }
+
+  async getModels() {
+    try {
+      const response = await fetch('/api/v1/models/', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      })
+      
+      if (response.ok) {
+        const models = await response.json()
+        return models.map(model => ({
+          id: model.id,
+          name: model.name,
+          provider: this.name.toLowerCase()
+        }))
+      }
+    } catch (error) {
+      console.warn('获取后端模型列表失败:', error)
+    }
+    
+    // 返回默认模型列表作为后备
+    return [
+      { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo', provider: this.name.toLowerCase() },
+      { id: 'qwen-turbo', name: 'Qwen Turbo', provider: this.name.toLowerCase() },
+      { id: 'deepseek-chat', name: 'DeepSeek Chat', provider: this.name.toLowerCase() }
+    ]
+  }
+
+  _getApiKey(keyName) {
+    return localStorage.getItem(keyName)
   }
 }
 

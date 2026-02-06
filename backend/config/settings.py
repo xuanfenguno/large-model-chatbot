@@ -221,6 +221,8 @@ if DEBUG:
         "http://127.0.0.1:3000",
         "http://localhost:8080", 
         "http://127.0.0.1:8080",
+        "http://127.0.0.1:5173", # Vite默认开发服务器端口
+        "http://localhost:5173",  # Vite默认开发服务器端口
         # 在生产环境中添加实际的前端域名
         # "https://yourdomain.com",
     ]
@@ -280,7 +282,7 @@ REST_FRAMEWORK = {
 from datetime import timedelta
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=5),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
     'ROTATE_REFRESH_TOKENS': False,
     'BLACKLIST_AFTER_ROTATION': True,

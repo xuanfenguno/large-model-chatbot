@@ -138,7 +138,7 @@ class UnifiedAIApi {
     try {
       // 首先尝试从后端API获取模型列表
       try {
-        const response = await service.get('/v1/models/')
+        const response = await service.get('/models/')
         if (response.data && Array.isArray(response.data)) {
           // 转换后端返回的数据格式以适应前端需求
           const models = response.data.map(model => ({

@@ -353,6 +353,7 @@ const handleRegister = async () => {
   })
 }
 
+/*
 // 处理微信登录
 const handleWechatLogin = async () => {
   try {
@@ -451,7 +452,9 @@ const handleGithubLogin = async () => {
     ElMessage.error('GitHub登录失败，请稍后重试')
   }
 }
+*/
 
+/*
 // 处理微信登录回调
 const handleWechatCallback = async () => {
   // 检查URL中是否有微信回调参数
@@ -571,6 +574,7 @@ const handleGithubCallback = async () => {
     }
   }
 }
+*/
 
 // 打开用户协议
 const openUserAgreement = () => {
@@ -588,6 +592,7 @@ const goToForgotPassword = () => {
 }
 
 // 测试模式下的微信回调处理
+/*
 const handleWechatCallbackTest = async (authUrl) => {
   try {
     const loading = ElLoading.service({
@@ -700,6 +705,7 @@ const handleGithubCallbackTest = async (authUrl) => {
     ElMessage.error('GitHub登录失败，请稍后重试')
   }
 }
+*/
 
 // 初始化时根据查询参数决定显示哪个表单
 onMounted(() => {
@@ -709,10 +715,12 @@ onMounted(() => {
     isRegisterForm.value = false
   }
   
+  /* 
   // 检查是否需要处理各种OAuth登录回调
   handleWechatCallback()
   handleQQCallback()
   handleGithubCallback()
+  */
 })
 </script>
 
@@ -745,7 +753,7 @@ onMounted(() => {
   height: 100px; /* 增大Logo尺寸 */
   border-radius: 50%;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  z-index: 9999; /* 确保在最上层 */
+  z-index: 100; /* 降低层级，确保弹窗提示在顶层 */
   display: flex;
   align-items: center;
   justify-content: center;

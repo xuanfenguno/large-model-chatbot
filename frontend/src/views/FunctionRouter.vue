@@ -19,7 +19,7 @@
             <div class="title-icon">✨</div>
             <div class="title-content">
               <h1 class="main-title">AI多功能助手</h1>
-              <p class="subtitle">18种智能功能，为您提供个性化AI体验</p>
+              <p class="subtitle">12种智能功能，为您提供个性化AI体验</p>
             </div>
             <div class="title-badge">
               <span class="badge-text">智能</span>
@@ -51,56 +51,38 @@
           <el-menu-item index="auto" class="menu-item">
             <span>自动识别</span>
           </el-menu-item>
-          <el-menu-item index="chat" class="menu-item">
-            <span>聊天</span>
+          <el-menu-item index="text_summary" class="menu-item">
+            <span>文本摘要</span>
           </el-menu-item>
-          <el-menu-item index="story" class="menu-item">
-            <span>故事</span>
+          <el-menu-item index="report_generator" class="menu-item">
+            <span>周报生成器</span>
           </el-menu-item>
-          <el-menu-item index="chengyu" class="menu-item">
-            <span>成语接龙</span>
-          </el-menu-item>
-          <el-menu-item index="encyclopedia" class="menu-item">
-            <span>百科全书</span>
-          </el-menu-item>
-          <el-menu-item index="poetry" class="menu-item">
-            <span>诗词创作</span>
+          <el-menu-item index="travel_planner" class="menu-item">
+            <span>旅行计划师</span>
           </el-menu-item>
           <el-menu-item index="translate" class="menu-item">
             <span>翻译</span>
           </el-menu-item>
-          <el-menu-item index="math" class="menu-item">
-            <span>数学问题</span>
-          </el-menu-item>
           <el-menu-item index="programming" class="menu-item">
             <span>编程帮助</span>
           </el-menu-item>
-          <el-menu-item index="weather" class="menu-item">
-            <span>天气查询</span>
+          <el-menu-item index="story" class="menu-item">
+            <span>故事创作</span>
           </el-menu-item>
-          <el-menu-item index="calculator" class="menu-item">
-            <span>计算器</span>
+          <el-menu-item index="poetry" class="menu-item">
+            <span>诗词创作</span>
           </el-menu-item>
-          <el-menu-item index="life_advice" class="menu-item">
-            <span>生活建议</span>
+          <el-menu-item index="chengyu" class="menu-item">
+            <span>成语接龙</span>
           </el-menu-item>
-          <el-menu-item index="news" class="menu-item">
-            <span>新闻</span>
+          <el-menu-item index="role_playing" class="menu-item">
+            <span>角色扮演</span>
           </el-menu-item>
-          <el-menu-item index="emotion" class="menu-item">
-            <span>情感支持</span>
+          <el-menu-item index="social_media_copywriter" class="menu-item">
+            <span>小红书文案</span>
           </el-menu-item>
-          <el-menu-item index="game" class="menu-item">
-            <span>游戏</span>
-          </el-menu-item>
-          <el-menu-item index="education" class="menu-item">
-            <span>教育</span>
-          </el-menu-item>
-          <el-menu-item index="health" class="menu-item">
-            <span>健康</span>
-          </el-menu-item>
-          <el-menu-item index="finance" class="menu-item">
-            <span>金融</span>
+          <el-menu-item index="visual_idiom_puzzle" class="menu-item">
+            <span>看图猜成语</span>
           </el-menu-item>
         </el-menu>
       </aside>
@@ -140,6 +122,21 @@
             
             <!-- 输入区域 -->
             <div class="input-area">
+              <!-- 翻译语言选择器 -->
+              <div v-if="activeFunction === 'translate'" class="language-selector">
+                <span class="selector-label">目标语言：</span>
+                <el-select v-model="targetLanguage" placeholder="选择目标语言" size="default" style="width: 120px">
+                  <el-option label="中文" value="中文" />
+                  <el-option label="英语" value="英语" />
+                  <el-option label="日语" value="日语" />
+                  <el-option label="韩语" value="韩语" />
+                  <el-option label="法语" value="法语" />
+                  <el-option label="德语" value="德语" />
+                  <el-option label="西班牙语" value="西班牙语" />
+                  <el-option label="俄语" value="俄语" />
+                </el-select>
+              </div>
+
               <div class="input-container">
                 <div class="input-wrapper">
                   <el-input
@@ -187,11 +184,14 @@ const loading = ref(false);
 const selectedModel = ref('qwen-max');
 const availableModels = ref([]);
 const messagesAreaRef = ref(null);
+const targetLanguage = ref('中文'); // 新增：翻译目标语言
 
 // 获取可用模型列表
+import { service } from '@/utils/request';
+
 const fetchAvailableModels = async () => {
   try {
-    const response = await axios.get('/api/v1/models/');
+    const response = await service.get('/models/');
     availableModels.value = response.data.map(model => ({
       value: model.name,
       label: model.label || model.name
@@ -227,25 +227,19 @@ const goBack = () => {
 
 // 获取功能名称
 const getFunctionName = (funcType) => {
-  const funcNames = {
+  const functionNames = {
     auto: '自动识别',
-    chat: '聊天',
-    story: '故事',
-    chengyu: '成语接龙',
-    encyclopedia: '百科全书',
-    poetry: '诗词创作',
+    text_summary: '文本摘要',
+    report_generator: '周报生成器',
+    travel_planner: '旅行计划师',
     translate: '翻译',
-    math: '数学问题',
     programming: '编程帮助',
-    weather: '天气查询',
-    calculator: '计算器',
-    life_advice: '生活建议',
-    news: '新闻',
-    emotion: '情感支持',
-    game: '游戏',
-    education: '教育',
-    health: '健康',
-    finance: '金融'
+    story: '故事创作',
+    poetry: '诗词创作',
+    chengyu: '成语接龙',
+    role_playing: '角色扮演',
+    social_media_copywriter: '小红书文案',
+    visual_idiom_puzzle: '看图猜成语',
   };
   return funcNames[funcType] || '未知功能';
 };
@@ -257,6 +251,7 @@ const getFunctionDescription = (funcType) => {
     chat: '与AI进行自然对话，获取智能回答',
     story: '生成精彩的故事，激发想象力',
     chengyu: '参与成语接龙游戏，学习传统文化',
+    homophone: '找出与给定词语同音但字不同的词',
     encyclopedia: '查询各类知识，获取准确信息',
     poetry: '创作优美的诗词，体验文学魅力',
     translate: '多语言翻译，打破沟通障碍',
@@ -279,23 +274,17 @@ const getFunctionDescription = (funcType) => {
 const getInputPlaceholder = (funcType) => {
   const placeholders = {
     auto: '请描述您的需求，AI将自动识别功能...',
-    chat: '请输入您想聊的内容...',
-    story: '请输入故事主题或要求...',
-    chengyu: '请输入成语或开始接龙...',
-    encyclopedia: '请输入您想查询的知识...',
-    poetry: '请输入诗词主题或要求...',
+    text_summary: '请粘贴需要总结的文本...',
+    report_generator: '请输入本周工作要点，AI将为您生成周报...',
+    travel_planner: '请输入目的地、天数和偏好，AI将为您规划行程...',
     translate: '请输入需要翻译的内容...',
-    math: '请输入数学问题...',
-    programming: '请输入编程问题或代码...',
-    weather: '请输入城市名称查询天气...',
-    calculator: '请输入计算表达式...',
-    life_advice: '请输入您的生活问题...',
-    news: '请输入新闻关键词...',
-    emotion: '请分享您的情感问题...',
-    game: '请输入游戏相关问题...',
-    education: '请输入学习问题...',
-    health: '请输入健康问题...',
-    finance: '请输入金融问题...'
+    programming: '请输入您遇到的编程问题...',
+    story: '请输入故事主题，比如“一个宇航员在火星的奇遇”...',
+    poetry: '请输入诗词主题或要求...',
+    chengyu: '开始成语接龙...',
+    role_playing: '请输入您想让AI扮演的角色和对话场景...',
+    social_media_copywriter: '请输入产品或场景关键词，AI将为您生成小红书文案...',
+    visual_idiom_puzzle: '输入“开始”，获取第一个看图猜成语挑战！',
   };
   return placeholders[funcType] || '请输入内容...';
 };
@@ -320,10 +309,17 @@ const sendMessage = async () => {
   loading.value = true;
   
   try {
-    const response = await axios.post('/api/v1/function-router/', {
+    const payload = {
       input: userMessage.content,
-      model: selectedModel.value
-    });
+      model: selectedModel.value,
+      function: activeFunction.value
+    };
+
+    if (activeFunction.value === 'translate') {
+      payload.language = targetLanguage.value;
+    }
+
+    const response = await service.post('/function-router/', payload);
     
     const aiMessage = {
       role: 'assistant',
@@ -654,6 +650,26 @@ onMounted(() => {
   border: 1px solid rgba(0, 122, 255, 0.6) !important;
   border-radius: 0 12px 12px 0 !important;
   backdrop-filter: blur(20px);
+}
+
+/* 新增：翻译语言选择器样式 */
+.language-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 0 20px;
+}
+
+.selector-label {
+  font-size: 0.9rem;
+  color: #475569;
+  font-weight: 500;
+}
+
+:deep(.language-selector .el-input__wrapper) {
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
 }
 
 @keyframes icon-float {

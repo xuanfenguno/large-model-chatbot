@@ -70,7 +70,36 @@ class EnhancedApiWrapper:
             return 'doubao-pro', 'doubao'
         else:
             return None, None
-    
+
+    @staticmethod
+    def get_available_models():
+        """获取所有可用的模型列表"""
+        from .api_base import OpenAIApi, GoogleGeminiApi, MoonshotKimiApi, QwenApi, DeepSeekApi
+        all_models = []
+        
+        # 检查哪些API密钥已配置，仅添加相应模型
+        providers = EnhancedApiWrapper.get_available_providers()
+        
+        if 'openai' in providers:
+            all_models.extend(OpenAIApi.get_supported_models())
+        if 'gemini' in providers:
+            all_models.extend(GoogleGeminiApi.get_supported_models())
+        if 'qwen' in providers:
+            all_models.extend(QwenApi.get_supported_models())
+        if 'deepseek' in providers:
+            all_models.extend(DeepSeekApi.get_supported_models())
+        if 'kimi' in providers:
+            all_models.extend(MoonshotKimiApi.get_supported_models())
+        if 'doubao' in providers:
+            # 豆包API模型
+            all_models.extend([
+                {'name': 'doubao-pro', 'label': '豆包Pro'},
+                {'name': 'doubao-lite', 'label': '豆包Lite'},
+                {'name': 'doubao-ultra', 'label': '豆包Ultra'}
+            ])
+        
+        return all_models
+
     @staticmethod
     def create_api_instance(model):
         """创建适当的API实例，如果没有API密钥则返回模拟实例"""

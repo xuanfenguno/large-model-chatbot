@@ -17,8 +17,11 @@ export const useChatStore = defineStore('chat', () => {
   // 获取会话列表（优化缓存）
   const fetchConversations = async () => {
     try {
-      const response = await service.get('/v1/conversations/', {
-        timeout: 10000
+      const response = await service.get('/conversations/', {
+        params: {
+          page: 1,
+          page_size: 50
+        }
       })
       conversations.value = response.data
     } catch (error) {
@@ -56,8 +59,9 @@ export const useChatStore = defineStore('chat', () => {
   // 创建新会话
   const createConversation = async (title) => {
     try {
-      const response = await service.post('/v1/conversations/', {
-        title: title || '新会话'
+      const response = await service.post('/conversations/', {
+        title: title || '新会话',
+        mode: 'chat'
       }, {
         timeout: 10000
       })
@@ -91,8 +95,11 @@ export const useChatStore = defineStore('chat', () => {
   // 获取消息列表（优化响应速度）
   const fetchMessages = async (conversationId) => {
     try {
-      const response = await service.get(`/v1/conversations/${conversationId}/messages/`, {
-        timeout: 10000
+      const response = await service.get(`/conversations/${conversationId}/messages/`, {
+        params: {
+          page: 1,
+          page_size: 100
+        }
       })
       messages.value = response.data
     } catch (error) {
@@ -119,17 +126,9 @@ export const useChatStore = defineStore('chat', () => {
         }
       }
 
-      // 首先将用户消息保存到后端数据库
-      const userMessageResponse = await service.post('/v1/messages/', {
-        conversation_id: selectedConversationId.value,
-        role: 'user',
-        content: content,
-        image_url: image
-      })
-
       // 创建本地用户消息预览
       const userMessage = {
-        id: userMessageResponse.data.id,
+        id: Date.now(),
         role: 'user',
         content: content,
         image_url: image,
@@ -160,24 +159,18 @@ export const useChatStore = defineStore('chat', () => {
       const result = await aiApi.sendMessage(content, {
         model: model,
         history: history,
+        conversation_id: selectedConversationId.value,
+        image_url: image,
         temperature: 0.6,
         maxTokens: 2000
       })
 
       if (result.success) {
-        // 将AI回复保存到后端数据库
-        const aiMessageResponse = await service.post('/v1/messages/', {
-          conversation_id: selectedConversationId.value,
-          role: 'assistant',
-          content: result.content,
-          model: result.model
-        })
-
         // 更新AI回复
         const aiIndex = messages.value.findIndex(msg => msg.id === aiMessage.id)
         if (aiIndex !== -1) {
           messages.value[aiIndex] = {
-            id: aiMessageResponse.data.id,
+            id: Date.now() + 2,
             role: 'assistant',
             content: result.content,
             created_at: new Date().toISOString(),
@@ -233,16 +226,9 @@ export const useChatStore = defineStore('chat', () => {
         }
       }
 
-      // 首先将用户消息保存到后端数据库
-      const userMessageResponse = await service.post('/v1/messages/', {
-        conversation_id: selectedConversationId.value,
-        role: 'user',
-        content: content
-      })
-
       // 创建本地用户消息预览
       const userMessage = {
-        id: userMessageResponse.data.id,
+        id: Date.now(),
         role: 'user',
         content: content,
         created_at: new Date().toISOString()
@@ -274,6 +260,7 @@ export const useChatStore = defineStore('chat', () => {
         {
           model: model,
           history: history,
+          conversation_id: selectedConversationId.value,
           temperature: 0.6,
           maxTokens: 2000
         },
@@ -286,19 +273,11 @@ export const useChatStore = defineStore('chat', () => {
         },
         // 完成回调
         async (result) => {
-          // 将AI回复保存到后端数据库
-          const aiMessageResponse = await service.post('/v1/messages/', {
-            conversation_id: selectedConversationId.value,
-            role: 'assistant',
-            content: messages.value.find(msg => msg.id === aiMessage.id)?.content || '',
-            model: result.model
-          })
-
           const aiIndex = messages.value.findIndex(msg => msg.id === aiMessage.id)
           if (aiIndex !== -1) {
             messages.value[aiIndex] = {
               ...messages.value[aiIndex],
-              id: aiMessageResponse.data.id,
+              id: Date.now() + 2,
               is_loading: false,
               is_streaming: false,
               model: result.model
@@ -336,7 +315,7 @@ export const useChatStore = defineStore('chat', () => {
   // 删除会话
   const deleteConversation = async (conversationId) => {
     try {
-      await service.delete(`/v1/conversations/${conversationId}/`, {
+      await service.delete(`/conversations/${conversationId}/`, {
         timeout: 10000
       })
       conversations.value = conversations.value.filter(c => c.id !== conversationId)

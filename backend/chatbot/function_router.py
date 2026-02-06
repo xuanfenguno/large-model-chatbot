@@ -42,7 +42,7 @@ class FunctionRouter:
         # 中文语义理解准确率
         self.chinese_accuracy = 0.90  # 90%准确率
         
-    def route_function(self, user_input: str, model: str = 'gpt-3.5-turbo'):
+    def route_function(self, user_input: str, model: str = 'qwen-turbo', language: Optional[str] = None):
         """
         根据用户输入路由到相应功能
         """
@@ -91,7 +91,7 @@ class FunctionRouter:
         # 如果没有匹配到特定功能，返回未知
         return 'unknown'
     
-    def chat_handler(self, user_input: str, model: str = 'gpt-3.5-turbo'):
+    def chat_handler(self, user_input: str, model: str = 'qwen-turbo'):
         """
         默认聊天处理
         """
@@ -121,7 +121,7 @@ class FunctionRouter:
         except Exception as e:
             return f"抱歉，请求AI服务时发生错误：{str(e)}"
     
-    def joke_handler(self, user_input: str, model: str = 'gpt-3.5-turbo'):
+    def joke_handler(self, user_input: str, model: str = 'qwen-turbo'):
         """
         笑话功能处理
         """
@@ -174,7 +174,7 @@ class FunctionRouter:
         except Exception:
             return random.choice(jokes)
     
-    def story_handler(self, user_input: str, model: str = 'gpt-3.5-turbo'):
+    def story_handler(self, user_input: str, model: str = 'qwen-turbo'):
         """
         故事功能处理
         """
@@ -217,7 +217,7 @@ class FunctionRouter:
         except Exception:
             return random.choice(stories)
     
-    def chinese_understanding_handler(self, user_input: str, model: str = 'gpt-3.5-turbo'):
+    def chinese_understanding_handler(self, user_input: str, model: str = 'qwen-turbo'):
         """
         中文语义理解处理（准确率高达90%）
         """
@@ -273,7 +273,7 @@ class FunctionRouter:
         except Exception:
             return f"中文语义理解（准确率{self.chinese_accuracy*100}%）：{user_input}"
     
-    def custom_reply_handler(self, user_input: str, model: str = 'gpt-3.5-turbo'):
+    def custom_reply_handler(self, user_input: str, model: str = 'qwen-turbo'):
         """
         自定义回答处理
         """
@@ -285,7 +285,7 @@ class FunctionRouter:
         # 如果没有匹配的自定义回答，询问用户是否要添加
         return f"我没有找到关于'{user_input}'的自定义回答。您想要添加一个自定义回答吗？请告诉我您希望我如何回应这个问题。"
     
-    def weather_handler(self, user_input: str, model: str = 'gpt-3.5-turbo'):
+    def weather_handler(self, user_input: str, model: str = 'qwen-turbo'):
         """
         天气功能处理（模拟）
         """
@@ -329,7 +329,7 @@ class FunctionRouter:
         else:
             return f"{city}当前天气：{current_condition}，温度：{temperature}°C，湿度：{humidity}%"
     
-    def calculator_handler(self, user_input: str, model: str = 'gpt-3.5-turbo'):
+    def calculator_handler(self, user_input: str, model: str = 'qwen-turbo'):
         """
         计算器功能处理
         """
@@ -380,7 +380,7 @@ class FunctionRouter:
         except Exception:
             return "抱歉，我无法计算这个表达式，请检查输入是否正确。"
     
-    def encyclopedia_handler(self, user_input: str, model: str = 'gpt-3.5-turbo'):
+    def encyclopedia_handler(self, user_input: str, model: str = 'qwen-turbo'):
         """
         百科全书功能处理
         """
@@ -410,7 +410,7 @@ class FunctionRouter:
         except Exception:
             return f"百科全书：关于'{user_input}'的信息暂时无法获取。"
     
-    def poetry_handler(self, user_input: str, model: str = 'gpt-3.5-turbo'):
+    def poetry_handler(self, user_input: str, model: str = 'qwen-turbo'):
         """
         诗词功能处理
         """
@@ -454,7 +454,7 @@ class FunctionRouter:
             ]
             return random.choice(poems)
     
-    def translation_handler(self, user_input: str, model: str = 'gpt-3.5-turbo'):
+    def translation_handler(self, user_input: str, model: str = 'qwen-turbo'):
         """
         翻译功能处理
         """
@@ -481,7 +481,7 @@ class FunctionRouter:
         except Exception:
             return f"翻译功能：无法翻译'{user_input}'。"
     
-    def programming_handler(self, user_input: str, model: str = 'gpt-3.5-turbo'):
+    def programming_handler(self, user_input: str, model: str = 'qwen-turbo'):
         """
         编程功能处理
         """
@@ -512,7 +512,7 @@ class FunctionRouter:
         except Exception:
             return f"编程助手：关于'{user_input}'的问题暂时无法解答。"
     
-    def life_advice_handler(self, user_input: str, model: str = 'gpt-3.5-turbo'):
+    def life_advice_handler(self, user_input: str, model: str = 'qwen-turbo'):
         """
         生活建议功能处理
         """
@@ -553,7 +553,7 @@ class FunctionRouter:
             ]
             return random.choice(advice_list)
     
-    def news_handler(self, user_input: str, model: str = 'gpt-3.5-turbo'):
+    def news_handler(self, user_input: str, model: str = 'qwen-turbo'):
         """
         新闻功能处理（模拟）
         """
@@ -593,7 +593,7 @@ class FunctionRouter:
             ]
             return random.choice(news_list)
     
-    def emotion_support_handler(self, user_input: str, model: str = 'gpt-3.5-turbo'):
+    def emotion_support_handler(self, user_input: str, model: str = 'qwen-turbo'):
         """
         情感支持功能处理
         """
@@ -632,7 +632,7 @@ class FunctionRouter:
             ]
             return random.choice(support_messages)
     
-    def game_handler(self, user_input: str, model: str = 'gpt-3.5-turbo'):
+    def game_handler(self, user_input: str, model: str = 'qwen-turbo'):
         """
         游戏功能处理（如成语接龙等）
         """
@@ -709,7 +709,7 @@ class FunctionRouter:
             except Exception:
                 return "我们来玩成语接龙吧！请说出一个四字成语，我会接龙。比如你说'一心一意'，我就接'意气风发'。"
     
-    def education_handler(self, user_input: str, model: str = 'gpt-3.5-turbo'):
+    def education_handler(self, user_input: str, model: str = 'qwen-turbo'):
         """
         教育功能处理
         """
@@ -750,7 +750,7 @@ class FunctionRouter:
             ]
             return random.choice(education_tips)
     
-    def health_handler(self, user_input: str, model: str = 'gpt-3.5-turbo'):
+    def health_handler(self, user_input: str, model: str = 'qwen-turbo'):
         """
         健康功能处理
         """
@@ -791,7 +791,7 @@ class FunctionRouter:
             ]
             return random.choice(health_tips)
     
-    def finance_handler(self, user_input: str, model: str = 'gpt-3.5-turbo'):
+    def finance_handler(self, user_input: str, model: str = 'qwen-turbo'):
         """
         金融功能处理
         """

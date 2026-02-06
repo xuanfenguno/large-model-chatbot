@@ -248,46 +248,32 @@
         <div v-for="(message, index) in messages" :key="message.id" :class="['message-item', message.role]">
           <div class="message-avatar">
             <template v-if="message.role === 'user'">
-              <!-- 用户头像 -->
               <img v-if="userAvatarUrl" :src="userAvatarUrl" alt="User Avatar" class="avatar-img" />
-              <el-icon v-else :size="20">
-                <User />
-              </el-icon>
+              <el-icon v-else :size="20"><User /></el-icon>
             </template>
             <template v-else>
-              <!-- AI头像 -->
               <img v-if="aiAvatarUrl" :src="aiAvatarUrl" alt="AI Avatar" class="avatar-img" />
-              <el-icon v-else :size="20">
-                <ChatLineRound />
-              </el-icon>
+              <el-icon v-else :size="20"><ChatLineRound /></el-icon>
             </template>
           </div>
-          <div class="message-content">
+          <div class="message-bubble">
             <div class="message-header">
               <span class="message-role">{{ message.role === 'user' ? '我' : 'AI' }}</span>
               <span class="message-time">{{ formatTime(message.created_at) }}</span>
             </div>
             <div class="message-text">
-              <!-- 处理加载状态 -->
               <div v-if="message.is_loading" class="loading-content">
                 <el-skeleton :rows="3" animated />
               </div>
-              <!-- 处理错误状态 -->
               <div v-else-if="message.error" class="error-content">
                 <div class="error-message">
                   <el-icon class="error-icon"><Warning /></el-icon>
                   {{ message.content }}
                 </div>
-                <el-button 
-                  type="primary" 
-                  size="small" 
-                  @click="handleRetryMessage"
-                  class="retry-btn"
-                >
+                <el-button type="primary" size="small" @click="handleRetryMessage" class="retry-btn">
                   重试
                 </el-button>
               </div>
-              <!-- 正常消息显示 -->
               <div v-else>
                 <Vue3MarkdownIt :source="message.content" />
               </div>
@@ -365,6 +351,7 @@ import { useChatStore } from '@/stores/chat'
 import { useSettingsStore } from '@/stores/settings'
 import { useUnifiedAIApi } from '@/utils/ai-api'
 import { useAIConfig } from '@/utils/ai-config'
+import { service } from '@/utils/request'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import Vue3MarkdownIt from 'vue3-markdown-it'
 import ChatModeSelector from '@/components/ChatModeSelector.vue'
@@ -562,7 +549,7 @@ const formatTime = (timeStr) => {
 // 获取可用模型列表
 const loadModels = async () => {
   try {
-    const response = await fetch('/api/v1/models/')
+    const response = await service.get('/models/')
     if (response.ok) {
       const data = await response.json()
       models.value = data
@@ -1127,7 +1114,7 @@ const setupTokenRefresh = () => {
         console.log('定时检查token状态...')
         
         // 尝试调用一个简单的API来验证token是否有效
-        await service.get('/v1/conversations/', {
+        await service.get('/conversations/', {
           timeout: 5000,
           _isTokenCheck: true
         })
@@ -1247,16 +1234,10 @@ const loadUserAvatar = async () => {
   }
   
   try {
-    const response = await fetch('/api/v1/user-info/', {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${authStore.accessToken}`,
-        'Content-Type': 'application/json'
-      }
-    })
+    const response = await service.get('/user-info/')
     
-    if (response.ok) {
-      const userData = await response.json()
+    if (response.status === 200) {
+      const userData = response.data
       if (userData.avatar_url) {
         userAvatarUrl.value = userData.avatar_url
       }
@@ -1273,6 +1254,66 @@ const goToProfile = () => {
 </script>
 
 <style scoped>
+/* 新增：消息气泡样式 */
+.messages-container {
+  background-color: #f4f5f7; /* 聊天背景色 */
+}
+
+.message-item {
+  display: flex;
+  align-items: flex-end;
+  margin-bottom: 15px;
+  max-width: 85%;
+}
+
+.message-item .message-avatar {
+  flex-shrink: 0;
+}
+
+.message-item.user {
+  margin-left: auto;
+  flex-direction: row-reverse;
+}
+
+.message-item.assistant {
+  margin-right: auto;
+  flex-direction: row;
+}
+
+.message-avatar .avatar-img {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+}
+
+.message-item.user .message-avatar {
+  margin-left: 12px;
+}
+
+.message-item.assistant .message-avatar {
+  margin-right: 12px;
+}
+
+.message-bubble {
+  padding: 10px 16px;
+  border-radius: 18px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  word-wrap: break-word;
+  white-space: pre-wrap;
+}
+
+.message-item.user .message-bubble {
+  background-color: #dcf8c6; /* 用户气泡颜色 */
+}
+
+.message-item.assistant .message-bubble {
+  background-color: #ffffff; /* AI气泡颜色 */
+}
+
+.message-header {
+  display: none; /* 暂时隐藏旧的消息头 */
+}
+
 .chat-container {
   display: flex;
   height: 100vh;

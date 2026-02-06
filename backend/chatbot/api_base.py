@@ -46,6 +46,12 @@ class BaseAIApi:
     def _build_messages(self, user_message: str, history: List[Dict]) -> List[Dict]:
         """构建消息历史"""
         messages = []
+
+        # 添加系统消息，强制使用Markdown格式
+        messages.append({
+            'role': 'system',
+            'content': 'You are a helpful assistant. Please format your response in Markdown.'
+        })
         
         # 添加历史消息，最多保留8条
         if history:
@@ -146,6 +152,15 @@ class OpenAIApi(BaseAIApi):
         self.base_url = getattr(settings, 'OPENAI_API_BASE_URL', 'https://api.openai.com/v1/chat/completions')
         self.name = "OpenAI"
     
+    @staticmethod
+    def get_supported_models():
+        return [
+            {'name': 'gpt-4', 'label': 'GPT-4'},
+            {'name': 'gpt-4-32k', 'label': 'GPT-4-32k'},
+            {'name': 'gpt-4-turbo', 'label': 'GPT-4 Turbo'},
+            {'name': 'gpt-3.5-turbo', 'label': 'GPT-3.5 Turbo'},
+        ]
+    
     def _get_api_key(self, model: str) -> Optional[str]:
         return getattr(settings, 'OPENAI_API_KEY', None) or settings.LLM_CONFIG.get('OPENAI_API_KEY')
     
@@ -187,6 +202,12 @@ class OpenAIApi(BaseAIApi):
 
 
 class GoogleGeminiApi(BaseAIApi):
+
+    @staticmethod
+    def get_supported_models():
+        return [
+            {'name': 'gemini-pro', 'label': 'Gemini Pro'},
+        ]
     """Google Gemini API实现"""
     
     def __init__(self):
@@ -277,6 +298,14 @@ class MoonshotKimiApi(BaseAIApi):
         super().__init__()
         self.base_url = getattr(settings, 'MOONSHOT_API_BASE_URL', 'https://api.moonshot.cn/v1')
         self.name = "Moonshot Kimi"
+
+    @staticmethod
+    def get_supported_models():
+        return [
+            {'name': 'moonshot-v1-8k', 'label': 'Moonshot V1 8K'},
+            {'name': 'moonshot-v1-32k', 'label': 'Moonshot V1 32K'},
+            {'name': 'moonshot-v1-128k', 'label': 'Moonshot V1 128K'},
+        ]
     
     def _get_api_key(self, model: str) -> Optional[str]:
         return getattr(settings, 'MOONSHOT_API_KEY', None) or settings.LLM_CONFIG.get('KIMI_API_KEY')
@@ -339,9 +368,17 @@ class QwenApi(BaseAIApi):
     
     def _get_api_key(self, model: str) -> Optional[str]:
         return getattr(settings, 'QWEN_API_KEY', None) or settings.LLM_CONFIG.get('QWEN_API_KEY')
+
+    @staticmethod
+    def get_supported_models():
+        return [
+            {'name': 'qwen-turbo', 'label': 'Qwen Turbo'},
+            {'name': 'qwen-plus', 'label': 'Qwen Plus'},
+            {'name': 'qwen-max', 'label': 'Qwen Max'},
+        ]
     
     def send_message(self, message: str, config: Dict) -> Dict:
-        """重写发送消息方法以适配Qwen OpenAI兼容API格式"""
+        """重写发送消息方法以适配Qwen API格式"""
         # 验证配置
         self._validate_config(config)
         
@@ -380,32 +417,69 @@ class QwenApi(BaseAIApi):
         }
     
     def _prepare_payload(self, message: str, history: List[Dict], config: Dict) -> Dict:
-        """准备OpenAI兼容的请求载荷"""
-        # 构建消息历史
-        messages = self._build_messages(message, history)
-        
-        payload = {
-            'model': config.get('model', 'qwen-turbo'),
-            'messages': messages,
-            'temperature': config.get('temperature', 0.6),
-            'max_tokens': config.get('max_tokens', 2000),
-            'top_p': config.get('top_p', 0.7),
-        }
+        """准备Qwen API的请求载荷 - 支持原生和兼容模式"""
+        # 检查是否使用DashScope兼容模式 (包含'compatible-mode'的是兼容模式)
+        if 'dashscope.aliyuncs.com' in self.base_url and 'compatible-mode' in self.base_url:
+            # OpenAI兼容格式
+            messages = []
+            
+            # 添加历史消息
+            if history:
+                messages.extend(history[-8:])  # 最多保留8条历史记录
+            
+            # 检查最后一条消息的角色，如果不是user，则添加当前消息
+            # 如果最后一条消息已经是user，就不重复添加
+            if not messages or messages[-1]['role'] != 'user':
+                # 添加当前用户消息（确保最后一条消息是user角色）
+                messages.append({
+                    'role': 'user',
+                    'content': message
+                })
+            
+            payload = {
+                'model': config.get('model', 'qwen-turbo'),
+                'messages': messages,
+                'temperature': config.get('temperature', 0.6),
+                'max_tokens': config.get('max_tokens', 2000),
+                'top_p': config.get('top_p', 0.7),
+            }
+        else:
+            # DashScope原生API格式（非兼容模式）
+            # 构建消息历史，DashScope可能需要不同的格式
+            messages = self._build_messages(message, history)
+            
+            # DashScope原生API参数格式
+            payload = {
+                "model": config.get('model', 'qwen-turbo'),
+                "input": {
+                    "messages": messages
+                },
+                "parameters": {
+                    "temperature": config.get('temperature', 0.6),
+                    "max_tokens": config.get('max_tokens', 2000),
+                    "top_p": config.get('top_p', 0.7),
+                }
+            }
         
         return payload
     
     def _extract_response_content(self, response_data: Dict) -> Dict:
-        """从OpenAI兼容响应中提取内容"""
-        if 'choices' not in response_data or len(response_data['choices']) == 0:
-            raise Exception("Qwen API响应格式错误")
-        
-        content = response_data['choices'][0]['message']['content']
-        
-        usage = response_data.get('usage', {})
+        """从Qwen API响应中提取内容 - 支持多种响应格式"""
+        # 首先尝试DashScope原生格式
+        if 'output' in response_data and 'text' in response_data['output']:
+            # DashScope原生API格式: {"output":{"text":"..."}} 
+            content = response_data['output']['text']
+            usage_info = response_data.get('usage', {})
+        elif 'choices' in response_data and len(response_data['choices']) > 0:
+            # OpenAI兼容格式: {"choices":[{"message":{"content":"..."}}]}
+            content = response_data['choices'][0]['message']['content']
+            usage_info = response_data.get('usage', {})
+        else:
+            raise Exception("Qwen API响应格式错误: " + str(response_data))
         
         return {
             'content': content,
-            'usage': usage
+            'usage': usage_info
         }
 
 
@@ -416,6 +490,13 @@ class DeepSeekApi(BaseAIApi):
         super().__init__()
         self.base_url = getattr(settings, 'DEEPSEEK_API_BASE_URL', 'https://api.deepseek.com/v1')
         self.name = "DeepSeek"
+
+    @staticmethod
+    def get_supported_models():
+        return [
+            {'name': 'deepseek-chat', 'label': 'DeepSeek Chat'},
+            {'name': 'deepseek-coder', 'label': 'DeepSeek Coder'},
+        ]
     
     def _get_api_key(self, model: str) -> Optional[str]:
         return getattr(settings, 'DEEPSEEK_API_KEY', None) or settings.LLM_CONFIG.get('DEEPSEEK_API_KEY')
@@ -448,3 +529,30 @@ class DeepSeekApi(BaseAIApi):
             'content': content,
             'usage': usage
         }
+
+
+class EnhancedApiWrapper:
+    """
+    增强的API包装器，用于自动处理API密钥缺失的情况
+    """
+    
+    # 存储所有支持的API类
+    SUPPORTED_APIS = {
+        'qwen': QwenApi,
+        'deepseek': DeepSeekApi,
+        'openai': OpenAIApi,
+        'gemini': GoogleGeminiApi,
+        'kimi': MoonshotKimiApi
+    }
+
+    @staticmethod
+    def get_available_models():
+        """
+        获取所有可用的AI模型列表
+        """
+        models = []
+        for api_name, api_class in EnhancedApiWrapper.SUPPORTED_APIS.items():
+            # 假设每个API类都有一个 `get_supported_models` 方法
+            if hasattr(api_class, 'get_supported_models'):
+                models.extend(api_class.get_supported_models())
+        return models

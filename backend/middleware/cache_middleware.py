@@ -35,7 +35,7 @@ class APICacheMiddleware(MiddlewareMixin):
         cached_response = cache.get(cache_key)
         if cached_response:
             logger.info(f"Cache hit for {request.path}")
-            return JsonResponse(cached_response)
+            return JsonResponse(cached_response, safe=False)
         
         return None
 

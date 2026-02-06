@@ -1,6 +1,20 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import ConversationViewSet, MessageViewSet, login_view, register_view, health_check, available_models, request_password_reset, reset_password, reset_password_test, function_router, stream_chat, upload_avatar, get_user_info
+from .views import (
+    ConversationViewSet, 
+    MessageViewSet, 
+    UserLoginView, 
+    UserRegistrationView, 
+    available_models, 
+    request_password_reset, 
+    reset_password, 
+    reset_password_test,
+    function_router, 
+    stream_chat, 
+    upload_avatar, 
+    get_user_info,
+    health_check
+)
 from .voice_views import initiate_call, answer_call, reject_call, end_call, get_call_status, signaling, get_signaling, get_call_history, get_active_calls
 # Knowledge base views are now imported from their dedicated file
 from .knowledge_base_views import (
@@ -13,13 +27,14 @@ from .knowledge_base_views import (
 
 router = DefaultRouter()
 router.register(r'conversations', ConversationViewSet, basename='conversation')
-router.register(r'messages', MessageViewSet, basename='message')
+# router.register(r'messages', MessageViewSet, basename='message')
 
 urlpatterns = [
+    path('health-check/', health_check, name='health-check'),
     path('', include(router.urls)),
-    path('login/', login_view, name='login'),
-    path('register/', register_view, name='register'),
-    path('health/', health_check, name='health_check'),
+    path('login/', UserLoginView.as_view(), name='login'),
+    path('register/', UserRegistrationView.as_view(), name='register'),
+
     path('models/', available_models, name='available-models'),
 
     path('password/reset/request/', request_password_reset, name='request-password-reset'),

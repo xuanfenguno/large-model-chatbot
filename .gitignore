@@ -1,158 +1,86 @@
-# --- 通用忽略规则 ---
-*.class
-*.log
-*.pyc
-*.swp
-*.DS_Store
-Thumbs.db
-._*
-
-# --- 编译输出目录 ---
-# C/C++
-*.o
-*.out
-*.so
-*.a
-*.dll
-*.exe
-build/
-obj/
-Bin/
-
-# Java
-target/
-*.jar
-*.war
-*.ear
-*.nar
-
 # Python
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
-pycache/
-venv/
-.venv/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
-# JavaScript/Node.js
+# Django
+*.log
+local_settings.py
+db.sqlite3
+media/
+staticfiles/
+*.pot
+*.pyo
+
+# Node.js
 node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-dist/
-build/
 
-# Go
-bin/
-pkg/
-*.exe
-*.test
-
-# Rust
-/target/
-**/*.rs.bk
-
-# .NET
-bin/
-obj/
-*.suo
-*.user
-*.cache
-
-# PHP
-vendor/
-composer.lock
-
-# Ruby
-/.bundle/
-/vendor/bundle
-*.gem
-
-# Swift
-.build/
-*.xcworkspace
-!default.xcworkspace
-
-# Android
-gen/
-bin/
-*.apk
-*.ap_
-
-# iOS
-build/
-*.ipa
-*.xcuserstate
-
-# Haskell
-*.hi
-*.o
-dist/
-dist-newstyle/
-.cabal-sandbox/
-cabal.sandbox.config
-
-# Scala
-target/
-*.class
-
-# --- 环境变量文件保护 ---
-# 保护敏感的环境变量文件
-.env
-.env.*
-!.env.example
-backend/.env
-backend/.env.*
-!backend/.env.example
-frontend/.env
-frontend/.env.*
-!frontend/.env.example
-
-# --- 本地开发环境文件 ---
-local_settings.py
-local.py
-secrets.py
-config/local.py
-
-# Kotlin
-*.class
-/build/
-
-# TypeScript
-dist/
-*.js.map
-*.tsbuildinfo
-
-# --- IDE 相关 ---
-# Visual Studio Code
+# IDE
 .vscode/
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
-
-# IntelliJ
 .idea/
-*.iml
-*.iws
+*.swp
+*.swo
 
-# Eclipse
-.settings/
-.classpath
-.project
+# Environment
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 
-# --- 操作系统生成文件 ---
-# Windows
-[Dd]esktop.ini
-$RECYCLE.BIN/
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
 
-# Linux/Unix
-*~
-.fuse_hidden*
+# Test and temporary files
+test_*.py
+debug_*.py
+check_*.py
+simulate_*.py
+knowledge_base_example.py
+login_test.html
+start_*.sh
+start_*.bat
+restart_*.sh
 
-# macOS
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes._logger_
+# OS
+.DS_Store
+Thumbs.db
+
+# Backend specific
+backend/db.sqlite3
+backend/media/
+backend/staticfiles/
+backend/.env
+backend/config/settings_local.py
+
+# Frontend specific
+frontend/dist/
+frontend/.env
+frontend/node_modules/
+
+# Custom ignore
+tests/test_*.py
+test_*.py

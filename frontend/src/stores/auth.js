@@ -8,7 +8,8 @@ export let refreshToken = null
 
 export const useAuthStore = defineStore('auth', () => {
   const token = ref(localStorage.getItem('token') || null)
-  const user = ref(JSON.parse(localStorage.getItem('user') || 'null'))
+  const storedUser = localStorage.getItem('user')
+const user = ref(storedUser ? JSON.parse(storedUser) : null)
   const isLoggedIn = computed(() => {
     const result = !!token.value && !!user.value
     console.log('isLoggedIn计算:', { token: !!token.value, user: !!user.value, result })
@@ -25,9 +26,9 @@ export const useAuthStore = defineStore('auth', () => {
     }
     
     try {
-      const response = await service.get('/v1/user-info/', {
+      const response = await service.get('/user-info/', {
         headers: {
-          Authorization: `Bearer ${accessToken.value}`
+          'Authorization': `Bearer ${token.value}`
         }
       })
       
@@ -64,10 +65,10 @@ export const useAuthStore = defineStore('auth', () => {
       }
       
       console.log('请求数据:', requestData)
-      console.log('请求路径:', '/v1/login/')
+      console.log('请求路径:', '/login/')
       console.log('service baseURL:', service.defaults.baseURL)
       
-      const response = await service.post('/v1/login/', requestData, {
+      const response = await service.post('/login/', requestData, {
           timeout: 30000,
           _isLoginRequest: true
         })
@@ -85,44 +86,27 @@ export const useAuthStore = defineStore('auth', () => {
       }
       
       // 更健壮的数据解析，支持多种响应格式
-      let newToken, usernameData, emailData
-      
-      // 尝试不同的字段名
-      if (responseData.access) {
-        newToken = responseData.access
-        usernameData = responseData.username
-        emailData = responseData.email
-      } else if (responseData.token) {
-        newToken = responseData.token
-        usernameData = responseData.username || responseData.user?.username
-        emailData = responseData.email || responseData.user?.email
-      } else if (responseData.data) {
-        // 嵌套data字段的情况
-        newToken = responseData.data.access || responseData.data.token
-        usernameData = responseData.data.username || responseData.data.user?.username
-        emailData = responseData.data.email || responseData.data.user?.email
-      }
-      
-      console.log('解析后的数据:', { newToken, usernameData, emailData })
+      const newToken = responseData.access;
 
-      if (!newToken || !usernameData) {
+      if (!newToken || !responseData.user) {
         console.error('登录响应缺少必需字段，完整响应:', responseData)
         throw new Error('登录响应缺少必需字段')
       }
 
       token.value = newToken
-      user.value = { username: usernameData, email: emailData || '' }
+      user.value = responseData.user // 直接使用登录响应中的完整用户信息
 
       localStorage.setItem('token', newToken)
-      localStorage.setItem('user', JSON.stringify({ username: usernameData, email: emailData || '' }))
+      localStorage.setItem('user', JSON.stringify(responseData.user))
+      // 检查并存储refresh token
+      if (responseData.refresh) {
+        localStorage.setItem('refreshToken', responseData.refresh)
+      }
 
       service.defaults.headers.Authorization = `Bearer ${newToken}`
 
-      // 登录成功后获取完整的用户信息（包括头像等）
-      await fetchUserInfo()
-
       console.log('登录成功，token已保存:', newToken)
-      console.log('用户信息已保存:', { username: usernameData, email: emailData || '' })
+      console.log('用户信息已保存:', responseData.user)
       console.log('当前认证状态:', isLoggedIn.value)
 
       return true
@@ -139,12 +123,13 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  const register = async (username, email, password) => {
+  const register = async (username, email, password, confirmPassword) => {
     try {
-      const response = await service.post('/v1/register/', {
+      const response = await service.post('/register/', {
         username,
+        email,
         password,
-        email
+        confirm_password: confirmPassword
       }, {
         timeout: 30000
       })
@@ -190,8 +175,10 @@ export const useAuthStore = defineStore('auth', () => {
 
   const logout = () => {
     token.value = null
-    user.value = null
-    localStorage.removeItem('token')
+      user.value = null
+      localStorage.removeItem('token')
+      localStorage.removeItem('refreshToken')
+      localStorage.removeItem('user') // 新增：移除用户信息 // 确保也清除refresh token
     localStorage.removeItem('user')
     delete service.defaults.headers.Authorization
     
@@ -203,18 +190,20 @@ export const useAuthStore = defineStore('auth', () => {
 
   // 刷新token
   const refreshTokenFn = async () => {
+    const refreshToken = localStorage.getItem('refreshToken')
+    if (!refreshToken) {
+      console.error('没有可用的refresh token，无法刷新')
+      // 在这里可以选择登出用户
+      logout()
+      throw new Error('No refresh token available.')
+    }
+
     try {
-      console.log('开始刷新token...')
-      
-      // 检查是否有有效的token
-      const currentToken = token.value || localStorage.getItem('token')
-      if (!currentToken) {
-        throw new Error('没有有效的token可以刷新')
-      }
+      console.log('开始使用refresh token刷新access token...')
       
       // 调用后端刷新接口
-      const response = await service.post('/v1/token/refresh/', {
-        token: currentToken
+      const response = await service.post('/token/refresh/', {
+        refresh: refreshToken
       }, {
         timeout: 10000,
         _isRefreshRequest: true
@@ -242,7 +231,7 @@ export const useAuthStore = defineStore('auth', () => {
       service.defaults.headers.Authorization = `Bearer ${newToken}`
       
       console.log('token刷新成功')
-      return true
+      return newToken
       
     } catch (error) {
       console.error('刷新token失败:', error)
