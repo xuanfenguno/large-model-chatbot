@@ -63,6 +63,30 @@ class FunctionRouter:
         """
         user_input_lower = user_input.lower()
         
+        # 首先检查是否包含明确的功能前缀（例如："chengyu 一帆风顺"）
+        # 检查常见功能名称作为前缀
+        prefix_functions = {
+            'chengyu': 'game',  # 成语接龙
+            'game': 'game',     # 游戏
+            'joke': 'joke',     # 笑话
+            'story': 'story',   # 故事
+            'poetry': 'poetry', # 诗词
+            'translate': 'translation', # 翻译
+            'programming': 'programming', # 编程
+            'encyclopedia': 'encyclopedia', # 百科
+            'weather': 'weather', # 天气
+            'calculator': 'calculator', # 计算器
+            'news': 'news',     # 新闻
+            'education': 'education', # 教育
+            'health': 'health', # 健康
+            'finance': 'finance' # 金融
+        }
+        
+        # 检查是否以功能名称开头
+        words = user_input_lower.split()
+        if words and words[0] in prefix_functions:
+            return prefix_functions[words[0]]
+        
         # 关键词映射
         intent_keywords = {
             'joke': ['笑话', '搞笑', '幽默', '笑死', '好玩', 'joke', 'funny'],
