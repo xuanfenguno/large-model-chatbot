@@ -88,6 +88,23 @@ class FunctionRouter:
                 if keyword in user_input_lower:
                     return intent
         
+        # 新增：检测是否为成语接龙场景
+        # 如果输入是4个中文字符（可能的成语），且上下文暗示是游戏
+        import re as regex_module
+        chinese_chars = regex_module.findall(r'[\u4e00-\u9fff]', user_input)
+        four_char_words = regex_module.findall(r'[\u4e00-\u9fff]{4}', user_input)
+        
+        # 如果输入包含四字词，且前面有"接"、"我接"等字样，认为是成语接龙
+        if four_char_words and ('接' in user_input or '我接' in user_input or 
+                               '接龙' in user_input or user_input.strip().endswith('接')):
+            return 'game'
+        
+        # 如果输入恰好是四字成语，且用户之前可能在玩成语接龙，也可以考虑为game意图
+        if len(four_char_words) > 0 and len(user_input.strip()) <= 10:
+            # 简单判断：如果输入是4个汉字且总长度不大，认为可能是成语接龙
+            if len(chinese_chars) == 4 and len(user_input.strip()) <= 6:
+                return 'game'
+        
         # 如果没有匹配到特定功能，返回未知
         return 'unknown'
     
@@ -637,7 +654,7 @@ class FunctionRouter:
         游戏功能处理（如成语接龙等）
         """
         if '成语接龙' in user_input or 'chengyu' in user_input.lower():
-            # 成语接龙游戏
+            # 成语接龙游戏（原始逻辑）
             chengyu_list = [
                 "一心一意", "意气风发", "发愤图强", "强词夺理", "理直气壮",
                 "壮志凌云", "云开见日", "日新月异", "异想天开", "开心见诚",
@@ -676,7 +693,39 @@ class FunctionRouter:
             riddle = random.choice(riddles)
             return f"谜语：{riddle['question']} （提示：答案是一个常见的事物）"
         else:
-            # 使用AI提供游戏体验
+            # 检查是否为成语接龙场景（新逻辑）
+            import re as regex_module
+            four_char_words = regex_module.findall(r'[\u4e00-\u9fa5]{4}', user_input)
+            if four_char_words:
+                # 如果输入包含四字成语，尝试成语接龙逻辑
+                chengyu_list = [
+                    "一心一意", "意气风发", "发愤图强", "强词夺理", "理直气壮",
+                    "壮志凌云", "云开见日", "日新月异", "异想天开", "开心见诚",
+                    "诚心诚意", "意在言外", "外强中干", "干干净净", "净几明窗",
+                    "窗明几净", "净手敛容", "容光焕发", "发人深省", "省吃俭用"
+                ]
+                
+                last_chengyu = ""
+                # 尝试从用户输入中获取上一个成语的最后一个字
+                user_chengyu_match = regex_module.findall(r'[\u4e00-\u9fa5]{4}', user_input)
+                if user_chengyu_match:
+                    last_chengyu = user_chengyu_match[-1]
+                
+                # 找到以指定字开头的成语
+                next_chengyu = None
+                if last_chengyu and len(last_chengyu) >= 1:
+                    last_char = last_chengyu[-1]
+                    for cy in chengyu_list:
+                        if cy[0] == last_char and cy != last_chengyu:
+                            next_chengyu = cy
+                            break
+                
+                if not next_chengyu:
+                    next_chengyu = random.choice(chengyu_list)
+                
+                return f"成语接龙：我接 '{next_chengyu}'，该你接了！"
+            
+            # 如果不是成语接龙，则使用AI提供游戏体验
             prompt = f"让我们玩一个游戏：{user_input}。请选择合适的游戏类型并提供游戏规则和互动。"
             
             # 使用增强的API包装器来创建API实例，自动处理API密钥缺失情况
