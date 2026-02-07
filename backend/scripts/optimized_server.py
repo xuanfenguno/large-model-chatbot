@@ -56,7 +56,7 @@ if __name__ == '__main__':
     optimize_memory()
     
     # 启动优化后的服务器
-    execute_from_command_line(['manage.py', 'runserver', '--noreload', '--nothreading'])
+    execute_from_command_line(['manage.py', 'runserver', '--noreload', '--nothreading', '127.0.0.1:8000'])
     
     # 定期清理内存
     import threading
