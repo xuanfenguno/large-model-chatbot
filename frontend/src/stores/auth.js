@@ -201,7 +201,7 @@ const user = ref(storedUser ? JSON.parse(storedUser) : null)
     try {
       console.log('开始使用refresh token刷新access token...')
       
-      // 调用后端刷新接口
+      // 调用后端刷新接口 - 使用正确的API路径
       const response = await service.post('/token/refresh/', {
         refresh: refreshToken
       }, {
