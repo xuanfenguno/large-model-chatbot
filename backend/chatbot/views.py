@@ -74,7 +74,7 @@ def stream_chat(request):
             if msg.role == 'user':
                 content = [{"type": "text", "text": msg.content}]
                 if msg.image_url:
-                    content.append({"type": "image_url", "image_url": {"url": request.build_absolute_uri(msg.image_url.url)}})
+                    content.append({"type": "image_url", "image_url": {"url": msg.image_url}})
                 history.append({"role": "user", "content": content if len(content) > 1 else content[0]['text']})
             elif msg.role == 'assistant':
                 history.append({"role": "assistant", "content": msg.content})
@@ -402,7 +402,7 @@ def update_user_info(request):
 @parser_classes([MultiPartParser, FormParser])
 def upload_avatar(request):
     if 'avatar' in request.FILES:
-        user_profile = request.user.userprofile
+        user_profile = request.user.profile
         # Delete old avatar if it exists
         if user_profile.avatar and os.path.exists(user_profile.avatar.path):
             os.remove(user_profile.avatar.path)

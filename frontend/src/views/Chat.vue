@@ -286,35 +286,50 @@
       <footer class="chat-footer">
         <!-- 文字聊天模式 -->
         <div v-if="chatMode === 'text'" class="input-wrapper">
-          <el-input
-            v-model="inputContent"
-            type="textarea"
-            :rows="1"
-            placeholder="说点什么吧～"
-            resize="none"
-            @keyup.enter.exact="handleSendMessage"
-            @keyup.enter.ctrl.exact="handleSendMessage"
-            class="message-input"
-            :autosize="{ minRows: 1, maxRows: 6 }"
-            :disabled="isSending"
-          >
-            <template #append>
-              <el-button
-                type="text"
-                size="small"
-                icon="Plus"
-                @click="handleAddAttachment"
-                :disabled="isSending"
-              />
-            </template>
-          </el-input>
+          <div class="input-with-image">
+            <el-input
+              v-model="inputContent"
+              type="textarea"
+              :rows="1"
+              placeholder="说点什么吧～"
+              resize="none"
+              @keyup.enter.exact="handleSendMessage"
+              @keyup.enter.ctrl.exact="handleSendMessage"
+              class="message-input"
+              :autosize="{ minRows: 1, maxRows: 6 }"
+              :disabled="isSending"
+            />
+            <input
+              type="file"
+              accept="image/*"
+              style="display: none"
+              ref="fileInputRef"
+              @change="handleFileChange"
+              :disabled="isSending"
+            />
+            <el-button
+              type="text"
+              size="small"
+              icon="Picture"
+              @click="triggerFileInput"
+              :disabled="isSending"
+              class="image-upload-btn"
+            />
+          </div>
+          
+          <!-- 图片预览区域 -->
+          <div v-if="imagePreviewUrl" class="image-preview-wrapper">
+            <img :src="imagePreviewUrl" alt="Preview" class="image-preview" />
+            <el-icon class="remove-image-btn" @click="removeImage"><Close /></el-icon>
+          </div>
+          
           <el-button
             type="primary"
             size="large"
             icon="Paperclip"
             :loading="isSending"
             @click="handleSendMessage"
-            :disabled="!inputContent.trim()"
+            :disabled="!inputContent.trim() && !imagePreviewUrl"
             class="send-button"
           >
             发送
@@ -357,7 +372,7 @@ import Vue3MarkdownIt from 'vue3-markdown-it'
 import ChatModeSelector from '@/components/ChatModeSelector.vue'
 import VoiceControls from '@/components/VoiceControls.vue'
 import VoiceCall from '@/components/VoiceCall.vue'
-import { Message, User, Setting, SwitchButton, Paperclip, Plus, Delete, Warning, Connection, ArrowDown, ChatLineRound, Microphone, Phone, ArrowRight } from '@element-plus/icons-vue'
+import { Message, User, Setting, SwitchButton, Paperclip, Plus, Delete, Warning, Connection, ArrowDown, ChatLineRound, Microphone, Phone, ArrowRight, Picture, Close } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -376,6 +391,11 @@ const models = ref([])
 const chatMode = ref('text') // 聊天模式：text, voice, video
 const modeSelectorRef = ref(null)
 const voiceControlsRef = ref(null)
+
+// 图片上传相关数据
+const selectedImage = ref(null)
+const imagePreviewUrl = ref('')
+const fileInputRef = ref(null)
 
 // 头像相关数据
 const userAvatarUrl = ref('')
@@ -613,17 +633,34 @@ const handleDeleteConversation = async (id) => {
 
 // 处理发送消息（优化响应速度）
 const handleSendMessage = async () => {
-  if (!inputContent.value.trim() || isSending.value) {
+  if ((!inputContent.value.trim() && !imagePreviewUrl.value) || isSending.value) {
     return
   }
 
   const content = inputContent.value.trim()
   inputContent.value = '' // 立即清空输入框，提升用户体验
+  
+  // 临时保存图片信息，发送成功后再清除
+  const tempImage = imagePreviewUrl.value ? selectedImage.value : null
+  const tempImageUrl = imagePreviewUrl.value
+  imagePreviewUrl.value = ''
+  selectedImage.value = null
+  
   isSending.value = true
 
   try {
-    // 在发送消息时传递当前选择的模型
-    const response = await chatStore.sendMessage(content, null, selectedModel.value)
+    // 如果有图片，先上传图片获取URL
+    let imageUrl = null
+    if (tempImage) {
+      ElMessage.info('正在上传图片...')
+      imageUrl = await uploadImage(tempImage)
+      if (!imageUrl) {
+        throw new Error('图片上传失败')
+      }
+    }
+    
+    // 在发送消息时传递当前选择的模型和图片URL
+    const response = await chatStore.sendMessage(content, imageUrl, selectedModel.value)
     
     // 如果当前是语音模式，自动播放AI回复
     if (chatMode.value === 'voice') {
@@ -715,6 +752,105 @@ const handleRetryMessage = async (content) => {
 // 处理添加附件
 const handleAddAttachment = () => {
   ElMessage.info('附件功能开发中...')
+}
+
+// 处理图片选择
+const handleImageSelect = (file) => {
+  if (!file.raw) {
+    return
+  }
+  
+  // 验证文件类型
+  if (!file.raw.type.startsWith('image/')) {
+    ElMessage.warning('请选择图片文件')
+    return
+  }
+  
+  // 验证文件大小（限制为5MB）
+  const maxSize = 5 * 1024 * 1024
+  if (file.raw.size > maxSize) {
+    ElMessage.warning('图片大小不能超过5MB')
+    return
+  }
+  
+  // 生成预览URL
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    imagePreviewUrl.value = e.target.result
+    selectedImage.value = file.raw
+  }
+  reader.readAsDataURL(file.raw)
+  
+  ElMessage.success('图片已选择')
+}
+
+// 触发文件选择
+const triggerFileInput = () => {
+  fileInputRef.value?.click()
+}
+
+// 处理文件选择变化
+const handleFileChange = (event) => {
+  const file = event.target.files[0]
+  if (!file) {
+    return
+  }
+  
+  // 验证文件类型
+  if (!file.type.startsWith('image/')) {
+    ElMessage.warning('请选择图片文件')
+    return
+  }
+  
+  // 验证文件大小（限制为5MB）
+  const maxSize = 5 * 1024 * 1024
+  if (file.size > maxSize) {
+    ElMessage.warning('图片大小不能超过5MB')
+    return
+  }
+  
+  // 生成预览URL
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    imagePreviewUrl.value = e.target.result
+    selectedImage.value = file
+  }
+  reader.readAsDataURL(file)
+  
+  ElMessage.success('图片已选择')
+}
+
+// 移除已选择的图片
+const removeImage = () => {
+  selectedImage.value = null
+  imagePreviewUrl.value = ''
+}
+
+// 上传图片到后端
+const uploadImage = async (imageFile) => {
+  try {
+    const formData = new FormData()
+    formData.append('avatar', imageFile)
+    
+    const token = localStorage.getItem('token')
+    const response = await service.post('/upload-avatar/', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+        'Authorization': `Bearer ${token}`
+      },
+      timeout: 30000
+    })
+    
+    if (response.data && response.data.avatar_url) {
+      return response.data.avatar_url
+    }
+    
+    return null
+  } catch (error) {
+    console.error('图片上传失败:', error)
+    ElMessage.error('图片上传失败，请稍后重试')
+    return null
+  }
 }
 
 
@@ -2482,6 +2618,15 @@ const goToProfile = () => {
   max-width: none;
   margin: 0 auto;
   padding: 0 1rem;
+  position: relative;
+}
+
+.input-with-image {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  position: relative;
 }
 
 .message-input {
@@ -2544,6 +2689,52 @@ const goToProfile = () => {
   cursor: not-allowed;
   transform: none;
   box-shadow: none;
+}
+
+/* 图片上传按钮样式 */
+.image-upload-btn {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+}
+
+/* 图片预览样式 */
+.image-preview-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0.5rem 1rem;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid #dcdfe6;
+  border-radius: 12px;
+  margin: 0.5rem 1rem;
+  max-width: 98%;
+  margin: 0 auto;
+}
+
+.image-preview {
+  max-width: 150px;
+  max-height: 150px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1px solid #ebeef5;
+}
+
+.remove-image-btn {
+  color: #ff4d4f;
+  cursor: pointer;
+  padding: 4px;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.remove-image-btn:hover {
+  color: #ff1f1f;
+  transform: scale(1.2);
 }
 
 .video-controls-placeholder {
