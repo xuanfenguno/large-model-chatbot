@@ -11,7 +11,7 @@ export const useChatStore = defineStore('chat', () => {
   const isLoading = ref(false)
   const isStreaming = ref(false)
   
-  // 大模型API
+  // 大模型 API
   const { api: aiApi } = useUnifiedAIApi()
 
   // 获取会话列表（优化缓存）
@@ -24,6 +24,56 @@ export const useChatStore = defineStore('chat', () => {
         }
       })
       conversations.value = response.data
+      
+      console.log(`从后端获取会话列表成功，共 ${conversations.value.length} 个会话`)
+      
+      // 清理 localStorage 中无效的会话缓存
+      const backendIds = conversations.value.map(c => c.id)
+      const storedConvs = JSON.parse(localStorage.getItem('chat-store') || '{}')
+      const localConvs = storedConvs.conversations || []
+      
+      // 找出 localStorage 中存在但后端不存在的会话 ID
+      const invalidIds = localConvs
+        .filter(c => !backendIds.includes(c.id))
+        .map(c => c.id)
+      
+      console.log(`发现 ${invalidIds.length} 个无效会话：${invalidIds.join(', ')}`)
+      
+      // 清理这些无效会话的缓存
+      invalidIds.forEach(id => {
+        localStorage.removeItem(`messages-${id}`)
+        console.log(`清理无效会话缓存：${id}`)
+      })
+      
+      // 如果当前选中的会话不存在于后端，清空选择
+      if (selectedConversationId.value && !backendIds.includes(selectedConversationId.value)) {
+        console.warn(`当前选中的会话 ${selectedConversationId.value} 不存在于后端，清空选择`)
+        selectedConversationId.value = null
+        messages.value = []
+        
+        // 立即保存更新
+        try {
+          localStorage.setItem('chat-store', JSON.stringify({
+            selectedConversationId: null,
+            messages: [],
+            conversations: conversations.value  // 使用后端返回的最新数据
+          }))
+        } catch (e) {
+          console.error('缓存会话列表失败:', e)
+        }
+      }
+      
+      // 更新 localStorage 中的会话列表（使用后端数据）
+      try {
+        localStorage.setItem('chat-store', JSON.stringify({
+          selectedConversationId: selectedConversationId.value,
+          messages: messages.value,
+          conversations: conversations.value
+        }))
+      } catch (e) {
+        console.error('缓存会话列表失败:', e)
+      }
+      
     } catch (error) {
       console.error('获取会话列表失败:', error)
       let errorMessage = '获取会话列表失败'
@@ -69,6 +119,18 @@ export const useChatStore = defineStore('chat', () => {
       await fetchConversations()
       selectedConversationId.value = response.data.id
       messages.value = []
+      
+      // 保存更新后的会话列表到 localStorage
+      try {
+        localStorage.setItem('chat-store', JSON.stringify({
+          selectedConversationId: selectedConversationId.value,
+          messages: messages.value,
+          conversations: conversations.value
+        }))
+      } catch (e) {
+        console.error('缓存会话列表失败:', e)
+      }
+      
       return response.data
     } catch (error) {
       ElMessage({
@@ -95,18 +157,91 @@ export const useChatStore = defineStore('chat', () => {
   // 获取消息列表（优化响应速度）
   const fetchMessages = async (conversationId) => {
     try {
+      // 先尝试从 localStorage 加载缓存的消息
+      const cachedMessages = localStorage.getItem(`messages-${conversationId}`)
+      if (cachedMessages) {
+        try {
+          messages.value = JSON.parse(cachedMessages)
+          console.log(`从缓存加载了 ${messages.value.length} 条消息`)
+        } catch (e) {
+          console.error('解析缓存消息失败:', e)
+        }
+      }
+
+      // 然后从服务器获取最新消息
       const response = await service.get(`/conversations/${conversationId}/messages/`, {
         params: {
           page: 1,
           page_size: 100
         }
       })
+      
+      // 更新消息列表
       messages.value = response.data
+      
+      // 缓存到 localStorage
+      try {
+        localStorage.setItem(`messages-${conversationId}`, JSON.stringify(response.data))
+      } catch (e) {
+        console.error('缓存消息失败:', e)
+      }
     } catch (error) {
-      ElMessage({
-        message: '获取消息列表失败',
-        type: 'error'
-      })
+      console.error('获取消息列表失败:', error)
+      
+      // 如果是 404 错误，说明会话不存在，需要清理无效引用
+      if (error.response?.status === 404 || error.response?.status === 500) {
+        console.warn(`会话 ${conversationId} 不存在，清理无效引用`)
+        
+        // 从会话列表中移除该会话
+        const convIndex = conversations.value.findIndex(c => c.id === conversationId)
+        if (convIndex !== -1) {
+          conversations.value.splice(convIndex, 1)
+          
+          // 更新 localStorage
+          try {
+            localStorage.setItem('chat-store', JSON.stringify({
+              selectedConversationId: selectedConversationId.value,
+              messages: messages.value,
+              conversations: conversations.value
+            }))
+          } catch (e) {
+            console.error('缓存会话列表失败:', e)
+          }
+        }
+        
+        // 如果当前选中的是这个不存在的会话，清空选择
+        if (selectedConversationId.value === conversationId) {
+          selectedConversationId.value = null
+          messages.value = []
+        }
+        
+        ElMessage({
+          message: '该会话已不存在，已自动清理',
+          type: 'warning',
+          duration: 3000
+        })
+        return
+      }
+      
+      // 如果网络请求失败，尝试使用缓存
+      const cachedMessages = localStorage.getItem(`messages-${conversationId}`)
+      if (cachedMessages) {
+        try {
+          messages.value = JSON.parse(cachedMessages)
+          ElMessage({
+            message: '已加载缓存的聊天记录',
+            type: 'warning',
+            duration: 3000
+          })
+        } catch (e) {
+          console.error('解析缓存消息失败:', e)
+        }
+      } else {
+        ElMessage({
+          message: '获取消息列表失败',
+          type: 'error'
+        })
+      }
     }
   }
 
@@ -166,7 +301,7 @@ export const useChatStore = defineStore('chat', () => {
       })
 
       if (result.success) {
-        // 更新AI回复
+        // 更新 AI 回复
         const aiIndex = messages.value.findIndex(msg => msg.id === aiMessage.id)
         if (aiIndex !== -1) {
           messages.value[aiIndex] = {
@@ -176,6 +311,41 @@ export const useChatStore = defineStore('chat', () => {
             created_at: new Date().toISOString(),
             model: result.model,
             responseTime: result.responseTime
+          }
+          
+          // 实时更新缓存
+          try {
+            localStorage.setItem(`messages-${selectedConversationId.value}`, JSON.stringify(messages.value))
+          } catch (e) {
+            console.error('缓存消息失败:', e)
+          }
+        }
+        
+        // 更新会话列表中的该会话信息（标题和最后更新时间）
+        const convIndex = conversations.value.findIndex(c => c.id === selectedConversationId.value)
+        if (convIndex !== -1) {
+          // 如果当前会话标题是默认的，使用第一条消息作为新标题
+          const currentConv = conversations.value[convIndex]
+          if (currentConv.title === '新会话' || currentConv.title === 'New Chat') {
+            const firstMessage = messages.value[0]?.content || content
+            conversations.value[convIndex].title = firstMessage.slice(0, 30) + (firstMessage.length > 30 ? '...' : '')
+          }
+          // 更新最后活动时间
+          conversations.value[convIndex].updated_at = new Date().toISOString()
+          
+          // 将会话移到列表最前面
+          const updatedConv = conversations.value.splice(convIndex, 1)[0]
+          conversations.value.unshift(updatedConv)
+          
+          // 保存更新后的会话列表到 localStorage
+          try {
+            localStorage.setItem('chat-store', JSON.stringify({
+              selectedConversationId: selectedConversationId.value,
+              messages: messages.value,
+              conversations: conversations.value
+            }))
+          } catch (e) {
+            console.error('缓存会话列表失败:', e)
           }
         }
         
@@ -282,6 +452,41 @@ export const useChatStore = defineStore('chat', () => {
               is_streaming: false,
               model: result.model
             }
+            
+            // 实时更新缓存
+            try {
+              localStorage.setItem(`messages-${selectedConversationId.value}`, JSON.stringify(messages.value))
+            } catch (e) {
+              console.error('缓存消息失败:', e)
+            }
+          }
+          
+          // 更新会话列表中的该会话信息（标题和最后更新时间）
+          const convIndex = conversations.value.findIndex(c => c.id === selectedConversationId.value)
+          if (convIndex !== -1) {
+            // 如果当前会话标题是默认的，使用第一条消息作为新标题
+            const currentConv = conversations.value[convIndex]
+            if (currentConv.title === '新会话' || currentConv.title === 'New Chat') {
+              const firstMessage = messages.value[0]?.content || content
+              conversations.value[convIndex].title = firstMessage.slice(0, 30) + (firstMessage.length > 30 ? '...' : '')
+            }
+            // 更新最后活动时间
+            conversations.value[convIndex].updated_at = new Date().toISOString()
+            
+            // 将会话移到列表最前面
+            const updatedConv = conversations.value.splice(convIndex, 1)[0]
+            conversations.value.unshift(updatedConv)
+            
+            // 保存更新后的会话列表到 localStorage
+            try {
+              localStorage.setItem('chat-store', JSON.stringify({
+                selectedConversationId: selectedConversationId.value,
+                messages: messages.value,
+                conversations: conversations.value
+              }))
+            } catch (e) {
+              console.error('缓存会话列表失败:', e)
+            }
           }
           
           if (result.success) {
@@ -318,11 +523,28 @@ export const useChatStore = defineStore('chat', () => {
       await service.delete(`/conversations/${conversationId}/`, {
         timeout: 10000
       })
+      
+      // 立即从前端移除该会话
       conversations.value = conversations.value.filter(c => c.id !== conversationId)
       
+      // 如果当前选中的是这个会话，清空选择
       if (selectedConversationId.value === conversationId) {
         selectedConversationId.value = null
         messages.value = []
+      }
+      
+      // 清理该会话的所有缓存
+      localStorage.removeItem(`messages-${conversationId}`)
+      
+      // 保存更新后的会话列表到 localStorage
+      try {
+        localStorage.setItem('chat-store', JSON.stringify({
+          selectedConversationId: selectedConversationId.value,
+          messages: messages.value,
+          conversations: conversations.value
+        }))
+      } catch (e) {
+        console.error('缓存会话列表失败:', e)
       }
 
       ElMessage({
@@ -330,6 +552,52 @@ export const useChatStore = defineStore('chat', () => {
         type: 'success'
       })
     } catch (error) {
+      console.error('删除会话失败:', error)
+      console.log('错误详情:', {
+        hasResponse: !!error.response,
+        status: error.response?.status,
+        data: error.response?.data,
+        message: error.message,
+        isAxiosError: error.isAxiosError
+      })
+      
+      // 检查是否是 404 或 500 错误（会话不存在）
+      const isNotFound = error.response?.status === 404 || error.response?.status === 500
+      
+      if (isNotFound) {
+        console.warn(`会话 ${conversationId} 不存在，视为已删除`)
+        
+        // 从前端移除该会话
+        conversations.value = conversations.value.filter(c => c.id !== conversationId)
+        
+        // 如果当前选中的是这个会话，清空选择
+        if (selectedConversationId.value === conversationId) {
+          selectedConversationId.value = null
+          messages.value = []
+        }
+        
+        // 清理缓存
+        localStorage.removeItem(`messages-${conversationId}`)
+        
+        // 保存更新
+        try {
+          localStorage.setItem('chat-store', JSON.stringify({
+            selectedConversationId: selectedConversationId.value,
+            messages: messages.value,
+            conversations: conversations.value
+          }))
+        } catch (e) {
+          console.error('缓存会话列表失败:', e)
+        }
+        
+        ElMessage({
+          message: '会话已删除',
+          type: 'success'
+        })
+        return
+      }
+      
+      // 其他错误才显示失败
       ElMessage({
         message: '删除会话失败',
         type: 'error'
@@ -366,5 +634,11 @@ export const useChatStore = defineStore('chat', () => {
     deleteConversation,
     clearMessages,
     conversationTitle
+  }
+}, {
+  persist: {
+    key: 'chat-store',
+    storage: localStorage,
+    paths: ['selectedConversationId', 'messages']  // 移除 'conversations'，避免恢复过期的会话列表
   }
 })

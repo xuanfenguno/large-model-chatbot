@@ -186,6 +186,28 @@ const availableModels = ref([]);
 const messagesAreaRef = ref(null);
 const targetLanguage = ref('中文'); // 新增：翻译目标语言
 
+// 从 localStorage 加载聊天记录
+const loadMessagesFromStorage = () => {
+  const savedMessages = localStorage.getItem('function-router-messages');
+  if (savedMessages) {
+    try {
+      messages.value = JSON.parse(savedMessages);
+      console.log(`从缓存加载了 ${messages.value.length} 条消息`);
+    } catch (e) {
+      console.error('解析缓存消息失败:', e);
+    }
+  }
+};
+
+// 保存聊天记录到 localStorage
+const saveMessagesToStorage = () => {
+  try {
+    localStorage.setItem('function-router-messages', JSON.stringify(messages.value));
+  } catch (e) {
+    console.error('缓存消息失败:', e);
+  }
+};
+
 // 获取可用模型列表
 import { service } from '@/utils/request';
 
@@ -210,6 +232,7 @@ const fetchAvailableModels = async () => {
 
 onMounted(() => {
   fetchAvailableModels();
+  loadMessagesFromStorage(); // 加载缓存的聊天记录
 });
 
 // 格式化时间
@@ -305,6 +328,7 @@ const sendMessage = async () => {
   };
   
   messages.value.push(userMessage);
+  saveMessagesToStorage(); // 保存聊天记录
   inputMessage.value = '';
   loading.value = true;
   
@@ -328,6 +352,7 @@ const sendMessage = async () => {
     };
     
     messages.value.push(aiMessage);
+    saveMessagesToStorage(); // 保存聊天记录
   } catch (error) {
     const errorMessage = {
       role: 'assistant',
@@ -335,6 +360,7 @@ const sendMessage = async () => {
       timestamp: new Date().toISOString()
     };
     messages.value.push(errorMessage);
+    saveMessagesToStorage(); // 保存聊天记录
   } finally {
     loading.value = false;
     scrollToBottom();
@@ -348,10 +374,6 @@ const scrollToBottom = async () => {
     messagesAreaRef.value.scrollTop = messagesAreaRef.value.scrollHeight;
   }
 };
-
-onMounted(() => {
-  fetchAvailableModels();
-});
 </script>
 
 <style scoped>

@@ -123,7 +123,7 @@
       </div>
 
       <!-- 对话记录 -->
-      <div class="conversation-log">
+      <div ref="conversationLogRef" class="conversation-log">
         <div 
           v-for="(message, index) in conversationHistory" 
           :key="index"
@@ -137,6 +137,11 @@
             <div class="message-text">{{ message.text }}</div>
             <div class="message-time">{{ message.time }}</div>
           </div>
+        </div>
+        <!-- 空状态提示 -->
+        <div v-if="conversationHistory.length === 0" class="empty-log">
+          <el-icon><ChatDotRound /></el-icon>
+          <span>暂无对话记录，开始说话吧！</span>
         </div>
       </div>
     </main>
@@ -210,15 +215,17 @@
 
         <!-- 语音输入控制 -->
         <div class="voice-controls" v-if="isCallActive">
-          <el-button 
-            :class="['voice-btn', { recording: isVoiceRecording }]"
-            @click="toggleVoiceInput"
-            :disabled="!isVoiceSupported || isAISpeaking"
-            size="small"
-          >
-            <el-icon><Microphone /></el-icon>
-            {{ isVoiceRecording ? '停止说话' : '语音输入' }}
-          </el-button>
+          <el-tooltip content="点击开始语音识别，AI 会听到您说的话" placement="top">
+            <el-button 
+              :class="['voice-btn', 'speak-btn', { recording: isVoiceRecording }]"
+              @click="toggleVoiceInput"
+              :disabled="!isVoiceSupported || isAISpeaking"
+              size="large"
+            >
+              <el-icon style="font-size: 1.5em; margin-right: 8px;"><Microphone /></el-icon>
+              {{ isVoiceRecording ? '🔴 正在听您说话...' : '🎤 点击开始说话' }}
+            </el-button>
+          </el-tooltip>
           
           <div class="voice-visualizer" v-if="isVoiceRecording || isAISpeaking">
             <div 
@@ -228,7 +235,32 @@
               :style="waveStyle(i)"
             ></div>
           </div>
+          
+          <!-- 语音支持提示 -->
+          <div class="voice-hint" v-if="!isVoiceSupported">
+            <el-tag type="warning" size="small">
+              <el-icon><Warning /></el-icon>
+              您的浏览器不支持语音识别，请使用 Chrome 浏览器
+            </el-tag>
+          </div>
         </div>
+      </div>
+
+      <!-- 未开始通话时的提示 -->
+      <div class="voice-hint-before" v-if="!isCallActive">
+        <el-alert
+          title="💡 语音使用说明"
+          type="info"
+          :closable="false"
+          show-icon
+        >
+          <template #default>
+            <p><strong>步骤 1：</strong>点击"开始视频通话"按钮</p>
+            <p><strong>步骤 2：</strong>允许摄像头和麦克风权限</p>
+            <p><strong>步骤 3：</strong>通话开始后，底部会出现 <strong style="color: #4facfe; font-size: 1.1em;">🎤 "开始说话"</strong> 按钮</p>
+            <p><strong>步骤 4：</strong>点击该按钮即可开始语音识别，AI 会听到您说话</p>
+          </template>
+        </el-alert>
       </div>
 
       <!-- 语音转文字实时显示 -->
@@ -241,7 +273,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import AudioVisualizer from '@/components/AudioVisualizer.vue'
@@ -252,7 +284,9 @@ import {
   Phone, 
   Switch, 
   Monitor, 
-  VideoCameraFilled 
+  VideoCameraFilled,
+  Warning,
+  ChatDotRound
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -280,6 +314,16 @@ const aiAudioStream = ref(null)
 
 // 对话历史
 const conversationHistory = ref([])
+const conversationLogRef = ref(null)  // 对话记录容器引用
+
+// 滚动到最新消息
+const scrollToBottom = () => {
+  nextTick(() => {
+    if (conversationLogRef.value) {
+      conversationLogRef.value.scrollTop = conversationLogRef.value.scrollHeight
+    }
+  })
+}
 
 // 连接状态
 const connectionStatus = computed(() => {
@@ -364,7 +408,7 @@ const startVideoCall = async () => {
       return
     }
     
-    // 模拟AI连接过程
+    // 模拟 AI 连接过程
     await new Promise(resolve => setTimeout(resolve, 2000))
     
     isCallActive.value = true
@@ -375,6 +419,35 @@ const startVideoCall = async () => {
     startCallTimer()
     
     ElMessage.success('视频通话已连接')
+    
+    // 显示语音识别引导提示
+    setTimeout(() => {
+      ElMessageBox.alert(
+        `
+        <div style="text-align: left; padding: 20px 0;">
+          <p style="font-size: 16px; margin-bottom: 15px;">
+            <strong style="color: #4facfe;">🎤 如何与 AI 语音对话：</strong>
+          </p>
+          <ol style="line-height: 2;">
+            <li>找到页面<b style="color: #ff6b6b;">底部</b>的控制栏</li>
+            <li>点击蓝色的 <strong style="color: #4facfe; font-size: 1.2em;">🎤 点击开始说话</strong> 按钮</li>
+            <li>按钮变红后，对着麦克风说话</li>
+            <li>AI 会听到您的话并回复</li>
+          </ol>
+          <p style="margin-top: 15px; color: #909399; font-size: 14px;">
+            💡 提示：按钮在底部控制栏的最右边，很大很显眼！
+          </p>
+        </div>
+        `,
+        '语音使用说明',
+        {
+          dangerouslyUseHTMLString: true,
+          confirmButtonText: '我知道了',
+          type: 'info',
+          customClass: 'voice-guide-messagebox'
+        }
+      )
+    }, 1000)
     
   } catch (error) {
     console.error('开始视频通话失败:', error)
@@ -495,26 +568,43 @@ let recognition = null
 
 // 初始化语音识别
 const initSpeechRecognition = () => {
-  if (!isVoiceSupported.value) return
+  if (!isVoiceSupported.value) {
+    console.warn('浏览器不支持语音识别')
+    ElMessage.warning({
+      message: '您的浏览器不支持语音识别，建议使用 Chrome 浏览器',
+      duration: 5000
+    })
+    return
+  }
 
   try {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
     recognition = new SpeechRecognition()
     
-    recognition.continuous = true
-    recognition.interimResults = true
-    recognition.lang = 'zh-CN'
+    // 配置语音识别
+    recognition.continuous = true  // 持续识别
+    recognition.interimResults = true  // 返回临时结果
+    recognition.lang = 'zh-CN'  // 设置语言为中文
+    recognition.maxAlternatives = 1  // 只返回一个最佳结果
 
     recognition.onstart = () => {
+      console.log('语音识别已启动')
       isUserSpeaking.value = true
     }
 
     recognition.onresult = (event) => {
+      console.log('语音识别结果事件:', event)
       let finalTranscript = ''
       let interimTranscript = ''
 
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const transcript = event.results[i][0].transcript
+        console.log(`识别结果 [${i}]:`, {
+          transcript,
+          isFinal: event.results[i].isFinal,
+          confidence: event.results[i][0].confidence
+        })
+        
         if (event.results[i].isFinal) {
           finalTranscript += transcript
         } else {
@@ -523,31 +613,96 @@ const initSpeechRecognition = () => {
       }
 
       if (finalTranscript) {
+        console.log('✅ 识别到完整语音:', finalTranscript)
         currentSpeechText.value = finalTranscript
         handleUserSpeech(finalTranscript)
       } else if (interimTranscript) {
         currentSpeechText.value = interimTranscript
+        console.log('临时识别结果:', interimTranscript)
+      } else {
+        console.log('⚠️ 没有识别到任何内容')
       }
     }
 
     recognition.onerror = (event) => {
       console.error('语音识别错误:', event.error)
-      stopVoiceRecording()
-    }
-
-    recognition.onend = () => {
-      if (isVoiceRecording.value) {
-        recognition.start()
+      
+      // 处理不同类型的错误
+      if (event.error === 'network') {
+        console.warn('语音识别网络错误，可能是网络问题或浏览器不支持离线识别')
+        // 不显示错误提示，避免频繁打扰用户
+        console.log('将在 5 秒后尝试重新启动语音识别...')
+      } else if (event.error === 'not-allowed') {
+        console.warn('用户拒绝了麦克风权限')
+        ElMessage.error({
+          message: '需要麦克风权限才能进行语音识别，请在浏览器设置中允许',
+          duration: 5000
+        })
+      } else if (event.error === 'no-speech') {
+        console.log('没有检测到语音输入')
+        // 这是正常情况，不需要显示错误
+      } else if (event.error === 'aborted') {
+        console.log('语音识别已中止')
+        // 用户主动停止，不需要处理
+      } else {
+        console.warn(`语音识别错误：${event.error}`)
+      }
+      
+      // 如果是网络错误，稍后尝试重启语音识别
+      if (event.error === 'network' && isVoiceRecording.value) {
+        console.log('5 秒后尝试重新启动语音识别...')
+        setTimeout(() => {
+          if (isVoiceRecording.value && recognition) {
+            try {
+              // @ts-ignore
+              if (recognition.state !== 'running') {
+                recognition.start()
+                console.log('重新启动语音识别成功')
+              }
+            } catch (restartError) {
+              console.error('重新启动语音识别失败:', restartError)
+            }
+          }
+        }, 5000)
+      } else if (event.error !== 'network') {
+        // 非网络错误才停止
+        stopVoiceRecording()
       }
     }
 
+    recognition.onend = () => {
+      console.log('语音识别已停止')
+      if (isVoiceRecording.value) {
+        // 如果是意外停止，尝试重启
+        console.log('语音识别意外停止，尝试重启...')
+        setTimeout(() => {
+          if (isVoiceRecording.value && recognition) {
+            try {
+              recognition.start()
+              console.log('自动重启语音识别成功')
+            } catch (e) {
+              console.log('自动重启失败:', e)
+            }
+          }
+        }, 500)
+      }
+    }
+
+    console.log('语音识别初始化成功')
+
   } catch (error) {
     console.error('语音识别初始化失败:', error)
+    ElMessage.error({
+      message: '语音识别初始化失败，请检查浏览器设置',
+      duration: 5000
+    })
   }
 }
 
 // 切换语音输入
 const toggleVoiceInput = () => {
+  console.log('切换语音输入，当前状态:', isVoiceRecording.value)
+  
   if (isVoiceRecording.value) {
     stopVoiceRecording()
   } else {
@@ -557,33 +712,89 @@ const toggleVoiceInput = () => {
 
 // 开始语音录音
 const startVoiceRecording = () => {
+  console.log('开始语音录音，当前状态:', {
+    isVoiceRecording: isVoiceRecording.value,
+    hasRecognition: !!recognition
+  })
+  
   if (!isVoiceSupported.value) {
-    ElMessage.warning('浏览器不支持语音识别')
+    ElMessage.warning('浏览器不支持语音识别，建议使用 Chrome 浏览器')
+    return
+  }
+
+  // 如果已经在录音中，不要重复启动
+  if (isVoiceRecording.value) {
+    console.log('已经在录音中，无需重复启动')
     return
   }
 
   isVoiceRecording.value = true
   currentSpeechText.value = ''
   
-  if (recognition) {
-    recognition.start()
-  } else {
+  // 如果是第一次启动，先初始化
+  if (!recognition) {
+    console.log('第一次启动，初始化语音识别...')
     initSpeechRecognition()
   }
+  
+  // 延迟启动，确保初始化完成
+  setTimeout(() => {
+    if (recognition) {
+      try {
+        // 检查是否已经在运行
+        // @ts-ignore
+        if (recognition.start && recognition.state !== 'running') {
+          recognition.start()
+          console.log('语音识别已启动')
+          ElMessage.success('语音识别已启动，请开始说话')
+        } else {
+          console.log('语音识别已经在运行中')
+        }
+      } catch (error) {
+        console.error('启动语音识别失败:', error)
+        // 如果是"已经启动"的错误，忽略它
+        if (error.message.includes('already started')) {
+          console.log('语音识别已经启动，忽略此错误')
+          ElMessage.success('语音识别已启动，请开始说话')
+        } else {
+          ElMessage.error('启动语音识别失败，请检查麦克风权限')
+        }
+      }
+    } else {
+      console.error('语音识别未初始化')
+      ElMessage.error('语音识别初始化失败')
+    }
+  }, 200)
 }
 
 // 停止语音录音
 const stopVoiceRecording = () => {
+  console.log('停止语音录音')
   isVoiceRecording.value = false
   isUserSpeaking.value = false
   
   if (recognition) {
-    recognition.stop()
+    try {
+      recognition.stop()
+      console.log('语音识别已停止')
+    } catch (error) {
+      console.error('停止语音识别失败:', error)
+    }
   }
 }
 
 // 处理用户语音
 const handleUserSpeech = async (text) => {
+  console.log('🎤 handleUserSpeech 被调用，输入文本:', text)
+  
+  // 忽略太短的语音（可能是误识别）
+  if (!text || text.trim().length < 2) {
+    console.log('⚠️ 语音太短，忽略')
+    return
+  }
+  
+  console.log('✅ 语音内容有效，开始处理...')
+  
   // 添加到对话历史
   const userMessage = {
     type: 'user',
@@ -591,61 +802,130 @@ const handleUserSpeech = async (text) => {
     time: new Date().toLocaleTimeString('zh-CN', { hour12: false })
   }
   conversationHistory.value.push(userMessage)
+  scrollToBottom()  // 滚动到最新消息
+  console.log('✅ 已添加到对话历史')
 
-  // AI开始思考
+  // AI 开始思考
   isAIThinking.value = true
+  aiStatusText.value = 'AI 正在思考...'
+  console.log('🤖 AI 开始思考，状态:', {
+    isAIThinking: isAIThinking.value,
+    aiStatusText: aiStatusText.value
+  })
   
   try {
-    // 模拟AI处理时间（2-5秒）
-    const thinkingTime = Math.random() * 3000 + 2000
+    // 模拟 AI 处理时间（1-3 秒）
+    const thinkingTime = Math.random() * 2000 + 1000
+    console.log(`⏱️ AI 思考时间：${thinkingTime}ms`)
     await new Promise(resolve => setTimeout(resolve, thinkingTime))
     
-    // AI生成回复
+    // AI 生成回复
+    console.log('📝 开始生成 AI 回复...')
     const aiResponse = await generateAIResponse(text)
+    console.log('✅ AI 生成回复:', aiResponse)
     
-    // AI开始说话
+    // AI 开始说话
     isAIThinking.value = false
     isAISpeaking.value = true
+    aiStatusText.value = 'AI 正在说话...'
+    console.log('🔊 AI 开始说话，状态:', {
+      isAISpeaking: isAISpeaking.value,
+      aiStatusText: aiStatusText.value
+    })
     
-    // 播放AI语音回复
+    // 播放 AI 语音回复
+    console.log('🔊 开始播放 AI 语音...')
     await speakText(aiResponse)
+    console.log('✅ AI 语音播放完成')
     
-    // AI说完
+    // AI 说完
     isAISpeaking.value = false
+    aiStatusText.value = 'AI 助手'
+    console.log('✅ AI 完成回复，状态:', {
+      isAISpeaking: isAISpeaking.value,
+      aiStatusText: aiStatusText.value
+    })
     
   } catch (error) {
-    console.error('AI处理错误:', error)
-    ElMessage.error('AI处理失败')
+    console.error('❌ AI 处理错误:', error)
+    ElMessage.error('AI 处理失败')
     isAIThinking.value = false
+    aiStatusText.value = 'AI 助手'
   }
 }
 
-// 生成AI回复
+// 生成 AI 回复
 const generateAIResponse = async (userText) => {
-  // 这里应该调用实际的AI API
-  // 暂时使用模拟回复
-  const responses = [
-    `通过视频看到您了！您说的是："${userText}"。`, 
-    `在视频通话中听到您说："${userText}"，让我来帮您分析。`,
-    `您通过视频提到的"${userText}"很有意思！`,
-    `在视频交流中，您提出的"${userText}"让我想到...`,
-    `通过视频通话，我了解到您关心："${userText}"。`
-  ]
+  console.log('📡 开始调用后端 AI API...')
   
-  return responses[Math.floor(Math.random() * responses.length)]
+  try {
+    // 调用实际的 AI API
+    const response = await fetch('http://localhost:8080/api/v1/function-router/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      },
+      body: JSON.stringify({
+        feature_name: 'chat',  // 使用聊天功能
+        user_input: userText,
+        model: 'qwen-turbo'  // 使用通义千问模型
+      })
+    })
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    
+    const data = await response.json()
+    console.log('✅ API 响应:', data)
+    
+    if (data.error) {
+      throw new Error(data.error)
+    }
+    
+    if (data.result) {
+      console.log('✅ AI 回复:', data.result)
+      return data.result
+    } else {
+      throw new Error('API 返回空结果')
+    }
+  } catch (error) {
+    console.error('❌ 调用 AI API 失败:', error)
+    
+    // API 调用失败时使用模拟回复
+    console.log('⚠️ 使用模拟回复作为备用方案')
+    const responses = [
+      `通过视频看到您了！您说的是："${userText}"。`, 
+      `在视频通话中听到您说："${userText}"，让我来帮您分析。`,
+      `您通过视频提到的"${userText}"很有意思！`,
+      `在视频交流中，您提出的"${userText}"让我想到...`,
+      `通过视频通话，我了解到您关心："${userText}"。`
+    ]
+    
+    return responses[Math.floor(Math.random() * responses.length)]
+  }
 }
 
 // 文字转语音
 const speakText = (text) => {
+  console.log('🔊 speakText 被调用，文本:', text)
+  
   return new Promise((resolve) => {
     if ('speechSynthesis' in window) {
+      console.log('✅ 浏览器支持语音合成')
       const utterance = new SpeechSynthesisUtterance(text)
       utterance.lang = 'zh-CN'
       utterance.volume = 0.8
       utterance.rate = 1.0
       utterance.pitch = 1.0
 
+      utterance.onstart = () => {
+        console.log('🔊 语音播放开始')
+      }
+
       utterance.onend = () => {
+        console.log('✅ 语音播放完成')
         // 添加到对话历史
         const aiMessage = {
           type: 'ai',
@@ -653,15 +933,27 @@ const speakText = (text) => {
           time: new Date().toLocaleTimeString('zh-CN', { hour12: false })
         }
         conversationHistory.value.push(aiMessage)
+        scrollToBottom()
         resolve()
       }
 
-      utterance.onerror = () => {
+      utterance.onerror = (event) => {
+        console.error('❌ 语音播放错误:', event)
+        // 即使出错也 resolve，避免卡住
+        const aiMessage = {
+          type: 'ai',
+          text: text,
+          time: new Date().toLocaleTimeString('zh-CN', { hour12: false })
+        }
+        conversationHistory.value.push(aiMessage)
+        scrollToBottom()
         resolve()
       }
 
+      console.log('🔊 开始播放语音...')
       speechSynthesis.speak(utterance)
     } else {
+      console.warn('⚠️ 浏览器不支持语音合成，只显示文字')
       // 如果不支持语音合成，直接显示文字
       const aiMessage = {
         type: 'ai',
@@ -669,6 +961,7 @@ const speakText = (text) => {
         time: new Date().toLocaleTimeString('zh-CN', { hour12: false })
       }
       conversationHistory.value.push(aiMessage)
+      scrollToBottom()
       resolve()
     }
   })
@@ -975,32 +1268,112 @@ onUnmounted(() => {
 }
 
 .conversation-log {
-  height: 150px;
-  background: #2d2d2d;
+  height: 200px;  /* 增加高度 */
+  background: #1a1a1a;
   border-radius: 10px;
   padding: 15px;
   overflow-y: auto;
+  border: 1px solid #333;
+  box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.3);
+  margin-top: 15px;
+  position: relative;
+}
+
+.conversation-log::-webkit-scrollbar {
+  width: 6px;
+}
+
+.conversation-log::-webkit-scrollbar-track {
+  background: #2d2d2d;
+  border-radius: 3px;
+}
+
+.conversation-log::-webkit-scrollbar-thumb {
+  background: #4facfe;
+  border-radius: 3px;
+}
+
+.conversation-log::-webkit-scrollbar-thumb:hover {
+  background: #00f2fe;
+}
+
+.empty-log {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.empty-log .el-icon {
+  font-size: 3rem;
+  margin-bottom: 10px;
+  opacity: 0.5;
 }
 
 .message {
   display: flex;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
   align-items: flex-start;
+  animation: messageSlideIn 0.3s ease-out;
+}
+
+@keyframes messageSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .message.user {
   flex-direction: row-reverse;
 }
 
+.message:last-child {
+  margin-bottom: 0;
+}
+
 .message-avatar {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  background: #404040;
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
   margin: 0 10px;
+  font-size: 0.9rem;
+  font-weight: bold;
+  color: white;
+}
+
+.message.user .message-avatar {
+  background: linear-gradient(45deg, #4facfe, #00f2fe);
+}
+
+.message-avatar {
+  width: 35px;
+  height: 35px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin: 0 10px;
+  font-size: 0.9rem;
+  font-weight: bold;
+  color: white;
+}
+
+.message.user .message-avatar {
+  background: linear-gradient(45deg, #4facfe, #00f2fe);
+}
+
+.message.ai .message-avatar {
+  background: linear-gradient(45deg, #f093fb, #f5576c);
 }
 
 .ai-avatar-small {
@@ -1019,23 +1392,33 @@ onUnmounted(() => {
   flex: 1;
   background: #404040;
   border-radius: 10px;
-  padding: 8px 12px;
+  padding: 10px 14px;
   max-width: 70%;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 .message.user .message-content {
-  background: #52c41a;
+  background: linear-gradient(45deg, #52c41a, #73d13d);
+  color: white;
+}
+
+.message.ai .message-content {
+  background: #404040;
+  color: #fff;
+  border: 1px solid #505050;
 }
 
 .message-text {
-  font-size: 0.9rem;
-  line-height: 1.3;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  word-wrap: break-word;
 }
 
 .message-time {
-  font-size: 0.7rem;
-  opacity: 0.7;
-  margin-top: 3px;
+  font-size: 0.75rem;
+  opacity: 0.6;
+  margin-top: 5px;
+  text-align: right;
 }
 
 .video-controls {
@@ -1046,9 +1429,11 @@ onUnmounted(() => {
 
 .controls-container {
   display: flex;
-  flex-direction: column;
-  gap: 15px;
+  flex-direction: row;  /* 改为水平排列 */
+  gap: 20px;
   align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;  /* 允许换行 */
 }
 
 .main-controls {
@@ -1065,24 +1450,112 @@ onUnmounted(() => {
 .secondary-controls {
   display: flex;
   gap: 10px;
+  align-items: center;
 }
 
 .voice-controls {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 15px;
+  padding: 0;  /* 移除 padding，和其他按钮对齐 */
+  background: transparent;  /* 移除背景，和其他按钮一致 */
+  border-radius: 0;
 }
 
 .voice-btn {
-  background: linear-gradient(45deg, #ff6b6b, #ffd93d);
-  border: none;
+  background: linear-gradient(45deg, #4facfe, #00f2fe);
+  border: 2px solid rgba(255, 255, 255, 0.3);
   color: white;
+  font-weight: bold;
+  font-size: 1.1rem;
+  padding: 15px 30px;
   transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(79, 172, 254, 0.5);
+  animation: glow 2s infinite;
+}
+
+@keyframes glow {
+  0%, 100% {
+    box-shadow: 0 4px 15px rgba(79, 172, 254, 0.5);
+  }
+  50% {
+    box-shadow: 0 4px 25px rgba(79, 172, 254, 0.8), 0 0 10px rgba(79, 172, 254, 0.6);
+  }
+}
+
+.voice-btn:hover:not(:disabled) {
+  transform: translateY(-3px) scale(1.05);
+  box-shadow: 0 6px 25px rgba(79, 172, 254, 0.8);
+  animation: none;
+}
+
+.voice-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  animation: none;
 }
 
 .voice-btn.recording {
   background: linear-gradient(45deg, #ff416c, #ff4b2b);
-  animation: pulse 1s infinite;
+  animation: pulse 1s infinite, glow-red 2s infinite;
+  box-shadow: 0 4px 15px rgba(255, 65, 108, 0.5);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+@keyframes glow-red {
+  0%, 100% {
+    box-shadow: 0 4px 15px rgba(255, 65, 108, 0.5);
+  }
+  50% {
+    box-shadow: 0 4px 25px rgba(255, 65, 108, 0.8), 0 0 10px rgba(255, 65, 108, 0.6);
+  }
+}
+
+.voice-hint {
+  margin-left: 10px;
+}
+
+.voice-hint-before {
+  width: 100%;
+  margin-top: 10px;
+}
+
+.voice-hint-before .el-alert {
+  background: rgba(79, 172, 254, 0.1);
+  border: 1px solid rgba(79, 172, 254, 0.3);
+}
+
+.voice-hint-before p {
+  margin: 5px 0;
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.voice-guide-messagebox .el-message-box__header {
+  background: linear-gradient(45deg, #4facfe, #00f2fe);
+  color: white;
+  padding: 20px;
+  border-radius: 10px 10px 0 0;
+}
+
+.voice-guide-messagebox .el-message-box__title {
+  color: white;
+  font-size: 18px;
+}
+
+.voice-guide-messagebox .el-message-box__content {
+  padding: 30px 20px;
+}
+
+.voice-guide-messagebox .el-message-box__btns {
+  padding: 20px;
+}
+
+.voice-guide-messagebox .el-button--primary {
+  background: linear-gradient(45deg, #4facfe, #00f2fe);
+  border: none;
+  padding: 12px 30px;
+  font-size: 16px;
 }
 
 .voice-visualizer {

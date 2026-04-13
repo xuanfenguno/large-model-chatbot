@@ -156,17 +156,17 @@ def function_router(request):
     # 兼容新旧两种参数格式
     feature_name = request.data.get('feature_name') or request.data.get('function')
     user_input = request.data.get('user_input') or request.data.get('input')
-    language = request.data.get('language')  # 提取 language 参数
+    language = request.data.get('language')
+    model = request.data.get('model', 'qwen-turbo')
 
     if not feature_name or not user_input:
         return Response({'error': 'Feature name and user input are required.'}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
         # 将 feature_name 作为用户输入的一部分传入 route_function
-        # 因为 route_function 是根据用户输入分析意图的
         full_input = f"{feature_name} {user_input}".strip()
-        response_content = function_router_instance.route_function(full_input, language=language)
-        return Response({'result': response_content})  # 修改字段名为前端期望的 'result'
+        response_content = function_router_instance.route_function(full_input, model=model, language=language)
+        return Response({'result': response_content})
     except Exception as e:
         logger.error(f"Error in function router: {e}")
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -309,16 +309,24 @@ class UserRegistrationView(APIView):
         username = request.data.get('username')
         email = request.data.get('email')
         password = request.data.get('password')
-        if not all([username, email, password]):
-            return Response({"error": "All fields are required"}, status=status.HTTP_400_BAD_REQUEST)
+        confirm_password = request.data.get('confirm_password')
+        
+        if not all([username, email, password, confirm_password]):
+            return Response({"error": "所有字段都是必需的"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if password != confirm_password:
+            return Response({"error": "两次输入的密码不一致"}, status=status.HTTP_400_BAD_REQUEST)
+        
         if User.objects.filter(username=username).exists():
-            return Response({"error": "Username already exists"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "用户名已存在"}, status=status.HTTP_400_BAD_REQUEST)
+        
         if User.objects.filter(email=email).exists():
-            return Response({"error": "Email already exists"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "邮箱已存在"}, status=status.HTTP_400_BAD_REQUEST)
+        
         try:
             validate_password(password)
             user = User.objects.create_user(username=username, email=email, password=password)
-            # UserProfile会通过post_save信号自动创建，无需手动创建
+            # UserProfile 会通过 post_save 信号自动创建，无需手动创建
             return Response(UserSerializer(user).data, status=status.HTTP_201_CREATED)
         except ValidationError as e:
             return Response({"error": list(e.messages)}, status=status.HTTP_400_BAD_REQUEST)

@@ -275,7 +275,7 @@
                 </el-button>
               </div>
               <div v-else>
-                <Vue3MarkdownIt :source="message.content" />
+                <MarkdownRenderer :source="message.content" />
               </div>
             </div>
           </div>
@@ -368,7 +368,7 @@ import { useUnifiedAIApi } from '@/utils/ai-api'
 import { useAIConfig } from '@/utils/ai-config'
 import { service } from '@/utils/request'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import Vue3MarkdownIt from 'vue3-markdown-it'
+import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 import ChatModeSelector from '@/components/ChatModeSelector.vue'
 import VoiceControls from '@/components/VoiceControls.vue'
 import VoiceCall from '@/components/VoiceCall.vue'

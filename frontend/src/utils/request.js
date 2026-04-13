@@ -81,27 +81,32 @@ service.interceptors.response.use(
     return response
   },
   async error => {
-    console.error('响应错误:', error)
     const originalRequest = error.config
 
-    // 检查是否是取消请求
-    if (axios.isCancel(error)) {
-      console.log('请求被取消:', error.message)
+    // 如果请求已经重试过（如 token 刷新后重试），不要显示错误提示
+    if (originalRequest?._retry && originalRequest._retryCount === undefined) {
+      // 这是刷新 token 后的重试请求，让它自然失败或成功，不显示错误
       return Promise.reject(error)
     }
 
-    // 网络超时处理
-    if (error.code === 'ECONNABORTED') {
-      ElMessage({
-        message: '请求超时，请检查网络或重试',
-        type: 'error',
-        duration: 5000
-      })
-      return Promise.reject(error)
-    }
-
+    // 检查是否是 401 错误且需要刷新 token
     if (error.response?.status === 401 && !originalRequest._retry) {
+      // 如果是刷新 token 的请求本身失败，不要再次刷新
+      if (originalRequest._isRefreshRequest) {
+        console.error('Token 刷新失败，需要重新登录')
+        const authStore = useAuthStore()
+        authStore.logout()
+        ElMessage({
+          message: '会话已过期，请重新登录',
+          type: 'error',
+          duration: 3000
+        })
+        return Promise.reject(error)
+      }
+
       if (isRefreshing) {
+        // 如果正在刷新 token，将请求加入队列等待
+        console.log('Token 正在刷新中，将请求加入队列')
         return new Promise(function(resolve, reject) {
           failedQueue.push({ resolve, reject })
         })
@@ -118,9 +123,13 @@ service.interceptors.response.use(
       isRefreshing = true
 
       try {
+        console.log('开始自动刷新 token...')
         const newAccessToken = await refreshToken()
         processQueue(null, newAccessToken)
         originalRequest.headers['Authorization'] = 'Bearer ' + newAccessToken
+        
+        // 重试原请求
+        console.log('Token 刷新成功，重试原请求')
         return service(originalRequest)
       } catch (refreshError) {
         processQueue(refreshError, null)
@@ -128,12 +137,44 @@ service.interceptors.response.use(
         authStore.logout()
         ElMessage({
           message: '会话已过期，请重新登录',
-          type: 'error'
+          type: 'error',
+          duration: 3000
         })
         return Promise.reject(refreshError)
       } finally {
         isRefreshing = false
       }
+    }
+
+    // 详细的错误信息输出（仅用于非 401 错误，或刷新失败的情况）
+    const errorInfo = {
+      message: error.message || '未知错误',
+      code: error.code,
+      status: error.response?.status,
+      data: error.response?.data,
+      url: error.config?.url,
+      method: error.config?.method
+    }
+    console.error('响应错误详情:', errorInfo)
+
+    // 检查是否是取消请求
+    if (axios.isCancel(error)) {
+      console.log('请求被取消:', error.message)
+      ElMessage({
+        message: '请求已取消',
+        type: 'warning'
+      })
+      return Promise.reject(error)
+    }
+
+    // 网络超时处理
+    if (error.code === 'ECONNABORTED') {
+      ElMessage({
+        message: '请求超时，请检查网络或重试',
+        type: 'error',
+        duration: 5000
+      })
+      return Promise.reject(error)
     }
 
     // 请求重试逻辑 (非401错误)
@@ -168,17 +209,20 @@ service.interceptors.response.use(
       }
       // 服务器错误
       else if (status >= 500) {
+        const serverMessage = data?.detail || data?.message || `服务器错误 (${status})`
         ElMessage({
-          message: '服务器内部错误',
+          message: serverMessage,
           type: 'error',
           duration: 5000
         })
       }
       // 其他状态码
       else {
+        const errorMsg = data?.detail || data?.message || data?.error || `请求失败 (${status})`
         ElMessage({
-          message: data?.detail || data?.message || '请求失败',
-          type: 'error'
+          message: errorMsg,
+          type: 'error',
+          duration: 3000
         })
       }
     } else if (error.request) {
@@ -191,8 +235,9 @@ service.interceptors.response.use(
     } else {
       // 请求配置错误
       ElMessage({
-        message: error.message,
-        type: 'error'
+        message: error.message || '请求配置错误',
+        type: 'error',
+        duration: 3000
       })
     }
 
