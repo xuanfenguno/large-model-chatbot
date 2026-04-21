@@ -362,14 +362,14 @@ def get_user_info(request):
     try:
         profile = user.profile  # 使用正确的related_name
         user_data = UserSerializer(user).data
-        profile_data = UserProfileSerializer(profile).data
+        profile_data = UserProfileSerializer(profile, context={'request': request}).data
         user_data.update(profile_data)
         return Response(user_data)
     except UserProfile.DoesNotExist:
         # Create profile if it doesn't exist
         profile = UserProfile.objects.create(user=user)
         user_data = UserSerializer(user).data
-        profile_data = UserProfileSerializer(profile).data
+        profile_data = UserProfileSerializer(profile, context={'request': request}).data
         user_data.update(profile_data)
         return Response(user_data)
 
@@ -405,6 +405,44 @@ def update_user_info(request):
         return Response(errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+@api_view(['GET', 'PUT'])
+@permission_classes([permissions.IsAuthenticated])
+def profile(request):
+    """获取或更新用户个人资料"""
+    user = request.user
+    
+    try:
+        user_profile = user.profile
+    except UserProfile.DoesNotExist:
+        user_profile = UserProfile.objects.create(user=user)
+    
+    if request.method == 'GET':
+        # 获取个人资料
+        user_data = UserSerializer(user).data
+        profile_data = UserProfileSerializer(user_profile).data
+        user_data.update(profile_data)
+        return Response(user_data)
+    
+    elif request.method == 'PUT':
+        # 更新个人资料
+        data = request.data
+        
+        # 更新用户基本信息
+        if 'email' in data:
+            user.email = data['email']
+            user.save()
+        
+        # 更新用户资料信息
+        if 'nickname' in data:
+            user_profile.nickname = data['nickname']
+        if 'bio' in data:
+            user_profile.bio = data['bio']
+        
+        user_profile.save()
+        
+        return Response({'message': '个人资料保存成功'})
+
+
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
 @parser_classes([MultiPartParser, FormParser])
@@ -421,5 +459,140 @@ def upload_avatar(request):
         # Return the new avatar URL
         return Response({'avatar_url': request.build_absolute_uri(user_profile.avatar.url)})
     return Response({'error': 'No avatar file found'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+# ==================== 用户设置 API ====================
+
+@api_view(['GET', 'PUT'])
+@permission_classes([permissions.IsAuthenticated])
+def user_settings(request):
+    """获取或更新用户设置"""
+    user_profile = request.user.profile
+    
+    if request.method == 'GET':
+        return Response({
+            'ai': {
+                'qwenApiKey': user_profile.qwen_api_key or '',
+                'deepseekApiKey': user_profile.deepseek_api_key or '',
+                'doubaoApiKey': user_profile.doubao_api_key or '',
+            },
+            'preferences': {
+                'theme': user_profile.theme or 'auto',
+                'language': user_profile.language or 'zh-CN',
+            },
+            'privacy': {
+                'saveChatHistory': user_profile.save_chat_history,
+                'allowAnalytics': user_profile.allow_analytics,
+            }
+        })
+    
+    elif request.method == 'PUT':
+        data = request.data
+        
+        # 更新 AI 设置
+        if 'ai' in data:
+            ai_settings = data['ai']
+            user_profile.qwen_api_key = ai_settings.get('qwenApiKey', user_profile.qwen_api_key)
+            user_profile.deepseek_api_key = ai_settings.get('deepseekApiKey', user_profile.deepseek_api_key)
+            user_profile.doubao_api_key = ai_settings.get('doubaoApiKey', user_profile.doubao_api_key)
+        
+        # 更新外观设置
+        if 'preferences' in data:
+            pref_settings = data['preferences']
+            user_profile.theme = pref_settings.get('theme', user_profile.theme)
+            user_profile.language = pref_settings.get('language', user_profile.language)
+        
+        # 更新隐私设置
+        if 'privacy' in data:
+            privacy_settings = data['privacy']
+            user_profile.save_chat_history = privacy_settings.get('saveChatHistory', user_profile.save_chat_history)
+            user_profile.allow_analytics = privacy_settings.get('allowAnalytics', user_profile.allow_analytics)
+        
+        user_profile.save()
+        return Response({'message': '设置保存成功'})
+
+
+@api_view(['PUT'])
+@permission_classes([permissions.IsAuthenticated])
+def ai_settings(request):
+    """更新 AI 设置"""
+    user_profile = request.user.profile
+    data = request.data
+    
+    user_profile.qwen_api_key = data.get('qwenApiKey', user_profile.qwen_api_key)
+    user_profile.deepseek_api_key = data.get('deepseekApiKey', user_profile.deepseek_api_key)
+    user_profile.doubao_api_key = data.get('doubaoApiKey', user_profile.doubao_api_key)
+    user_profile.save()
+    
+    return Response({'message': 'AI设置保存成功'})
+
+
+@api_view(['PUT'])
+@permission_classes([permissions.IsAuthenticated])
+def appearance_settings(request):
+    """更新外观设置"""
+    user_profile = request.user.profile
+    data = request.data
+    
+    user_profile.theme = data.get('theme', user_profile.theme)
+    user_profile.language = data.get('language', user_profile.language)
+    user_profile.save()
+    
+    return Response({'message': '外观设置保存成功'})
+
+
+@api_view(['PUT'])
+@permission_classes([permissions.IsAuthenticated])
+def privacy_settings(request):
+    """更新隐私设置"""
+    user_profile = request.user.profile
+    data = request.data
+    
+    user_profile.save_chat_history = data.get('saveChatHistory', user_profile.save_chat_history)
+    user_profile.allow_analytics = data.get('allowAnalytics', user_profile.allow_analytics)
+    user_profile.save()
+    
+    return Response({'message': '隐私设置保存成功'})
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def change_password(request):
+    """修改密码（需要当前密码验证）"""
+    user = request.user
+    data = request.data
+    
+    current_password = data.get('current_password')
+    new_password = data.get('new_password')
+    confirm_password = data.get('confirm_password')
+    
+    # 验证参数
+    if not all([current_password, new_password, confirm_password]):
+        return Response({'error': '请填写所有密码字段'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # 验证当前密码
+    if not user.check_password(current_password):
+        return Response({'error': '当前密码不正确'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # 验证新密码长度
+    if len(new_password) < 6:
+        return Response({'error': '新密码长度至少6个字符'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # 验证两次密码是否一致
+    if new_password != confirm_password:
+        return Response({'error': '两次输入的新密码不一致'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # 验证新密码是否与旧密码相同
+    if current_password == new_password:
+        return Response({'error': '新密码不能与当前密码相同'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        # 设置新密码
+        user.set_password(new_password)
+        user.save()
+        
+        return Response({'message': '密码修改成功，请使用新密码重新登录'})
+    except Exception as e:
+        return Response({'error': f'密码修改失败: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 

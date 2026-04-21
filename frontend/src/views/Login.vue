@@ -333,7 +333,8 @@ const handleRegister = async () => {
         const success = await authStore.register(
           registerForm.username,
           registerForm.email,
-          registerForm.password
+          registerForm.password,
+          registerForm.confirmPassword
         )
         if (success) {
           ElMessage.success('注册成功')

@@ -8,7 +8,7 @@ export let refreshToken = null
 
 export const useAuthStore = defineStore('auth', () => {
   const token = ref(localStorage.getItem('token') || null)
-  const storedUser = localStorage.getItem('user')
+  const storedUser = localStorage.getItem('user');
 const user = ref(storedUser ? JSON.parse(storedUser) : null)
   const isLoggedIn = computed(() => {
     const result = !!token.value && !!user.value

@@ -13,7 +13,13 @@ from .views import (
     stream_chat, 
     upload_avatar, 
     get_user_info,
-    health_check
+    health_check,
+    user_settings,
+    ai_settings,
+    appearance_settings,
+    privacy_settings,
+    change_password,
+    profile
 )
 from .voice_views import initiate_call, answer_call, reject_call, end_call, get_call_status, signaling, get_signaling, get_call_history, get_active_calls
 # Knowledge base views are now imported from their dedicated file
@@ -63,4 +69,13 @@ urlpatterns = [
     # 头像上传和用户信息API
     path('upload-avatar/', upload_avatar, name='upload-avatar'),
     path('user-info/', get_user_info, name='get-user-info'),
+    # 用户设置API
+    path('settings/', user_settings, name='user-settings'),
+    path('ai-settings/', ai_settings, name='ai-settings'),
+    path('appearance-settings/', appearance_settings, name='appearance-settings'),
+    path('privacy-settings/', privacy_settings, name='privacy-settings'),
+    # 修改密码API
+    path('change-password/', change_password, name='change-password'),
+    # 个人资料API
+    path('profile/', profile, name='profile'),
 ]

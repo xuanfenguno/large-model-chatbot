@@ -4,24 +4,38 @@
       <button 
         :class="['voice-btn', { recording: isRecording }]"
         @click="toggleRecording"
-        :disabled="!isVoiceSupported"
+        :disabled="!isVoiceSupported || isSpeaking"
       >
         <el-icon v-if="!isRecording"><Microphone /></el-icon>
         <el-icon v-else><VideoPause /></el-icon>
         {{ isRecording ? '停止录音' : '开始说话' }}
       </button>
       
-
+      <button 
+        v-if="lastResponseText"
+        :class="['voice-btn', 'play-btn', { speaking: isSpeaking }]"
+        @click="toggleSpeakResponse"
+        :disabled="isRecording"
+      >
+        <el-icon v-if="!isSpeaking"><Headset /></el-icon>
+        <el-icon v-else><VideoPause /></el-icon>
+        {{ isSpeaking ? '停止播放' : '播放回复' }}
+      </button>
     </div>
     
     <!-- 语音波形显示 -->
-    <div class="voice-visualizer" v-if="isRecording">
+    <div class="voice-visualizer" v-if="isRecording || isSpeaking">
       <div class="wave-bar" v-for="i in 20" :key="i" :style="waveStyle(i)"></div>
     </div>
     
     <!-- 语音转文字实时显示 -->
-    <div class="speech-to-text" v-if="transcribedText">
+    <div class="speech-to-text" v-if="transcribedText && isRecording">
       <span>识别中: {{ transcribedText }}</span>
+    </div>
+    
+    <!-- AI 回复文字显示 -->
+    <div class="ai-response-text" v-if="lastResponseText && !isRecording">
+      <span>AI回复: {{ lastResponseText }}</span>
     </div>
     
     <!-- 不支持语音提示 -->
@@ -39,7 +53,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { Microphone, VideoPause, Headset } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 
@@ -53,12 +67,21 @@ const props = defineProps({
 const emit = defineEmits(['voice-data', 'transcription'])
 
 const isRecording = ref(false)
+const isSpeaking = ref(false)
 const transcribedText = ref('')
+const lastResponseText = ref('')
 const isVoiceSupported = ref(false)
 
-// 检查浏览器是否支持语音识别
+// 语音识别和语音合成实例
+let recognition = null
+let speechSynthesis = window.speechSynthesis
+let currentUtterance = null
+
+// 检查浏览器是否支持语音功能
 const checkVoiceSupport = () => {
-  isVoiceSupported.value = 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window
+  const hasSpeechRecognition = 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window
+  const hasSpeechSynthesis = 'speechSynthesis' in window
+  isVoiceSupported.value = hasSpeechRecognition && hasSpeechSynthesis
   return isVoiceSupported.value
 }
 
@@ -78,6 +101,9 @@ const toggleRecording = async () => {
 
 // 开始录音
 const startRecording = async () => {
+  // 停止正在播放的语音
+  stopSpeaking()
+  
   isRecording.value = true
   transcribedText.value = ''
   
@@ -98,9 +124,9 @@ const startRealSpeechRecognition = () => {
   return new Promise((resolve) => {
     try {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
-      const recognition = new SpeechRecognition()
+      recognition = new SpeechRecognition()
       
-      recognition.continuous = true
+      recognition.continuous = false
       recognition.interimResults = true
       recognition.lang = 'zh-CN'
       
@@ -131,6 +157,8 @@ const startRealSpeechRecognition = () => {
             type: 'speech-completed', 
             text: finalTranscript 
           })
+          // 停止录音
+          stopRecording()
         } else if (interimTranscript) {
           transcribedText.value = interimTranscript
         }
@@ -138,17 +166,19 @@ const startRealSpeechRecognition = () => {
       
       recognition.onerror = (event) => {
         console.error('语音识别错误:', event.error)
-        emit('voice-data', { type: 'recording-error', error: event.error })
-        // 降级到模拟识别
-        startSimulatedRecognition()
+        if (event.error !== 'no-speech' && event.error !== 'aborted') {
+          emit('voice-data', { type: 'recording-error', error: event.error })
+          ElMessage.error(`语音识别错误: ${event.error}`)
+        }
+        stopRecording()
       }
       
       recognition.onend = () => {
         console.log('语音识别已结束')
         emit('voice-data', { type: 'recording-ended' })
         if (isRecording.value) {
-          // 如果仍在录音状态，重新开始识别
-          recognition.start()
+          // 如果仍在录音状态，说明是异常结束
+          stopRecording()
         }
       }
       
@@ -157,8 +187,8 @@ const startRealSpeechRecognition = () => {
     } catch (error) {
       console.error('语音识别初始化失败:', error)
       emit('voice-data', { type: 'recording-error', error: error.message })
-      // 降级到模拟识别
-      startSimulatedRecognition()
+      ElMessage.error('语音识别初始化失败')
+      stopRecording()
       resolve()
     }
   })
@@ -173,6 +203,11 @@ const startSimulatedRecognition = () => {
     setTimeout(() => {
       transcribedText.value = '你好，我想了解一下这个功能'
       emit('transcription', transcribedText.value)
+      emit('voice-data', { 
+        type: 'speech-completed', 
+        text: transcribedText.value 
+      })
+      stopRecording()
     }, 2000)
   }, 500)
 }
@@ -181,37 +216,101 @@ const startSimulatedRecognition = () => {
 const stopRecording = () => {
   isRecording.value = false
   
-  // 停止语音识别（如果正在使用真实API）
-  if (window.SpeechRecognition || window.webkitSpeechRecognition) {
+  // 停止语音识别
+  if (recognition) {
     try {
-      // 这里可以添加停止语音识别的逻辑
-      // 实际实现需要保存对recognition实例的引用
+      recognition.stop()
     } catch (error) {
       console.error('停止语音识别失败:', error)
     }
-  }
-  
-  if (transcribedText.value) {
-    // 发送识别结果
-    emit('voice-data', {
-      text: transcribedText.value,
-      audio: null, // 实际项目中这里应该是录音数据
-      duration: 3.5
-    })
+    recognition = null
   }
   
   ElMessage.info('录音已停止')
 }
 
-// 播放回复
-const playLastResponse = () => {
-  if (!props.hasAudioResponse) {
-    ElMessage.warning('暂无语音回复可播放')
+// ==================== 文字转语音功能 ====================
+
+// 播放/停止 AI 回复语音
+const toggleSpeakResponse = () => {
+  if (isSpeaking.value) {
+    stopSpeaking()
+  } else {
+    speakResponse(lastResponseText.value)
+  }
+}
+
+// 文字转语音
+const speakResponse = (text) => {
+  if (!text) {
+    ElMessage.warning('暂无回复内容可播放')
     return
   }
   
-  // 模拟播放语音回复
-  ElMessage.success('播放语音回复...')
+  if (!speechSynthesis) {
+    ElMessage.warning('您的浏览器不支持语音播放')
+    return
+  }
+  
+  // 停止之前的语音
+  stopSpeaking()
+  
+  // 创建新的语音实例
+  currentUtterance = new SpeechSynthesisUtterance(text)
+  currentUtterance.lang = 'zh-CN'
+  currentUtterance.rate = 1.0  // 语速
+  currentUtterance.pitch = 1.0  // 音调
+  currentUtterance.volume = 1.0  // 音量
+  
+  // 选择中文语音
+  const voices = speechSynthesis.getVoices()
+  const chineseVoice = voices.find(voice => 
+    voice.lang.includes('zh') || voice.lang.includes('cmn')
+  )
+  if (chineseVoice) {
+    currentUtterance.voice = chineseVoice
+  }
+  
+  // 开始播放
+  currentUtterance.onstart = () => {
+    isSpeaking.value = true
+    console.log('开始播放语音回复')
+  }
+  
+  // 播放结束
+  currentUtterance.onend = () => {
+    isSpeaking.value = false
+    currentUtterance = null
+    console.log('语音回复播放结束')
+  }
+  
+  // 播放错误
+  currentUtterance.onerror = (event) => {
+    console.error('语音播放错误:', event.error)
+    isSpeaking.value = false
+    currentUtterance = null
+    if (event.error !== 'canceled' && event.error !== 'interrupted') {
+      ElMessage.error('语音播放失败')
+    }
+  }
+  
+  speechSynthesis.speak(currentUtterance)
+}
+
+// 停止语音播放
+const stopSpeaking = () => {
+  if (speechSynthesis) {
+    speechSynthesis.cancel()
+  }
+  isSpeaking.value = false
+  currentUtterance = null
+}
+
+// 设置 AI 回复文本（由父组件调用）
+const setAIResponse = (text) => {
+  lastResponseText.value = text
+  // 自动播放 AI 回复
+  speakResponse(text)
 }
 
 // 波形动画样式
@@ -227,26 +326,32 @@ const waveStyle = (index) => {
 // 组件挂载时检查语音支持
 onMounted(() => {
   checkVoiceSupport()
+  
+  // 预加载语音列表
+  if (speechSynthesis) {
+    speechSynthesis.getVoices()
+  }
+})
+
+// 组件卸载时清理
+onUnmounted(() => {
+  stopRecording()
+  stopSpeaking()
 })
 
 // 暴露方法给父组件
-const stopRecordingExternal = () => {
-  if (isRecording.value) {
-    stopRecording()
-  }
-}
-
 defineExpose({
-  stopRecordingExternal
+  stopRecordingExternal: stopRecording,
+  setAIResponse,
+  stopSpeaking
 })
 </script>
 
 <style scoped>
 .voice-controls {
   padding: 1rem;
-  background: rgba(255, 255, 255, 0.95);
+  background: #ffffff;
   border-top: 1px solid #ebeef5;
-  backdrop-filter: blur(10px);
 }
 
 .voice-buttons {
@@ -284,75 +389,102 @@ defineExpose({
 
 .voice-btn.recording {
   background: #f56c6c;
-  animation: recording-pulse 1s infinite;
+  animation: recording-pulse 1.5s infinite;
+}
+
+.voice-btn.play-btn {
+  background: #10b981;
+}
+
+.voice-btn.play-btn:hover:not(:disabled) {
+  background: #059669;
+}
+
+.voice-btn.speaking {
+  background: #8b5cf6;
+  animation: speaking-pulse 1s infinite;
 }
 
 @keyframes recording-pulse {
   0% { 
-    background: #f56c6c;
     box-shadow: 0 0 0 0 rgba(245, 108, 108, 0.7);
   }
   70% { 
-    box-shadow: 0 0 0 10px rgba(245, 108, 108, 0);
+    box-shadow: 0 0 0 15px rgba(245, 108, 108, 0);
   }
   100% { 
-    background: #f56c6c;
     box-shadow: 0 0 0 0 rgba(245, 108, 108, 0);
+  }
+}
+
+@keyframes speaking-pulse {
+  0% { 
+    box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.7);
+  }
+  50% { 
+    box-shadow: 0 0 0 10px rgba(139, 92, 246, 0.3);
+  }
+  100% { 
+    box-shadow: 0 0 0 0 rgba(139, 92, 246, 0);
   }
 }
 
 .voice-visualizer {
   display: flex;
   justify-content: center;
-  gap: 2px;
-  margin: 1rem 0;
-  height: 40px;
-  align-items: flex-end;
+  align-items: center;
+  gap: 4px;
+  height: 50px;
+  margin-bottom: 1rem;
 }
 
 .wave-bar {
-  width: 3px;
-  background: #667eea;
+  width: 4px;
+  background: linear-gradient(to top, #667eea, #764ba2);
   border-radius: 2px;
-  animation: wave 1s ease-in-out infinite;
+  animation: wave-animation 1s ease-in-out infinite;
 }
 
-@keyframes wave {
-  0%, 100% { 
+@keyframes wave-animation {
+  0%, 100% {
     transform: scaleY(0.5);
-    opacity: 0.7;
   }
-  50% { 
+  50% {
     transform: scaleY(1);
-    opacity: 1;
   }
 }
 
-.speech-to-text {
+.speech-to-text,
+.ai-response-text {
   text-align: center;
-  padding: 0.5rem;
-  background: #f0f9ff;
-  border-radius: 4px;
-  margin: 0.5rem 0;
+  padding: 0.75rem;
+  background: #f5f7fa;
+  border-radius: 8px;
+  margin-bottom: 0.5rem;
+}
+
+.speech-to-text span {
+  color: #667eea;
   font-size: 0.9rem;
-  color: #1890ff;
-  border: 1px solid #91d5ff;
+}
+
+.ai-response-text span {
+  color: #10b981;
+  font-size: 0.9rem;
 }
 
 .voice-not-supported {
   margin-top: 1rem;
 }
 
-/* 响应式设计 */
-@media (max-width: 768px) {
-  .voice-buttons {
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-  
-  .voice-btn {
-    padding: 0.75rem 1.5rem;
-    font-size: 0.85rem;
-  }
+/* 深色模式适配 */
+:global(.dark) .voice-controls {
+  background: #1e1e28;
+  border-color: #333;
+}
+
+:global(.dark) .speech-to-text,
+:global(.dark) .ai-response-text {
+  background: #2a2a3a;
 }
 </style>

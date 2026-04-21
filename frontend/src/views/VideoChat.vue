@@ -273,7 +273,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import AudioVisualizer from '@/components/AudioVisualizer.vue'
@@ -344,12 +344,20 @@ const aiStatus = computed(() => {
   return { type: 'info', text: '在线' }
 })
 
-// AI状态文本
-const aiStatusText = computed(() => {
-  if (isAIThinking.value) return '正在思考您的问题...'
-  if (isAISpeaking.value) return '正在回复...'
-  if (isUserSpeaking.value) return '正在聆听...'
-  return '等待您的发言'
+// AI状态文本（使用响应式变量而不是计算属性，以便可以动态修改）
+const aiStatusText = ref('等待您的发言')
+
+// 监听状态变化更新文本
+watch([isAIThinking, isAISpeaking, isUserSpeaking], ([thinking, speaking, listening]) => {
+  if (thinking) {
+    aiStatusText.value = '正在思考您的问题...'
+  } else if (speaking) {
+    aiStatusText.value = '正在回复...'
+  } else if (listening) {
+    aiStatusText.value = '正在聆听...'
+  } else {
+    aiStatusText.value = '等待您的发言'
+  }
 })
 
 // 检查语音支持
@@ -401,16 +409,7 @@ const startVideoCall = async () => {
   isStartingCall.value = true
   
   try {
-    // 检查媒体权限
-    const hasPermission = await initializeMediaStream()
-    if (!hasPermission) {
-      isStartingCall.value = false
-      return
-    }
-    
-    // 模拟 AI 连接过程
-    await new Promise(resolve => setTimeout(resolve, 2000))
-    
+    // 先立即更新UI状态，让用户看到响应
     isCallActive.value = true
     isStartingCall.value = false
     callStartTime.value = new Date()
@@ -418,9 +417,17 @@ const startVideoCall = async () => {
     // 开始计时
     startCallTimer()
     
-    ElMessage.success('视频通话已连接')
+    ElMessage.success('正在连接视频通话...')
     
-    // 显示语音识别引导提示
+    // 异步获取媒体权限（不阻塞UI）
+    const hasPermission = await initializeMediaStream()
+    if (!hasPermission) {
+      isCallActive.value = false
+      stopCallTimer()
+      return
+    }
+    
+    // 显示语音识别引导提示（延迟显示，避免打扰）
     setTimeout(() => {
       ElMessageBox.alert(
         `
@@ -447,12 +454,14 @@ const startVideoCall = async () => {
           customClass: 'voice-guide-messagebox'
         }
       )
-    }, 1000)
+    }, 500)
     
   } catch (error) {
     console.error('开始视频通话失败:', error)
     ElMessage.error('开始视频通话失败')
     isStartingCall.value = false
+    isCallActive.value = false
+    stopCallTimer()
   }
 }
 
@@ -807,19 +816,12 @@ const handleUserSpeech = async (text) => {
 
   // AI 开始思考
   isAIThinking.value = true
-  aiStatusText.value = 'AI 正在思考...'
   console.log('🤖 AI 开始思考，状态:', {
-    isAIThinking: isAIThinking.value,
-    aiStatusText: aiStatusText.value
+    isAIThinking: isAIThinking.value
   })
   
   try {
-    // 模拟 AI 处理时间（1-3 秒）
-    const thinkingTime = Math.random() * 2000 + 1000
-    console.log(`⏱️ AI 思考时间：${thinkingTime}ms`)
-    await new Promise(resolve => setTimeout(resolve, thinkingTime))
-    
-    // AI 生成回复
+    // AI 生成回复（立即开始，不添加额外延迟）
     console.log('📝 开始生成 AI 回复...')
     const aiResponse = await generateAIResponse(text)
     console.log('✅ AI 生成回复:', aiResponse)
@@ -827,10 +829,8 @@ const handleUserSpeech = async (text) => {
     // AI 开始说话
     isAIThinking.value = false
     isAISpeaking.value = true
-    aiStatusText.value = 'AI 正在说话...'
     console.log('🔊 AI 开始说话，状态:', {
-      isAISpeaking: isAISpeaking.value,
-      aiStatusText: aiStatusText.value
+      isAISpeaking: isAISpeaking.value
     })
     
     // 播放 AI 语音回复
@@ -840,17 +840,12 @@ const handleUserSpeech = async (text) => {
     
     // AI 说完
     isAISpeaking.value = false
-    aiStatusText.value = 'AI 助手'
-    console.log('✅ AI 完成回复，状态:', {
-      isAISpeaking: isAISpeaking.value,
-      aiStatusText: aiStatusText.value
-    })
+    console.log('✅ AI 完成回复')
     
   } catch (error) {
     console.error('❌ AI 处理错误:', error)
     ElMessage.error('AI 处理失败')
     isAIThinking.value = false
-    aiStatusText.value = 'AI 助手'
   }
 }
 
@@ -859,8 +854,8 @@ const generateAIResponse = async (userText) => {
   console.log('📡 开始调用后端 AI API...')
   
   try {
-    // 调用实际的 AI API
-    const response = await fetch('http://localhost:8080/api/v1/function-router/', {
+    // 调用实际的 AI API - 使用相对路径
+    const response = await fetch('/api/v1/function-router/', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -892,6 +887,9 @@ const generateAIResponse = async (userText) => {
     }
   } catch (error) {
     console.error('❌ 调用 AI API 失败:', error)
+    
+    // API 调用失败时通知用户
+    ElMessage.warning('AI 服务连接失败，使用本地回复')
     
     // API 调用失败时使用模拟回复
     console.log('⚠️ 使用模拟回复作为备用方案')
@@ -1637,9 +1635,58 @@ onUnmounted(() => {
   .controls-container {
     gap: 10px;
   }
-  
+
   .main-controls {
     flex-direction: column;
   }
+}
+
+/* MessageBox 弹窗纯色背景 */
+:global(.el-message-box) {
+  background: #ffffff !important;
+  border-radius: 10px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+:global(.el-message-box__header) {
+  background: #ffffff;
+  border-bottom: 1px solid #ebeef5;
+  border-radius: 10px 10px 0 0;
+}
+
+:global(.el-message-box__title) {
+  color: #333;
+}
+
+:global(.el-message-box__content) {
+  background: #ffffff;
+  color: #333;
+}
+
+:global(.el-message-box__btns) {
+  background: #ffffff;
+  border-top: 1px solid #ebeef5;
+  border-radius: 0 0 10px 10px;
+}
+
+/* 深色模式 MessageBox */
+:global(.dark) :global(.el-message-box),
+:global(.dark) :global(.el-message-box__header),
+:global(.dark) :global(.el-message-box__content),
+:global(.dark) :global(.el-message-box__btns) {
+  background: #1e1e28 !important;
+}
+
+:global(.dark) :global(.el-message-box__title) {
+  color: #e0e0e0;
+}
+
+:global(.dark) :global(.el-message-box__content) {
+  color: #c0c0c0;
+}
+
+:global(.dark) :global(.el-message-box__header),
+:global(.dark) :global(.el-message-box__btns) {
+  border-color: #333;
 }
 </style>

@@ -100,6 +100,14 @@ class UserProfile(models.Model):
     doubao_api_key = models.TextField(blank=True, null=True, verbose_name='豆包API密钥')
     qwen_code_api_key = models.TextField(blank=True, null=True, verbose_name='通义千问代码API密钥')
     
+    # 外观设置
+    theme = models.CharField(max_length=20, default='auto', verbose_name='主题模式')
+    language = models.CharField(max_length=10, default='zh-CN', verbose_name='语言')
+    
+    # 隐私设置
+    save_chat_history = models.BooleanField(default=True, verbose_name='保存聊天记录')
+    allow_analytics = models.BooleanField(default=True, verbose_name='允许数据统计')
+    
     created_at = models.DateTimeField(auto_now_add=True, db_index=True, verbose_name='创建时间')
     updated_at = models.DateTimeField(auto_now=True, db_index=True, verbose_name='更新时间')
     

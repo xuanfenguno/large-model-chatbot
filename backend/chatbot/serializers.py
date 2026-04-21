@@ -44,7 +44,7 @@ class PasswordResetTokenSerializer(serializers.ModelSerializer):
 
 class UserProfileSerializer(serializers.ModelSerializer):
     """用户配置序列化器"""
-    avatar = serializers.ImageField(required=False, allow_null=True)
+    avatar = serializers.SerializerMethodField()
     
     class Meta:
         model = UserProfile
@@ -60,6 +60,15 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'doubao_api_key': {'write_only': True},
             'qwen_code_api_key': {'write_only': True},
         }
+    
+    def get_avatar(self, obj):
+        """返回头像的完整URL"""
+        if obj.avatar:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.avatar.url)
+            return obj.avatar.url
+        return None
 
 
 class UserSerializer(serializers.ModelSerializer):

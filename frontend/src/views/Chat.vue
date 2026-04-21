@@ -94,13 +94,7 @@
           </el-button>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item command="profile" icon="User">个人资料</el-dropdown-item>
-              <el-dropdown-item command="ai" icon="Cpu">AI模型</el-dropdown-item>
-              <el-dropdown-item command="api-config" icon="Key">API配置</el-dropdown-item>
-              <el-dropdown-item command="preferences" icon="Setting">偏好设置</el-dropdown-item>
-              <el-dropdown-item command="chat" icon="ChatDotRound">聊天设置</el-dropdown-item>
-              <el-dropdown-item command="privacy" icon="Lock">隐私设置</el-dropdown-item>
-              <el-dropdown-item command="tools" icon="Tools">设置工具</el-dropdown-item>
+              <el-dropdown-item command="settings" icon="Tools">设置工具</el-dropdown-item>
               <el-dropdown-item divided command="logout" icon="SwitchButton" class="logout-item">退出登录</el-dropdown-item>
             </el-dropdown-menu>
           </template>
@@ -225,18 +219,6 @@
                   </template>
                 </el-dropdown>
                 
-                <!-- 语音通话按钮 -->
-                <el-button 
-                  v-if="chatMode === 'voice'"
-                  :type="isVoiceCallActive ? 'danger' : 'primary'"
-                  size="small"
-                  class="voice-call-button"
-                  @click="isVoiceCallActive ? forceEndVoiceCall() : initiateVoiceCall()"
-                  :disabled="false"
-                >
-                  <el-icon><Phone /></el-icon>
-                  <span>{{ isVoiceCallActive ? '结束通话' : '发起通话' }}</span>
-                </el-button>
               </div>
             </div>
           </div>
@@ -717,24 +699,10 @@ const handleSendMessage = async () => {
 // 文字转语音
 const speakText = (text) => {
   return new Promise((resolve) => {
-    if ('speechSynthesis' in window && chatMode.value === 'voice') {
-      const utterance = new SpeechSynthesisUtterance(text)
-      utterance.lang = 'zh-CN'
-      utterance.volume = 0.8
-      utterance.rate = 1.0
-      utterance.pitch = 1.0
-
-      utterance.onend = () => {
-        console.log('AI语音回复播放完成')
-        resolve()
-      }
-
-      utterance.onerror = () => {
-        console.error('语音合成错误')
-        resolve()
-      }
-
-      speechSynthesis.speak(utterance)
+    if (chatMode.value === 'voice' && voiceControlsRef.value) {
+      // 使用 VoiceControls 组件播放语音
+      voiceControlsRef.value.setAIResponse(text)
+      resolve()
     } else {
       resolve()
     }
@@ -1035,12 +1003,9 @@ const handleSettingsCommand = async (command) => {
     } catch (error) {
       ElMessage.error('退出登录失败')
     }
-  } else if (command === 'api-config') {
-    // 打开API配置页面
-    router.push('/ai-test')
-  } else {
-    // 处理其他设置命令
-    router.push(`/settings?tab=${command}`)
+  } else if (command === 'settings') {
+    // 打开设置页面
+    router.push('/settings')
   }
 }
 
@@ -1613,29 +1578,6 @@ const goToProfile = () => {
   border-color: rgba(255, 255, 255, 0.6);
 }
 
-/* 语音助手按钮 - 在中间 */
-.voice-assistant-btn {
-  width: calc(100% - 1rem);
-  height: 36px;
-  background: linear-gradient(45deg, #ff6b6b, #ffd93d);
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  color: white;
-  font-weight: 600;
-  font-size: 12px;
-  transition: all 0.3s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 4px;
-  margin: 0 0.5rem;
-}
-
-.voice-assistant-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(255, 107, 107, 0.3);
-  border-color: rgba(255, 255, 255, 0.6);
-}
-
 /* 视频通话按钮 - 在下方 */
 .video-chat-btn {
   width: calc(100% - 1rem);
@@ -1656,6 +1598,29 @@ const goToProfile = () => {
 .video-chat-btn:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(255, 65, 108, 0.3);
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+/* 语音助手按钮 - 在中间 */
+.voice-assistant-btn {
+  width: calc(100% - 1rem);
+  height: 36px;
+  background: linear-gradient(45deg, #ff6b6b, #ffd93d);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  font-weight: 600;
+  font-size: 12px;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  margin: 0 0.5rem;
+}
+
+.voice-assistant-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 107, 107, 0.3);
   border-color: rgba(255, 255, 255, 0.6);
 }
 
@@ -2477,23 +2442,6 @@ const goToProfile = () => {
 .mode-dropdown-button .el-icon {
   color: #909399;
   font-size: 14px;
-}
-
-.voice-call-button {
-  margin-left: 8px;
-  background: #67c23a;
-  border-color: #67c23a;
-}
-
-.voice-call-button:hover:not(:disabled) {
-  background: #85ce61;
-  border-color: #85ce61;
-}
-
-.voice-call-button:disabled {
-  background: #c2e7b0;
-  border-color: #c2e7b0;
-  cursor: not-allowed;
 }
 
 .chat-actions {
