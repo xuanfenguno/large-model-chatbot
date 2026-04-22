@@ -245,7 +245,13 @@
             </div>
             <div class="message-text">
               <div v-if="message.is_loading" class="loading-content">
-                <el-skeleton :rows="3" animated />
+                <div class="ai-thinking">
+                  <span class="thinking-dots">
+                    <span></span><span></span><span></span>
+                  </span>
+                  <span class="thinking-text">AI正在思考，请稍候...</span>
+                  <span v-if="message.waitTime" class="thinking-timer">{{ Math.floor(message.waitTime / 1000) }}秒</span>
+                </div>
               </div>
               <div v-else-if="message.error" class="error-content">
                 <div class="error-message">
@@ -619,15 +625,15 @@ const handleSendMessage = async () => {
     return
   }
 
-  const content = inputContent.value.trim()
+  let content = inputContent.value.trim()
   inputContent.value = '' // 立即清空输入框，提升用户体验
-  
+
   // 临时保存图片信息，发送成功后再清除
   const tempImage = imagePreviewUrl.value ? selectedImage.value : null
   const tempImageUrl = imagePreviewUrl.value
   imagePreviewUrl.value = ''
   selectedImage.value = null
-  
+
   isSending.value = true
 
   try {
@@ -640,7 +646,12 @@ const handleSendMessage = async () => {
         throw new Error('图片上传失败')
       }
     }
-    
+
+    // 如果只发送图片没有文字，添加默认提示让AI识别图片
+    if (!content && imageUrl) {
+      content = '请详细描述这张图片的内容，包括图片中的物体、人物、场景、文字等信息。'
+    }
+
     // 在发送消息时传递当前选择的模型和图片URL
     const response = await chatStore.sendMessage(content, imageUrl, selectedModel.value)
     
@@ -794,25 +805,25 @@ const removeImage = () => {
   imagePreviewUrl.value = ''
 }
 
-// 上传图片到后端
+// 上传图片到后端（用于聊天图片识别）
 const uploadImage = async (imageFile) => {
   try {
     const formData = new FormData()
-    formData.append('avatar', imageFile)
-    
+    formData.append('image', imageFile)
+
     const token = localStorage.getItem('token')
-    const response = await service.post('/upload-avatar/', formData, {
+    const response = await service.post('/upload-image/', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
         'Authorization': `Bearer ${token}`
       },
       timeout: 30000
     })
-    
-    if (response.data && response.data.avatar_url) {
-      return response.data.avatar_url
+
+    if (response.data && response.data.image_url) {
+      return response.data.image_url
     }
-    
+
     return null
   } catch (error) {
     console.error('图片上传失败:', error)
@@ -2947,5 +2958,58 @@ const goToProfile = () => {
 .performance-tag {
   font-size: 10px;
   margin-right: 2px;
+}
+
+/* AI思考中的加载动画样式 */
+.ai-thinking {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  color: #606266;
+  font-size: 14px;
+}
+
+.thinking-dots {
+  display: flex;
+  gap: 4px;
+}
+
+.thinking-dots span {
+  width: 8px;
+  height: 8px;
+  background: #409eff;
+  border-radius: 50%;
+  animation: thinking-bounce 1.4s infinite ease-in-out both;
+}
+
+.thinking-dots span:nth-child(1) {
+  animation-delay: -0.32s;
+}
+
+.thinking-dots span:nth-child(2) {
+  animation-delay: -0.16s;
+}
+
+@keyframes thinking-bounce {
+  0%, 80%, 100% {
+    transform: scale(0);
+    opacity: 0.5;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.thinking-text {
+  color: #409eff;
+  font-weight: 500;
+}
+
+.thinking-timer {
+  color: #909399;
+  font-size: 12px;
+  margin-left: 8px;
 }
 </style>

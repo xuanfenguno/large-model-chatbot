@@ -41,6 +41,7 @@ class AIClient {
    * @param {number} options.temperature - 温度参数
    * @param {number} options.maxTokens - 最大token数
    * @param {Array} options.history - 对话历史
+   * @param {string} options.image_url - 图片URL（用于图片识别）
    * @returns {Promise<Object>} AI回复
    */
   async sendMessage(message, options = {}) {
@@ -53,8 +54,14 @@ class AIClient {
       // 验证参数
       this._validateConfig(config)
       
-      // 获取模型提供商
-      const provider = this._getProvider(config.model)
+      // 如果有图片，强制使用后端API提供者，让后端处理图片识别
+      let provider
+      if (config.image_url) {
+        console.log('检测到图片，使用后端API处理图片识别')
+        provider = this.providers.backend
+      } else {
+        provider = this._getProvider(config.model)
+      }
       
       // 调用API
       const response = await provider.sendMessage(message, config)
@@ -158,23 +165,8 @@ class AIClient {
    * @returns {Object} 提供商实例
    */
   _getProvider(modelId) {
-    // 根据模型ID前缀判断提供商（只支持国内模型）
-    if (modelId.startsWith('deepseek')) {
-      return this.providers.deepseek
-    } else if (modelId.startsWith('qwen')) {
-      return this.providers.qwen
-    } else if (modelId.startsWith('kimi')) {
-      return this.providers.kimi
-    } else if (modelId.startsWith('doubao')) {
-      return this.providers.doubao
-    } else if (modelId.startsWith('bailian')) {
-      return this.providers.bailian
-    } else {
-      // 对于所有其他模型，使用后端API提供者以支持知识库功能
-      return this.providers.backend
-    }
-    
-    throw new Error(`不支持的模型: ${modelId}`)
+    // 所有模型都使用后端API提供者，以支持知识库功能和统一的错误处理
+    return this.providers.backend
   }
 
   /**
@@ -211,10 +203,10 @@ class BackendProvider {
       const token = localStorage.getItem('token')
       const history = config.history || []
       
-      // 使用XMLHttpRequest处理SSE响应
+      // 使用XMLHttpRequest处理普通响应
       const xhr = new XMLHttpRequest()
       
-      xhr.open('POST', '/api/v1/stream-chat/', true) // 改为异步请求
+      xhr.open('POST', '/api/v1/chat/', true) // 使用非流式端点
       xhr.setRequestHeader('Content-Type', 'application/json')
       xhr.setRequestHeader('Authorization', `Bearer ${token}`)
       
@@ -224,46 +216,31 @@ class BackendProvider {
       // 监听加载完成事件
       xhr.onload = () => {
         if (xhr.status >= 200 && xhr.status < 300) {
-          // 处理剩余的响应文本
-          const newResponse = xhr.responseText.substring(lastResponseLength)
-          lastResponseLength = xhr.responseText.length
-          
-          // 解析SSE响应
-          const lines = newResponse.split('\n')
-          let lastContent = ''
-          let lastData = null
-          
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              try {
-                const data = JSON.parse(line.slice(6))
-                if (data.content) {
-                  lastContent += data.content
-                }
-                if (data.status === 'completed' || data.error) {
-                  lastData = data
-                }
-              } catch (e) {
-                // 忽略解析错误
-              }
+          try {
+            // 解析普通JSON响应
+            const data = JSON.parse(xhr.responseText)
+            
+            if (data.error) {
+              reject(new Error(data.error))
+            } else {
+              resolve({
+                success: true,
+                content: data.content || '请求成功',
+                usage: {}
+              })
             }
-          }
-          
-          if (lastData && lastData.error) {
-            reject(new Error(lastData.error))
-          } else {
-            resolve({
-              content: lastContent || '请求成功',
-              usage: {}
-            })
+          } catch (e) {
+            reject(new Error('响应解析失败'))
           }
         } else {
-          reject(new Error(`后端API错误: ${xhr.status}`))
+          // HTTP错误（如401未授权）
+          const errorMsg = xhr.status === 401 ? '登录已过期，请重新登录' : `后端API错误: ${xhr.status}`
+          reject(new Error(errorMsg))
         }
       }
       
       xhr.onerror = () => {
-        reject(new Error('网络错误'))
+        reject(new Error('网络错误，请检查网络连接'))
       }
       
       xhr.send(JSON.stringify({
@@ -277,11 +254,12 @@ class BackendProvider {
   }
 
   async sendMessageStream(message, config, onChunk, onComplete) {
+    // 优先使用流式接口，实现真正的逐字输出
     return new Promise((resolve, reject) => {
       const token = localStorage.getItem('token')
       const history = config.history || []
       
-      // 使用XMLHttpRequest处理SSE响应，因为fetch API在某些情况下处理SSE有问题
+      // 使用XMLHttpRequest处理SSE响应
       const xhr = new XMLHttpRequest()
       
       xhr.open('POST', '/api/v1/stream-chat/', true)
@@ -291,6 +269,7 @@ class BackendProvider {
       let fullContent = ''
       let buffer = ''
       let processedLength = 0 // 跟踪已处理的响应长度
+      let isCompleted = false // 标记是否已完成
       
       // 监听 readyState 变化以处理SSE数据
       xhr.onreadystatechange = () => {
@@ -316,6 +295,7 @@ class BackendProvider {
                     }
                   } else if (data.status === 'completed') {
                     // 完成时调用complete回调
+                    isCompleted = true // 标记已完成
                     if (onComplete) {
                       onComplete({
                         success: true,
@@ -344,18 +324,53 @@ class BackendProvider {
       }
       
       xhr.onload = () => {
+        // 如果已经完成（收到completed状态），则忽略onload事件
+        if (isCompleted) {
+          return
+        }
+        
         if (xhr.status >= 200 && xhr.status < 300) {
           // 如果onload时还没有完成（即没有收到completed状态），则认为出错了
           if (!fullContent) {
-            reject(new Error('未收到有效的AI响应'))
+            const error = new Error('未收到有效的AI响应')
+            if (onComplete) {
+              onComplete({
+                success: false,
+                error: error.message
+              })
+            }
+            reject(error)
           }
         } else {
-          reject(new Error(`后端API错误: ${xhr.status}`))
+          // HTTP错误（如401未授权）
+          const errorMsg = xhr.status === 401 ? '登录已过期，请重新登录' : `后端API错误: ${xhr.status}`
+          const error = new Error(errorMsg)
+          
+          // 调用onComplete回调，让上层知道请求失败了
+          if (onComplete) {
+            onComplete({
+              success: false,
+              error: errorMsg
+            })
+          }
+          
+          reject(error)
         }
       }
       
       xhr.onerror = () => {
-        reject(new Error('网络错误'))
+        const errorMsg = '网络错误，请检查网络连接'
+        const error = new Error(errorMsg)
+        
+        // 调用onComplete回调
+        if (onComplete) {
+          onComplete({
+            success: false,
+            error: errorMsg
+          })
+        }
+        
+        reject(error)
       }
       
       xhr.send(JSON.stringify({

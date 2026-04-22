@@ -245,12 +245,13 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  // 发送消息（使用新的大模型API框架）
+  // 发送消息（使用SSE流式响应，AI回复逐字动态生成）
   const sendMessage = async (content, image = null, model = null) => {
     isLoading.value = true
 
     // 初始化aiMessage变量，以防在定义前发生错误
     let aiMessage = null
+    const startTime = Date.now()
 
     try {
       // 如果没有选择会话，自动创建新会话
@@ -269,9 +270,9 @@ export const useChatStore = defineStore('chat', () => {
         image_url: image,
         created_at: new Date().toISOString()
       }
-      
+
       messages.value.push(userMessage)
-      
+
       // 创建AI回复的占位消息
       aiMessage = {
         id: Date.now() + 1,
@@ -290,77 +291,145 @@ export const useChatStore = defineStore('chat', () => {
           content: msg.content
         }))
 
-      // 使用新的大模型API发送消息
-      const result = await aiApi.sendMessage(content, {
-        model: model,
-        history: history,
-        conversation_id: selectedConversationId.value,
-        image_url: image,
-        temperature: 0.6,
-        maxTokens: 2000
-      })
+      // 使用SSE流式发送消息，实现逐字动态生成效果
+        let fullContent = ''
+        let isFirstChunk = true
+        let waitTimer = null
 
-      if (result.success) {
-        // 更新 AI 回复
-        const aiIndex = messages.value.findIndex(msg => msg.id === aiMessage.id)
-        if (aiIndex !== -1) {
-          messages.value[aiIndex] = {
-            id: Date.now() + 2,
-            role: 'assistant',
-            content: result.content,
-            created_at: new Date().toISOString(),
-            model: result.model,
-            responseTime: result.responseTime
-          }
-          
-          // 实时更新缓存
-          try {
-            localStorage.setItem(`messages-${selectedConversationId.value}`, JSON.stringify(messages.value))
-          } catch (e) {
-            console.error('缓存消息失败:', e)
+        // 更新等待时间
+        const updateWaitTime = () => {
+          const waitTime = Date.now() - startTime
+          const aiIndex = messages.value.findIndex(msg => msg.id === aiMessage.id)
+          if (aiIndex !== -1) {
+            messages.value[aiIndex] = {
+              ...messages.value[aiIndex],
+              waitTime: waitTime
+            }
           }
         }
-        
-        // 更新会话列表中的该会话信息（标题和最后更新时间）
-        const convIndex = conversations.value.findIndex(c => c.id === selectedConversationId.value)
-        if (convIndex !== -1) {
-          // 如果当前会话标题是默认的，使用第一条消息作为新标题
-          const currentConv = conversations.value[convIndex]
-          if (currentConv.title === '新会话' || currentConv.title === 'New Chat') {
-            const firstMessage = messages.value[0]?.content || content
-            conversations.value[convIndex].title = firstMessage.slice(0, 30) + (firstMessage.length > 30 ? '...' : '')
+
+        // 启动计时器，每秒更新一次
+        waitTimer = setInterval(updateWaitTime, 1000)
+
+        await aiApi.sendMessageStream(
+          content,
+          {
+            model: model,
+            history: history,
+            conversation_id: selectedConversationId.value,
+            image_url: image,
+            temperature: 0.6,
+            maxTokens: 2000
+          },
+          // 收到数据块时的回调（逐字显示）- chunk是字符串
+          (chunkContent) => {
+            fullContent += chunkContent
+
+            // 实时更新AI回复内容，实现逐字动态生成效果
+            const aiIndex = messages.value.findIndex(msg => msg.id === aiMessage.id)
+            if (aiIndex !== -1) {
+              messages.value[aiIndex] = {
+                ...messages.value[aiIndex],
+                content: fullContent,
+                is_loading: false
+              }
+            }
+
+            // 滚动到底部
+            setTimeout(() => {
+              const messagesContainer = document.querySelector('.messages-container')
+              if (messagesContainer) {
+                messagesContainer.scrollTop = messagesContainer.scrollHeight
+              }
+            }, 0)
+          },
+          // 完成时的回调
+          (result) => {
+            // 清除计时器
+            if (waitTimer) {
+              clearInterval(waitTimer)
+              waitTimer = null
+            }
+
+            const responseTime = Date.now() - startTime
+
+            if (result && result.success) {
+              // 更新最终AI回复
+              const aiIndex = messages.value.findIndex(msg => msg.id === aiMessage.id)
+              if (aiIndex !== -1) {
+                messages.value[aiIndex] = {
+                  id: Date.now() + 2,
+                  role: 'assistant',
+                  content: fullContent || result.content || '请求成功',
+                  created_at: new Date().toISOString(),
+                  model: model,
+                  responseTime: responseTime
+                }
+              }
+
+              // 实时更新缓存
+              try {
+                localStorage.setItem(`messages-${selectedConversationId.value}`, JSON.stringify(messages.value))
+              } catch (e) {
+                console.error('缓存消息失败:', e)
+              }
+
+              // 更新会话列表中的该会话信息（标题和最后更新时间）
+              const convIndex = conversations.value.findIndex(c => c.id === selectedConversationId.value)
+              if (convIndex !== -1) {
+                // 如果当前会话标题是默认的，使用第一条消息作为新标题
+                const currentConv = conversations.value[convIndex]
+                if (currentConv.title === '新会话' || currentConv.title === 'New Chat') {
+                  const firstMessage = messages.value[0]?.content || content
+                  conversations.value[convIndex].title = firstMessage.slice(0, 30) + (firstMessage.length > 30 ? '...' : '')
+                }
+                // 更新最后活动时间
+                conversations.value[convIndex].updated_at = new Date().toISOString()
+
+                // 将会话移到列表最前面
+                const updatedConv = conversations.value.splice(convIndex, 1)[0]
+                conversations.value.unshift(updatedConv)
+
+                // 保存更新后的会话列表到 localStorage
+                try {
+                  localStorage.setItem('chat-store', JSON.stringify({
+                    selectedConversationId: selectedConversationId.value,
+                    messages: messages.value,
+                    conversations: conversations.value
+                  }))
+                } catch (e) {
+                  console.error('缓存会话列表失败:', e)
+                }
+              }
+
+              // 显示成功消息
+              ElMessage({
+                message: `消息发送成功 (${responseTime}ms)`,
+                type: 'success',
+                duration: 2000
+              })
+            } else {
+              // 处理错误
+              const aiIndex = messages.value.findIndex(msg => msg.id === aiMessage.id)
+              if (aiIndex !== -1) {
+                messages.value[aiIndex] = {
+                  ...aiMessage,
+                  content: (result && result.error) ? result.error : '抱歉，消息发送失败。请稍后重试。',
+                  is_loading: false,
+                  error: true
+                }
+              }
+            }
           }
-          // 更新最后活动时间
-          conversations.value[convIndex].updated_at = new Date().toISOString()
-          
-          // 将会话移到列表最前面
-          const updatedConv = conversations.value.splice(convIndex, 1)[0]
-          conversations.value.unshift(updatedConv)
-          
-          // 保存更新后的会话列表到 localStorage
-          try {
-            localStorage.setItem('chat-store', JSON.stringify({
-              selectedConversationId: selectedConversationId.value,
-              messages: messages.value,
-              conversations: conversations.value
-            }))
-          } catch (e) {
-            console.error('缓存会话列表失败:', e)
-          }
-        }
-        
-        // 显示成功消息
-        ElMessage({
-          message: `消息发送成功 (${result.responseTime}ms)`,
-          type: 'success',
-          duration: 2000
-        })
-      } else {
-        // 处理API错误
-        throw new Error(result.error)
-      }
+        )
 
     } catch (error) {
+      // 清除计时器
+      if (waitTimer) {
+        clearInterval(waitTimer)
+        waitTimer = null
+      }
+
       // 处理错误
       if (aiMessage) {
         const aiIndex = messages.value.findIndex(msg => msg.id === aiMessage.id)
@@ -373,7 +442,7 @@ export const useChatStore = defineStore('chat', () => {
           }
         }
       }
-      
+
       // 错误消息已经在错误处理器中显示，这里不需要重复显示
     } finally {
       isLoading.value = false

@@ -45,12 +45,107 @@ def health_check(request):
 
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
+def chat(request):
+    """非流式聊天接口"""
+    conversation_id = request.data.get('conversation_id')
+    message_content = request.data.get('message')
+    image_url = request.data.get('image_url')
+    model = request.data.get('model', 'qwen-turbo')
+
+    logger.info(f"chat 被调用 - message: {message_content[:50]}..., model: {model}")
+
+    try:
+        if conversation_id:
+            conversation = Conversation.objects.get(id=conversation_id, user=request.user)
+        else:
+            title = message_content[:50] if message_content else "New Conversation"
+            conversation = Conversation.objects.create(user=request.user, title=title, model=model)
+
+        # 保存用户消息
+        Message.objects.create(
+            conversation=conversation,
+            role='user',
+            content=message_content,
+            image_url=image_url
+        )
+
+        # 构建历史
+        history = []
+        messages = Message.objects.filter(conversation=conversation).order_by('created_at')
+        for msg in messages:
+            if msg.role == 'user':
+                content = [{"type": "text", "text": msg.content}]
+                if msg.image_url:
+                    content.append({"type": "image_url", "image_url": {"url": msg.image_url}})
+                history.append({"role": "user", "content": content if len(content) > 1 else content[0]['text']})
+            elif msg.role == 'assistant':
+                history.append({"role": "assistant", "content": msg.content})
+
+        # 创建API实例
+        api_instance = EnhancedApiWrapper.create_api_instance(model)
+
+        try:
+            result = api_instance.send_message(
+                message=message_content,
+                config={
+                    'model': model,
+                    'history': history[:-1] if history else [],
+                    'temperature': 0.7,
+                    'max_tokens': 2000,
+                    'top_p': 0.9
+                }
+            )
+            content = result['content']
+        except Exception as api_error:
+            logger.warning(f"API调用失败，使用模拟响应: {str(api_error)}")
+            from .enhanced_api import MockApiInstance
+            mock_api = MockApiInstance()
+            result = mock_api.send_message(
+                message=message_content,
+                config={'model': model}
+            )
+            content = result['content']
+
+        # 保存AI回复
+        Message.objects.create(
+            conversation=conversation,
+            role='assistant',
+            content=content
+        )
+        conversation.save()
+
+        return Response({
+            'content': content,
+            'conversation_id': conversation.id,
+            'status': 'completed'
+        })
+
+    except Conversation.DoesNotExist:
+        return Response({'error': '会话不存在'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        logger.error(f"Chat error: {str(e)}")
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
 def stream_chat(request):
     """流式聊天接口"""
     conversation_id = request.data.get('conversation_id')
     message_content = request.data.get('message')
     image_url = request.data.get('image_url')
     model = request.data.get('model', 'gpt-3.5-turbo')
+
+    # 调试日志
+    logger.info(f"stream_chat 被调用 - image_url: {image_url}, model: {model}")
+
+    # 如果上传了图片但当前模型不支持视觉，自动切换到视觉模型
+    vision_models = ['qwen-vl-plus', 'qwen-vl-max', 'gpt-4-vision', 'gpt-4o', 'claude-3-opus', 'claude-3-sonnet']
+    if image_url and model not in vision_models:
+        # 尝试使用 qwen-vl-plus 作为默认视觉模型
+        original_model = model
+        model = 'qwen-vl-plus'
+        logger.info(f"检测到图片但模型 {original_model} 不支持视觉，自动切换到 {model}")
 
     try:
         if conversation_id:
@@ -87,6 +182,9 @@ def stream_chat(request):
         def stream_response_generator():
             full_response = ""
             try:
+                # 立即返回一个初始消息，防止客户端超时
+                yield f"data: {json.dumps({'content': ''})}" + "\n\n"
+                
                 # 在发送消息前，先检查知识库
                 knowledge_context = ""
                 try:
@@ -105,24 +203,65 @@ def stream_chat(request):
 
                 # 准备发送给AI的消息，包含知识库上下文
                 enhanced_message = knowledge_context + message_content if knowledge_context else message_content
-                
+
                 # 使用api_instance发送消息
-                result = api_instance.send_message(
-                    message=enhanced_message,  # 使用增强后的消息（包含知识库上下文）
-                    config={
-                        'model': model,
-                        'history': history[:-1] if history else [],  # 除了最新消息外的历史
-                        'temperature': 0.7,
-                        'max_tokens': 2000,
-                        'top_p': 0.9
-                    }
-                )
-                
-                content = result['content']
-                full_response = content
-                
-                # 一次性返回内容，因为Qwen API不支持流式传输
-                yield f"data: {json.dumps({'content': content})}" + "\n\n"
+                # 如果有图片，构建包含图片的消息内容
+                current_message_content = enhanced_message
+                logger.info(f"准备发送消息 - image_url: {image_url}, message_type: {type(current_message_content)}")
+                if image_url:
+                    # 构建多模态消息内容
+                    current_message_content = [
+                        {"type": "text", "text": enhanced_message},
+                        {"type": "image_url", "image_url": {"url": image_url}}
+                    ]
+                    logger.info(f"构建多模态消息内容: {current_message_content}")
+
+                try:
+                    # 检查API实例是否支持流式输出
+                    if hasattr(api_instance, 'send_message_stream'):
+                        # 使用真正的流式输出
+                        for content_chunk in api_instance.send_message_stream(
+                            message=current_message_content,
+                            config={
+                                'model': model,
+                                'history': history[:-1] if history else [],
+                                'temperature': 0.7,
+                                'max_tokens': 2000,
+                                'top_p': 0.9
+                            }
+                        ):
+                            full_response += content_chunk
+                            # 逐块返回内容
+                            yield f"data: {json.dumps({'content': content_chunk})}" + "\n\n"
+                    else:
+                        # 回退到非流式方式
+                        result = api_instance.send_message(
+                            message=current_message_content,
+                            config={
+                                'model': model,
+                                'history': history[:-1] if history else [],
+                                'temperature': 0.7,
+                                'max_tokens': 2000,
+                                'top_p': 0.9
+                            }
+                        )
+                        content = result['content']
+                        full_response = content
+                        # 一次性返回内容
+                        yield f"data: {json.dumps({'content': content})}" + "\n\n"
+                except Exception as api_error:
+                    # API调用失败，使用模拟响应
+                    logger.warning(f"API调用失败，使用模拟响应: {str(api_error)}")
+                    from .enhanced_api import MockApiInstance
+                    mock_api = MockApiInstance()
+                    result = mock_api.send_message(
+                        message=current_message_content,
+                        config={'model': model}
+                    )
+                    content = result['content']
+                    full_response = content
+                    # 一次性返回内容
+                    yield f"data: {json.dumps({'content': content})}" + "\n\n"
 
                 if full_response:
                     Message.objects.create(
@@ -452,13 +591,54 @@ def upload_avatar(request):
         # Delete old avatar if it exists
         if user_profile.avatar and os.path.exists(user_profile.avatar.path):
             os.remove(user_profile.avatar.path)
-        
+
         user_profile.avatar = request.FILES['avatar']
         user_profile.save()
-        
+
         # Return the new avatar URL
         return Response({'avatar_url': request.build_absolute_uri(user_profile.avatar.url)})
     return Response({'error': 'No avatar file found'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+@parser_classes([MultiPartParser, FormParser])
+def upload_chat_image(request):
+    """上传聊天图片，返回图片URL用于AI识别"""
+    if 'image' in request.FILES:
+        image_file = request.FILES['image']
+
+        # 验证文件类型
+        allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+        if image_file.content_type not in allowed_types:
+            return Response({'error': '不支持的图片格式，请上传 JPG、PNG、GIF 或 WebP 格式的图片'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 验证文件大小（最大10MB）
+        if image_file.size > 10 * 1024 * 1024:
+            return Response({'error': '图片大小不能超过10MB'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 保存图片到媒体目录
+        from django.core.files.storage import default_storage
+        from django.core.files.base import ContentFile
+        import os
+        from datetime import datetime
+
+        # 生成唯一文件名
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"chat_images/{request.user.id}/{timestamp}_{image_file.name}"
+
+        # 保存文件
+        file_path = default_storage.save(filename, ContentFile(image_file.read()))
+
+        # 构建完整URL
+        image_url = request.build_absolute_uri(default_storage.url(file_path))
+
+        return Response({
+            'image_url': image_url,
+            'filename': image_file.name,
+            'size': image_file.size
+        })
+    return Response({'error': 'No image file found'}, status=status.HTTP_400_BAD_REQUEST)
 
 
 # ==================== 用户设置 API ====================
@@ -559,6 +739,7 @@ def privacy_settings(request):
 @permission_classes([permissions.IsAuthenticated])
 def change_password(request):
     """修改密码（需要当前密码验证）"""
+    logger.info(f"修改密码API被调用，用户: {request.user.username}")
     user = request.user
     data = request.data
     

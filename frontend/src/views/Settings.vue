@@ -657,7 +657,7 @@ const handleChangePassword = async () => {
     if (valid) {
       try {
         changingPassword.value = true
-        const response = await api.post('/api/v1/change-password/', {
+        const response = await api.post('/change-password/', {
           current_password: changePasswordForm.currentPassword,
           new_password: changePasswordForm.newPassword,
           confirm_password: changePasswordForm.confirmPassword
@@ -786,7 +786,7 @@ const removeAvatar = async () => {
 const saveAiSettings = async () => {
   savingAi.value = true
   try {
-    await api.put('/api/v1/ai-settings/', aiSettings, { timeout: 10000 })
+    await api.put('/ai-settings/', aiSettings, { timeout: 10000 })
     settingsStore.updateAISettings(aiSettings)
     ElMessage.success('AI设置保存成功')
   } catch (error) {
@@ -800,7 +800,7 @@ const saveAiSettings = async () => {
 const saveAppearanceSettings = async () => {
   savingAppearance.value = true
   try {
-    await api.put('/api/v1/appearance-settings/', appearanceSettings, { timeout: 10000 })
+    await api.put('/appearance-settings/', appearanceSettings, { timeout: 10000 })
     settingsStore.updatePreferences(appearanceSettings)
     changeTheme(appearanceSettings.theme)
     ElMessage.success('外观设置保存成功')
@@ -815,7 +815,7 @@ const saveAppearanceSettings = async () => {
 const savePrivacySettings = async () => {
   savingPrivacy.value = true
   try {
-    await api.put('/api/v1/privacy-settings/', privacySettings, { timeout: 10000 })
+    await api.put('/privacy-settings/', privacySettings, { timeout: 10000 })
     settingsStore.updateSettings({ privacy: privacySettings })
     ElMessage.success('隐私设置保存成功')
   } catch (error) {

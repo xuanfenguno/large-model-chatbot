@@ -43,8 +43,8 @@ class BaseAIApi:
             
         return payload
     
-    def _build_messages(self, user_message: str, history: List[Dict]) -> List[Dict]:
-        """构建消息历史"""
+    def _build_messages(self, user_message, history: List[Dict]) -> List[Dict]:
+        """构建消息历史，支持多模态内容"""
         messages = []
 
         # 添加系统消息，强制使用Markdown格式
@@ -57,11 +57,19 @@ class BaseAIApi:
         if history:
             messages.extend(history[-8:])
         
-        # 添加当前用户消息
-        messages.append({
-            'role': 'user',
-            'content': user_message
-        })
+        # 添加当前用户消息（支持文本或多模态内容）
+        if isinstance(user_message, list):
+            # 多模态消息（包含图片）
+            messages.append({
+                'role': 'user',
+                'content': user_message
+            })
+        else:
+            # 纯文本消息
+            messages.append({
+                'role': 'user',
+                'content': user_message
+            })
         
         return messages
     
@@ -375,6 +383,8 @@ class QwenApi(BaseAIApi):
             {'name': 'qwen-turbo', 'label': 'Qwen Turbo'},
             {'name': 'qwen-plus', 'label': 'Qwen Plus'},
             {'name': 'qwen-max', 'label': 'Qwen Max'},
+            {'name': 'qwen-vl-plus', 'label': 'Qwen VL Plus (支持图片)'},
+            {'name': 'qwen-vl-max', 'label': 'Qwen VL Max (支持图片)'},
         ]
     
     def send_message(self, message: str, config: Dict) -> Dict:
@@ -409,6 +419,71 @@ class QwenApi(BaseAIApi):
         # 提取响应内容
         return self._extract_response_content(response_data)
     
+    def send_message_stream(self, message: str, config: Dict):
+        """流式发送消息，逐块返回响应"""
+        # 验证配置
+        self._validate_config(config)
+        
+        # 获取API密钥
+        api_key = self._get_api_key(config.get('model'))
+        if not api_key:
+            raise Exception(f"未配置{self.name} API密钥")
+        
+        # 准备请求参数
+        headers = self._prepare_headers(api_key)
+        
+        # 确保启用流式模式
+        config['stream'] = True
+        
+        payload = self._prepare_payload(
+            message=message,
+            history=config.get('history', []),
+            config=config
+        )
+        
+        # 对于OpenAI兼容API，需要在基础URL后添加/chat/completions端点
+        url = f"{self.base_url.rstrip('/')}/chat/completions"
+        
+        # 发送流式请求
+        try:
+            response = requests.post(
+                url=url,
+                headers=headers,
+                json=payload,
+                timeout=config.get('timeout', 60),
+                stream=True  # 启用流式响应
+            )
+            
+            if not response.ok:
+                logger.error(f"{self.name} API请求失败: {response.status_code} - {response.text}")
+                raise Exception(f"{self.name} API错误: {response.status_code}")
+            
+            # 逐块读取SSE响应
+            for line in response.iter_lines():
+                if line:
+                    line_str = line.decode('utf-8')
+                    if line_str.startswith('data: '):
+                        data_str = line_str[6:]
+                        if data_str.strip() == '[DONE]':
+                            break
+                        try:
+                            data = json.loads(data_str)
+                            # 提取内容块
+                            if data.get('choices') and len(data['choices']) > 0:
+                                delta = data['choices'][0].get('delta', {})
+                                content = delta.get('content', '')
+                                if content:
+                                    yield content
+                        except json.JSONDecodeError:
+                            continue
+            
+        except requests.exceptions.Timeout:
+            logger.error(f"{self.name} API请求超时")
+            raise Exception(f"{self.name} API请求超时")
+        except requests.exceptions.RequestException as e:
+            logger.error(f"{self.name} API请求异常: {str(e)}")
+            raise Exception(f"{self.name} API请求异常: {str(e)}")
+    
     def _prepare_headers(self, api_key: str) -> Dict[str, str]:
         """使用标准的OpenAI API头部格式"""
         return {
@@ -416,33 +491,122 @@ class QwenApi(BaseAIApi):
             'Authorization': f'Bearer {api_key}'
         }
     
-    def _prepare_payload(self, message: str, history: List[Dict], config: Dict) -> Dict:
-        """准备Qwen API的请求载荷 - 支持原生和兼容模式"""
+    def _prepare_payload(self, message, history: List[Dict], config: Dict) -> Dict:
+        """准备Qwen API的请求载荷 - 支持原生和兼容模式，支持多模态"""
+        model = config.get('model', 'qwen-turbo')
+        
+        # 检查是否使用视觉模型
+        is_vision_model = 'vl' in model.lower()
+        
         # 检查是否使用DashScope兼容模式 (包含'compatible-mode'的是兼容模式)
         if 'dashscope.aliyuncs.com' in self.base_url and 'compatible-mode' in self.base_url:
             # OpenAI兼容格式
             messages = []
             
+            # 添加系统消息
+            messages.append({
+                'role': 'system',
+                'content': 'You are a helpful assistant. Please format your response in Markdown.'
+            })
+            
             # 添加历史消息
             if history:
                 messages.extend(history[-8:])  # 最多保留8条历史记录
             
-            # 检查最后一条消息的角色，如果不是user，则添加当前消息
-            # 如果最后一条消息已经是user，就不重复添加
-            if not messages or messages[-1]['role'] != 'user':
-                # 添加当前用户消息（确保最后一条消息是user角色）
+            # 添加当前用户消息（支持多模态内容）
+            if isinstance(message, list):
+                # 多模态消息（包含图片）
+                messages.append({
+                    'role': 'user',
+                    'content': message
+                })
+            else:
+                # 纯文本消息
                 messages.append({
                     'role': 'user',
                     'content': message
                 })
             
             payload = {
-                'model': config.get('model', 'qwen-turbo'),
+                'model': model,
                 'messages': messages,
                 'temperature': config.get('temperature', 0.6),
                 'max_tokens': config.get('max_tokens', 2000),
                 'top_p': config.get('top_p', 0.7),
+                'stream': config.get('stream', False),  # 支持流式输出
             }
+            
+            # 视觉模型需要额外的参数
+            if is_vision_model:
+                # 将本地图片URL转换为Base64数据URI
+                for msg in messages:
+                    if msg.get('role') == 'user' and isinstance(msg.get('content'), list):
+                        for item in msg['content']:
+                            if item.get('type') == 'image_url':
+                                image_url = item.get('image_url', {}).get('url', '')
+                                # 将图片URL转换为Base64数据URI
+                                if image_url:
+                                    base64_url = self._convert_image_to_base64(image_url)
+                                    if base64_url:
+                                        item['image_url']['url'] = base64_url
+            
+            return payload
+
+    def _convert_image_to_base64(self, image_url: str) -> str:
+        """将图片URL转换为Base64数据URI"""
+        import base64
+        import os
+        from django.conf import settings
+
+        try:
+            # 如果是HTTP/HTTPS URL，先下载图片
+            if image_url.startswith(('http://', 'https://')):
+                import requests
+                response = requests.get(image_url, timeout=10)
+                if response.status_code == 200:
+                    image_data = response.content
+                    # 检测图片类型
+                    content_type = response.headers.get('Content-Type', 'image/jpeg')
+                    if not content_type.startswith('image/'):
+                        content_type = 'image/jpeg'
+                    base64_data = base64.b64encode(image_data).decode('utf-8')
+                    return f"data:{content_type};base64,{base64_data}"
+                else:
+                    logger.warning(f"无法下载图片: {image_url}, 状态码: {response.status_code}")
+                    return image_url
+            else:
+                # 本地文件路径
+                # 移除开头的 /media/ 或 media/
+                relative_path = image_url.lstrip('/')
+                if relative_path.startswith('media/'):
+                    relative_path = relative_path[6:]  # 移除 'media/'
+
+                file_path = os.path.join(settings.MEDIA_ROOT, relative_path)
+
+                if os.path.exists(file_path):
+                    with open(file_path, 'rb') as f:
+                        image_data = f.read()
+
+                    # 检测图片类型
+                    ext = os.path.splitext(file_path)[1].lower()
+                    content_type_map = {
+                        '.jpg': 'image/jpeg',
+                        '.jpeg': 'image/jpeg',
+                        '.png': 'image/png',
+                        '.gif': 'image/gif',
+                        '.webp': 'image/webp'
+                    }
+                    content_type = content_type_map.get(ext, 'image/jpeg')
+
+                    base64_data = base64.b64encode(image_data).decode('utf-8')
+                    return f"data:{content_type};base64,{base64_data}"
+                else:
+                    logger.warning(f"图片文件不存在: {file_path}")
+                    return image_url
+        except Exception as e:
+            logger.error(f"转换图片为Base64失败: {str(e)}")
+            return image_url
+            
         else:
             # DashScope原生API格式（非兼容模式）
             # 构建消息历史，DashScope可能需要不同的格式
@@ -450,7 +614,7 @@ class QwenApi(BaseAIApi):
             
             # DashScope原生API参数格式
             payload = {
-                "model": config.get('model', 'qwen-turbo'),
+                "model": model,
                 "input": {
                     "messages": messages
                 },

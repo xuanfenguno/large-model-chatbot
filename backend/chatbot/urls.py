@@ -11,7 +11,9 @@ from .views import (
     reset_password_test,
     function_router, 
     stream_chat, 
+    chat,
     upload_avatar, 
+    upload_chat_image,
     get_user_info,
     health_check,
     user_settings,
@@ -50,6 +52,7 @@ urlpatterns = [
     path('function-router/', function_router, name='function-router'),
     # 流式聊天API
     path('stream-chat/', stream_chat, name='stream-chat'),
+    path('chat/', chat, name='chat'),
     # 语音通话API
     path('voice/initiate/', initiate_call, name='initiate-call'),
     path('voice/answer/', answer_call, name='answer-call'),
@@ -68,6 +71,7 @@ urlpatterns = [
     path('knowledge-base/stats/', get_knowledge_base_stats, name='get_knowledge_base_stats'),
     # 头像上传和用户信息API
     path('upload-avatar/', upload_avatar, name='upload-avatar'),
+    path('upload-image/', upload_chat_image, name='upload-chat-image'),
     path('user-info/', get_user_info, name='get-user-info'),
     # 用户设置API
     path('settings/', user_settings, name='user-settings'),

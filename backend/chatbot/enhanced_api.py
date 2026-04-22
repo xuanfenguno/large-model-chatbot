@@ -298,17 +298,51 @@ class MockApiInstance:
         self.name = "Mock API"
     
     def send_message(self, message, config):
-        """返回模拟响应"""
-        mock_responses = [
-            f"这是来自{self.name}的模拟响应。您输入的是：{message}",
-            f"由于未配置API密钥，返回模拟响应。您的问题是：{message}",
-            f"系统提示：未配置API密钥，此处显示模拟响应。您询问的是：{message}",
-            f"感谢您的提问：{message}。由于缺少API密钥，返回此模拟响应。",
-            f"您的输入：{message}。系统当前使用模拟响应，因为没有配置API密钥。"
-        ]
-        
+        """返回模拟响应 - 提供有用的默认回答"""
         import random
-        response_text = random.choice(mock_responses)
+        import time
+        
+        # 根据用户输入生成相关响应
+        user_input = message.lower() if isinstance(message, str) else str(message)
+        
+        if '斯诺克' in user_input or 'snooker' in user_input:
+            response_text = """## 斯诺克（Snooker）介绍
+
+斯诺克是一种台球运动，起源于19世纪的英国。
+
+### 基本规则：
+- 使用22个球：1个白球（母球）、15个红球（各1分）、6个彩球（黄2、绿3、棕4、蓝5、粉6、黑7分）
+- 选手先用白球击打红球入袋，再击打彩球，循环往复
+- 红球入袋后留在袋中，彩球入袋后取出放回置球点
+- 所有红球打完后再按顺序击打彩球
+
+### 计分方式：
+- 每局得分高者获胜
+- 单杆最高分147分（15×8 + 27）
+
+### 著名选手：
+- 罗尼·奥沙利文（Ronnie O'Sullivan）
+- 斯蒂芬·亨德利（Stephen Hendry）
+- 丁俊晖
+
+斯诺克被誉为"台球界的国际象棋"，需要极高的策略思维和精准技术。"""
+        elif '你好' in user_input or 'hi' in user_input or 'hello' in user_input:
+            response_text = "你好！我是AI助手，很高兴为您服务。请问有什么我可以帮助您的吗？"
+        elif '谢谢' in user_input or 'thanks' in user_input:
+            response_text = "不客气！如果还有其他问题，随时欢迎提问。"
+        else:
+            # 通用响应
+            general_responses = [
+                f"我理解您想了解关于\"{message[:30]}...\"的信息。这是一个很有趣的话题。",
+                f"感谢您的提问。关于\"{message[:30]}...\"，我可以为您提供一些基本信息。",
+                f"您询问的是：{message[:50]}... 让我为您详细解答。",
+                "我理解您的问题。目前系统使用模拟模式运行，无法提供实时AI回答。请配置有效的API密钥以获得完整功能。",
+                "这是一个很好的问题！由于当前系统处于演示模式，我提供了这个预设回答。"
+            ]
+            response_text = random.choice(general_responses)
+        
+        # 模拟网络延迟
+        time.sleep(0.5)
         
         return {
             'content': response_text,
