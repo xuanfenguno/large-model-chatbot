@@ -407,7 +407,9 @@ const flatModels = computed(() => {
 // 从API框架加载可用模型
 const loadAvailableModels = async () => {
   try {
+    console.log('开始加载模型列表...')
     const availableModels = await aiApi.getAvailableModels()
+    console.log('获取到的模型列表:', availableModels)
     
     // 按组分组模型
     const groups = {}
@@ -427,7 +429,7 @@ const loadAvailableModels = async () => {
         tag: model.tag || '',
         tagType: model.tagType || 'info',
         icon: model.icon || '',
-        available: model.available,
+        available: model.available !== undefined ? model.available : true,
         description: model.description
       })
     })
@@ -437,6 +439,8 @@ const loadAvailableModels = async () => {
       label: groupName,
       models: groups[groupName]
     }))
+    
+    console.log('分组后的模型:', modelGroups.value)
     
     // 设置默认模型
     if (availableModels.length > 0) {
@@ -473,23 +477,46 @@ const loadAvailableModels = async () => {
       errorMessage = error.message || '加载模型列表时发生未知错误'
     }
     
-    // 使用默认的模型列表作为后备
+    // 使用默认的模型列表作为后备（包含其他厂商的模型）
     modelGroups.value = [
       {
-        label: '高性能',
+        label: '多模态',
         models: [
-          { id: 'gpt-4', name: 'GPT-4', provider: 'OpenAI', group: '高性能', tag: '智能', tagType: 'success', available: true },
-          { id: 'claude-3-opus', name: 'Claude 3 Opus', provider: 'Anthropic', group: '高性能', tag: '安全', tagType: 'warning', available: true }
+          { id: 'qwen-vl-plus', name: 'Qwen VL Plus (支持图片)', provider: 'Qwen', group: '多模态', available: true },
+          { id: 'qwen-vl-max', name: 'Qwen VL Max (支持图片)', provider: 'Qwen', group: '多模态', available: true },
+          { id: 'gpt-4o', name: 'GPT-4o', provider: 'OpenAI', group: '多模态', available: true },
+          { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro', provider: 'Google', group: '多模态', available: true }
         ]
       },
       {
-        label: '高效能',
+        label: '高性能',
         models: [
-          { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo', provider: 'OpenAI', group: '高效能', tag: '快速', tagType: 'info', available: true },
-          { id: 'gpt-4o-mini', name: 'GPT-4o Mini', provider: 'OpenAI', group: '高效能', tag: '经济', tagType: 'info', available: true }
+          { id: 'qwen-max', name: 'Qwen Max', provider: 'Qwen', group: '高性能', available: true },
+          { id: 'gpt-4', name: 'GPT-4', provider: 'OpenAI', group: '高性能', available: true },
+          { id: 'claude-3-opus', name: 'Claude 3 Opus', provider: 'Anthropic', group: '高性能', available: true }
+        ]
+      },
+      {
+        label: '通用',
+        models: [
+          { id: 'qwen-turbo', name: 'Qwen Turbo', provider: 'Qwen', group: '通用', available: true },
+          { id: 'qwen-plus', name: 'Qwen Plus', provider: 'Qwen', group: '通用', available: true },
+          { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo', provider: 'OpenAI', group: '通用', available: true },
+          { id: 'claude-3-sonnet', name: 'Claude 3 Sonnet', provider: 'Anthropic', group: '通用', available: true },
+          { id: 'gemini-pro', name: 'Gemini Pro', provider: 'Google', group: '通用', available: true }
+        ]
+      },
+      {
+        label: '开源',
+        models: [
+          { id: 'llama-3-70b', name: 'Llama 3 70B', provider: 'Meta', group: '开源', available: true },
+          { id: 'mistral-large', name: 'Mistral Large', provider: 'Mistral', group: '开源', available: true }
         ]
       }
     ]
+    
+    // 设置默认模型
+    selectedModel.value = 'qwen-vl-plus'
   }
 }
 
@@ -1933,7 +1960,14 @@ const shouldShowTime = (index) => {
   padding: 0;
 }
 
+.ai-model-select :deep(.el-option) {
+  padding: 0 !important;
+  border-left: none !important;
+}
 
+.ai-model-select :deep(.el-option:hover) {
+  background: transparent !important;
+}
 
 .model-option {
   display: flex;

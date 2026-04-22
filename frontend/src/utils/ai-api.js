@@ -6,6 +6,7 @@
 import { aiClient } from './ai-client.js'
 import { aiErrorHandler } from './ai-error-handler.js'
 import { aiConfigManager } from './ai-config.js'
+import service from './request.js'
 
 class UnifiedAIApi {
   constructor() {
@@ -138,7 +139,9 @@ class UnifiedAIApi {
     try {
       // 首先尝试从后端API获取模型列表
       try {
+        console.log('尝试从后端获取模型列表...')
         const response = await service.get('/models/')
+        console.log('后端返回的模型列表:', response.data)
         if (response.data && Array.isArray(response.data)) {
           // 转换后端返回的数据格式以适应前端需求
           const models = response.data.map(model => ({
@@ -152,6 +155,7 @@ class UnifiedAIApi {
             available: model.available !== undefined ? model.available : true
           }))
           
+          console.log('转换后的模型列表:', models)
           // 缓存结果
           this.cache.set(cacheKey, models)
           this.cacheTimestamps.set(cacheKey, Date.now())
