@@ -1364,8 +1364,13 @@ const loadUserAvatar = async () => {
 // 监听authStore.user变化，实现头像实时更新
 watch(
   () => authStore.user,
-  (newUser) => {
+  (newUser, oldUser) => {
+    console.log('authStore.user变化:', {
+      oldAvatar: oldUser?.avatar,
+      newAvatar: newUser?.avatar
+    })
     if (newUser?.avatar) {
+      console.log('更新userAvatarUrl:', newUser.avatar)
       userAvatarUrl.value = newUser.avatar
     }
   },

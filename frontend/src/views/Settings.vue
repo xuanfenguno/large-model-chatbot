@@ -735,13 +735,13 @@ const customUploadAvatar = async (options) => {
 
     if (response.ok) {
       ElMessage.success(result.message || '头像上传成功')
+      console.log('头像上传成功，新头像URL:', result.avatar_url)
       profileForm.avatar = result.avatar_url
       
-      if (authStore.user) {
-        authStore.user.avatar = result.avatar_url
-      }
+      // 重新获取用户信息，确保状态同步
+      await authStore.fetchUserInfo()
+      console.log('已重新获取用户信息')
       
-      await authStore.fetchUserInfo();
       return result
     } else {
       ElMessage.error(result.error || `上传失败，状态码: ${response.status}`)
