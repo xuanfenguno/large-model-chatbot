@@ -387,7 +387,7 @@ class QwenApi(BaseAIApi):
             {'name': 'qwen-vl-max', 'label': 'Qwen VL Max (支持图片)'},
         ]
     
-    def send_message(self, message: str, config: Dict) -> Dict:
+    def send_message(self, message: str, config: Dict, image_url: Optional[str] = None) -> Dict:
         """重写发送消息方法以适配Qwen API格式"""
         # 验证配置
         self._validate_config(config)
@@ -396,6 +396,23 @@ class QwenApi(BaseAIApi):
         api_key = self._get_api_key(config.get('model'))
         if not api_key:
             raise Exception(f"未配置{self.name} API密钥")
+        
+        # 处理图片URL
+        if image_url:
+            # 构建多模态消息格式
+            multimodal_message = [
+                {
+                    "type": "text",
+                    "text": message
+                },
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": image_url
+                    }
+                }
+            ]
+            message = multimodal_message
         
         # 准备请求参数
         headers = self._prepare_headers(api_key)

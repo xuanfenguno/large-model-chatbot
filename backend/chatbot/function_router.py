@@ -42,7 +42,7 @@ class FunctionRouter:
         # 中文语义理解准确率
         self.chinese_accuracy = 0.90  # 90%准确率
         
-    def route_function(self, user_input: str, model: str = 'qwen-turbo', language: Optional[str] = None):
+    def route_function(self, user_input: str, model: str = 'qwen-turbo', language: Optional[str] = None, image_url: Optional[str] = None):
         """
         根据用户输入路由到相应功能
         """
@@ -51,16 +51,16 @@ class FunctionRouter:
         
         # 如果没有明确意图，使用默认聊天功能
         if intent == 'unknown':
-            return self.chat_handler(user_input, model)
+            return self.chat_handler(user_input, model, image_url)
         
         # 调用相应功能处理器
         handler = self.functions.get(intent, self.chat_handler)
         
         # 特殊处理：翻译功能需要传递 language 参数
         if intent == 'translation':
-            return handler(user_input, model, language)
+            return handler(user_input, model, language, image_url)
         
-        return handler(user_input, model)
+        return handler(user_input, model, image_url)
     
     def analyze_intent(self, user_input: str) -> str:
         """
@@ -134,7 +134,7 @@ class FunctionRouter:
         # 如果没有匹配到特定功能，返回未知
         return 'unknown'
     
-    def chat_handler(self, user_input: str, model: str = 'qwen-turbo'):
+    def chat_handler(self, user_input: str, model: str = 'qwen-turbo', image_url: Optional[str] = None):
         """
         默认聊天处理
         """
@@ -151,11 +151,11 @@ class FunctionRouter:
                 'top_k': 30,
                 'frequency_penalty': 0.0,
                 'presence_penalty': 0.0,
-                'timeout': 15,
+                'timeout': 20,
                 'history': [{"role": "user", "content": user_input}]
             }
             
-            result = api_instance.send_message(user_input, config)
+            result = api_instance.send_message(user_input, config, image_url=image_url)
             
             if 'error' in result:
                 return f"抱歉，请求{api_instance.name}服务时发生错误：{result['error']}"

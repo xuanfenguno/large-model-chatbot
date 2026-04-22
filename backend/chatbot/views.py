@@ -297,6 +297,7 @@ def function_router(request):
     user_input = request.data.get('user_input') or request.data.get('input')
     language = request.data.get('language')
     model = request.data.get('model', 'qwen-turbo')
+    image_url = request.data.get('image_url')
 
     if not feature_name or not user_input:
         return Response({'error': 'Feature name and user input are required.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -304,7 +305,7 @@ def function_router(request):
     try:
         # 将 feature_name 作为用户输入的一部分传入 route_function
         full_input = f"{feature_name} {user_input}".strip()
-        response_content = function_router_instance.route_function(full_input, model=model, language=language)
+        response_content = function_router_instance.route_function(full_input, model=model, language=language, image_url=image_url)
         return Response({'result': response_content})
     except Exception as e:
         logger.error(f"Error in function router: {e}")

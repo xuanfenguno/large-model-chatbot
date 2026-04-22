@@ -107,7 +107,10 @@
                   {{ msg.role === 'user' ? '👤' : '🤖' }}
                 </div>
                 <div class="message-content">
-                  <div class="message-text">{{ msg.content }}</div>
+                  <div class="message-text">
+                    {{ msg.content }}
+                    <img v-if="msg.image_url" :src="msg.image_url" alt="Image" class="message-image" />
+                  </div>
                   <div class="message-time">{{ formatDate(msg.timestamp) }}</div>
                 </div>
               </div>
@@ -149,7 +152,24 @@
                     type="textarea"
                     :rows="3"
                     resize="none"
-                  />
+                  >
+                    <template #append>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        @change="handleImageUpload"
+                        :disabled="loading"
+                        class="image-upload-input"
+                      />
+                      <el-button
+                        type="text"
+                        :icon="Image"
+                        @click="() => document.querySelector('.image-upload-input').click()"
+                        :disabled="loading"
+                        class="image-upload-btn"
+                      />
+                    </template>
+                  </el-input>
                   <el-button 
                     @click="sendMessage" 
                     :loading="loading" 
@@ -159,6 +179,12 @@
                   >
                     发送
                   </el-button>
+                </div>
+                
+                <!-- 图片预览区域 -->
+                <div v-if="imagePreviewUrl" class="image-preview-wrapper">
+                  <img :src="imagePreviewUrl" alt="Preview" class="image-preview" />
+                  <el-icon class="remove-image-btn" @click="removeImage"><Close /></el-icon>
                 </div>
               </div>
             </div>
@@ -174,6 +200,8 @@
 import { ref, onMounted, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 import axios from 'axios';
+import { ElMessage } from 'element-plus';
+import { Image, Plus, Close } from '@element-plus/icons-vue';
 
 const router = useRouter();
 
@@ -185,6 +213,70 @@ const selectedModel = ref('qwen-max');
 const availableModels = ref([]);
 const messagesAreaRef = ref(null);
 const targetLanguage = ref('中文'); // 新增：翻译目标语言
+const selectedImage = ref(null);
+const imagePreviewUrl = ref('');
+
+// 处理图片选择
+const handleImageUpload = (event) => {
+  const file = event.target.files[0];
+  if (file) {
+    // 验证文件类型
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      ElMessage.error('不支持的图片格式，请上传 JPG、PNG、GIF 或 WebP 格式的图片');
+      return;
+    }
+
+    // 验证文件大小（最大10MB）
+    if (file.size > 10 * 1024 * 1024) {
+      ElMessage.error('图片大小不能超过10MB');
+      return;
+    }
+
+    selectedImage.value = file;
+    // 生成预览URL
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      imagePreviewUrl.value = e.target.result;
+    };
+    reader.readAsDataURL(file);
+
+    ElMessage.success('图片已选择');
+  }
+};
+
+// 移除已选择的图片
+const removeImage = () => {
+  selectedImage.value = null;
+  imagePreviewUrl.value = '';
+};
+
+// 上传图片到后端（用于聊天图片识别）
+const uploadImage = async (imageFile) => {
+  try {
+    const formData = new FormData();
+    formData.append('image', imageFile);
+
+    const token = localStorage.getItem('token');
+    const response = await service.post('/upload-image/', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+        'Authorization': `Bearer ${token}`
+      },
+      timeout: 30000
+    });
+
+    if (response.data && response.data.image_url) {
+      return response.data.image_url;
+    }
+
+    return null;
+  } catch (error) {
+    console.error('图片上传失败:', error);
+    ElMessage.error('图片上传失败，请稍后重试');
+    return null;
+  }
+};
 
 // 从 localStorage 加载聊天记录
 const loadMessagesFromStorage = () => {
@@ -319,25 +411,48 @@ const handleFunctionSelect = (index) => {
 
 // 发送消息
 const sendMessage = async () => {
-  if (!inputMessage.value.trim()) return;
+  if (!inputMessage.value.trim() && !selectedImage.value) return;
+  
+  let content = inputMessage.value.trim();
+  let imageUrl = null;
+  
+  // 处理图片上传
+  if (selectedImage.value) {
+    imageUrl = await uploadImage(selectedImage.value);
+    if (!imageUrl) {
+      return;
+    }
+  }
+  
+  // 如果只发送图片没有文字，添加默认提示让AI识别图片
+  if (!content && imageUrl) {
+    content = '请详细描述这张图片的内容，包括图片中的物体、人物、场景、文字等信息。';
+  }
   
   const userMessage = {
     role: 'user',
-    content: inputMessage.value,
+    content: content,
+    image_url: imageUrl,
     timestamp: new Date().toISOString()
   };
   
   messages.value.push(userMessage);
   saveMessagesToStorage(); // 保存聊天记录
   inputMessage.value = '';
+  selectedImage.value = null;
+  imagePreviewUrl.value = '';
   loading.value = true;
   
   try {
     const payload = {
-      input: userMessage.content,
+      input: content,
       model: selectedModel.value,
       function: activeFunction.value
     };
+
+    if (imageUrl) {
+      payload.image_url = imageUrl;
+    }
 
     if (activeFunction.value === 'translate') {
       payload.language = targetLanguage.value;
@@ -1028,6 +1143,86 @@ const scrollToBottom = async () => {
 .model-selector :deep(.el-input__inner) {
   border-radius: 8px;
   font-size: 0.9rem;
+}
+
+/* 图片上传样式 */
+.image-upload-input {
+  display: none;
+}
+
+.image-upload-btn {
+  position: absolute;
+  right: 80px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+  color: #606266;
+  font-size: 20px;
+}
+
+.image-upload-btn:hover {
+  color: #409EFF;
+}
+
+/* 图片预览样式 */
+.image-preview-wrapper {
+  display: flex;
+  align-items: center;
+  margin-top: 12px;
+  padding: 12px;
+  background: #f5f7fa;
+  border-radius: 12px;
+  position: relative;
+  max-width: 100%;
+}
+
+.image-preview {
+  max-width: 200px;
+  max-height: 150px;
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.remove-image-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #909399;
+  font-size: 16px;
+  transition: all 0.3s ease;
+}
+
+.remove-image-btn:hover {
+  background: #fff;
+  color: #f56c6c;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* 消息中的图片显示 */
+.message-image {
+  max-width: 200px;
+  max-height: 150px;
+  border-radius: 8px;
+  object-fit: cover;
+  margin: 8px 0;
+}
+
+.user-message .message-image {
+  align-self: flex-start;
+  margin-left: 12px;
+}
+
+.assistant-message .message-image {
+  align-self: flex-start;
+  margin-right: 12px;
 }
 
 /* 响应式设计 */
