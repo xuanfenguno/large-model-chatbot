@@ -73,27 +73,28 @@ const renderedContent = computed(() => {
 
 <style scoped>
 .markdown-renderer {
-  line-height: 1.4;
+  line-height: 1.3;
   color: #606266;
+  font-size: 14px;
 }
 
 /* 代码块样式 */
 .markdown-renderer :deep(pre) {
   background: #f6f8fa;
-  border-radius: 6px;
-  padding: 12px;
+  border-radius: 4px;
+  padding: 10px;
   overflow-x: auto;
-  margin: 0.5em 0;
+  margin: 0.3em 0;
   border: 1px solid #eaecef;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .markdown-renderer :deep(code) {
   font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
-  font-size: 13px;
+  font-size: 12px;
   background: rgba(27, 31, 35, 0.05);
-  padding: 0.1em 0.3em;
-  border-radius: 3px;
+  padding: 0.1em 0.2em;
+  border-radius: 2px;
 }
 
 .markdown-renderer :deep(pre code) {
@@ -110,29 +111,29 @@ const renderedContent = computed(() => {
 
 /* 数学公式样式 */
 .markdown-renderer :deep(.katex) {
-  font-size: 1.1em;
+  font-size: 1.05em;
 }
 
 .markdown-renderer :deep(.katex-display) {
   overflow-x: auto;
   overflow-y: hidden;
-  padding: 0.3em 0;
+  padding: 0.2em 0;
 }
 
 /* 表格样式 */
 .markdown-renderer :deep(table) {
   border-collapse: collapse;
   width: 100%;
-  margin: 0.5em 0;
+  margin: 0.3em 0;
   display: block;
   overflow-x: auto;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .markdown-renderer :deep(th),
 .markdown-renderer :deep(td) {
   border: 1px solid #dfe2e5;
-  padding: 4px 8px;
+  padding: 3px 6px;
 }
 
 .markdown-renderer :deep(tr:nth-child(2n)) {
@@ -141,31 +142,32 @@ const renderedContent = computed(() => {
 
 /* 引用块样式 */
 .markdown-renderer :deep(blockquote) {
-  border-left: 4px solid #667eea;
-  padding-left: 0.8em;
-  margin: 0.5em 0;
+  border-left: 3px solid #667eea;
+  padding-left: 0.6em;
+  margin: 0.3em 0;
   color: #6a737d;
   font-style: italic;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 /* 列表样式 */
 .markdown-renderer :deep(ul),
 .markdown-renderer :deep(ol) {
-  padding-left: 1.5em;
-  margin: 0.4em 0;
+  padding-left: 1.2em;
+  margin: 0.2em 0;
 }
 
 .markdown-renderer :deep(li) {
-  margin: 0.2em 0;
+  margin: 0.1em 0;
+  line-height: 1.2;
 }
 
 /* 图片样式 */
 .markdown-renderer :deep(img) {
   max-width: 100%;
   height: auto;
-  border-radius: 6px;
-  margin: 0.5em 0;
+  border-radius: 4px;
+  margin: 0.3em 0;
 }
 
 /* 链接样式 */
@@ -185,27 +187,27 @@ const renderedContent = computed(() => {
 .markdown-renderer :deep(h4),
 .markdown-renderer :deep(h5),
 .markdown-renderer :deep(h6) {
-  margin-top: 0.8em;
-  margin-bottom: 0.3em;
+  margin-top: 0.5em;
+  margin-bottom: 0.2em;
   font-weight: 600;
-  line-height: 1.2;
+  line-height: 1.1;
   color: #24292e;
 }
 
 .markdown-renderer :deep(h1) {
-  font-size: 1.8em;
+  font-size: 1.6em;
   border-bottom: 1px solid #eaecef;
-  padding-bottom: 0.2em;
+  padding-bottom: 0.1em;
 }
 
 .markdown-renderer :deep(h2) {
-  font-size: 1.4em;
+  font-size: 1.3em;
   border-bottom: 1px solid #eaecef;
-  padding-bottom: 0.2em;
+  padding-bottom: 0.1em;
 }
 
 .markdown-renderer :deep(h3) {
-  font-size: 1.2em;
+  font-size: 1.1em;
 }
 
 .markdown-renderer :deep(h4) {
@@ -217,19 +219,19 @@ const renderedContent = computed(() => {
 }
 
 .markdown-renderer :deep(h6) {
-  font-size: 0.85em;
+  font-size: 0.8em;
   color: #6a737d;
 }
 
 /* 段落样式 */
 .markdown-renderer :deep(p) {
-  margin: 0.4em 0;
+  margin: 0.2em 0;
 }
 
 /* 水平线样式 */
 .markdown-renderer :deep(hr) {
   border: 0;
   border-top: 1px solid #eaecef;
-  margin: 0.8em 0;
+  margin: 0.5em 0;
 }
 </style>
