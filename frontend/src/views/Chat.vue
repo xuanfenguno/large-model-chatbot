@@ -1361,6 +1361,17 @@ const loadUserAvatar = async () => {
   }
 }
 
+// 监听authStore.user变化，实现头像实时更新
+watch(
+  () => authStore.user,
+  (newUser) => {
+    if (newUser?.avatar) {
+      userAvatarUrl.value = newUser.avatar
+    }
+  },
+  { deep: true }
+)
+
 // 跳转到个人资料页面
 const goToProfile = () => {
   router.push('/settings?tab=profile')
