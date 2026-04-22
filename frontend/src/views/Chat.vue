@@ -227,23 +227,25 @@
 
       <!-- 消息列表 -->
       <div class="messages-container" ref="messagesContainer">
-        <div v-for="(message, index) in messages" :key="message.id" :class="['message-item', message.role]">
-          <div class="message-avatar">
-            <template v-if="message.role === 'user'">
-              <img v-if="userAvatarUrl" :src="userAvatarUrl" alt="User Avatar" class="avatar-img" />
-              <el-icon v-else :size="20"><User /></el-icon>
-            </template>
-            <template v-else>
-              <img v-if="aiAvatarUrl" :src="aiAvatarUrl" alt="AI Avatar" class="avatar-img" />
-              <el-icon v-else :size="20"><ChatLineRound /></el-icon>
-            </template>
+        <div v-for="(message, index) in messages" :key="message.id" class="message-wrapper">
+          <!-- 时间显示 -->
+          <div v-if="shouldShowTime(index)" class="message-time">
+            {{ formatTime(message.created_at) }}
           </div>
-          <div class="message-bubble">
-            <div class="message-header">
-              <span class="message-role">{{ message.role === 'user' ? '我' : 'AI' }}</span>
-              <span class="message-time">{{ formatTime(message.created_at) }}</span>
+          
+          <!-- 消息项 -->
+          <div :class="['message-item', message.role]">
+            <div class="message-avatar">
+              <template v-if="message.role === 'user'">
+                <img v-if="userAvatarUrl" :src="userAvatarUrl" alt="User Avatar" class="avatar-img" />
+                <el-icon v-else :size="36"><User /></el-icon>
+              </template>
+              <template v-else>
+                <img v-if="aiAvatarUrl" :src="aiAvatarUrl" alt="AI Avatar" class="avatar-img" />
+                <el-icon v-else :size="36"><ChatLineRound /></el-icon>
+              </template>
             </div>
-            <div class="message-text">
+            <div class="message-bubble">
               <div v-if="message.is_loading" class="loading-content">
                 <div class="ai-thinking">
                   <span class="thinking-dots">
@@ -1363,23 +1365,62 @@ const loadUserAvatar = async () => {
 const goToProfile = () => {
   router.push('/settings?tab=profile')
 }
+
+// 判断是否应该显示时间
+const shouldShowTime = (index) => {
+  if (index === 0) return true
+  
+  const currentMessage = messages.value[index]
+  const prevMessage = messages.value[index - 1]
+  
+  if (!currentMessage || !prevMessage) return false
+  
+  // 计算时间差（分钟）
+  const currentTime = new Date(currentMessage.created_at).getTime()
+  const prevTime = new Date(prevMessage.created_at).getTime()
+  const timeDiff = (currentTime - prevTime) / (1000 * 60)
+  
+  // 如果时间差大于5分钟，显示时间
+  return timeDiff > 5
+}
 </script>
 
 <style scoped>
-/* 新增：消息气泡样式 */
+/* 微信风格聊天样式 */
 .messages-container {
-  background-color: #f4f5f7; /* 聊天背景色 */
+  background-color: #f5f5dc; /* 浅黄色聊天背景 */
+  background-image: 
+    radial-gradient(circle at 20% 80%, rgba(255, 255, 255, 0.3) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(255, 255, 255, 0.2) 0%, transparent 50%),
+    radial-gradient(circle at 40% 40%, rgba(255, 255, 255, 0.1) 0%, transparent 50%);
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
 }
 
+.message-wrapper {
+  margin-bottom: 16px;
+}
+
+/* 时间显示 */
+.message-time {
+  text-align: center;
+  font-size: 12px;
+  color: #999;
+  margin: 10px 0;
+  padding: 2px 10px;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 10px;
+  display: inline-block;
+  margin-left: 50%;
+  transform: translateX(-50%);
+}
+
+/* 消息项 */
 .message-item {
   display: flex;
-  align-items: flex-end;
-  margin-bottom: 15px;
-  max-width: 85%;
-}
-
-.message-item .message-avatar {
-  flex-shrink: 0;
+  margin-bottom: 10px;
+  max-width: 70%;
 }
 
 .message-item.user {
@@ -1392,38 +1433,50 @@ const goToProfile = () => {
   flex-direction: row;
 }
 
+/* 头像 */
+.message-avatar {
+  flex-shrink: 0;
+}
+
 .message-avatar .avatar-img {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
+  object-fit: cover;
 }
 
 .message-item.user .message-avatar {
-  margin-left: 12px;
+  margin-left: 8px;
 }
 
 .message-item.assistant .message-avatar {
-  margin-right: 12px;
+  margin-right: 8px;
 }
 
+/* 消息气泡 */
 .message-bubble {
-  padding: 10px 16px;
+  padding: 10px 14px;
   border-radius: 18px;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
   word-wrap: break-word;
   white-space: pre-wrap;
+  position: relative;
+  max-width: 100%;
 }
 
 .message-item.user .message-bubble {
-  background-color: #dcf8c6; /* 用户气泡颜色 */
+  background-color: #dcf8c6; /* 绿色气泡（用户） */
+  border-bottom-right-radius: 4px;
+  box-shadow: 0 1px 2px rgba(0, 150, 0, 0.1);
 }
 
 .message-item.assistant .message-bubble {
-  background-color: #ffffff; /* AI气泡颜色 */
+  background-color: #ffffff; /* 白色气泡（AI） */
+  border-bottom-left-radius: 4px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .message-header {
-  display: none; /* 暂时隐藏旧的消息头 */
+  display: none; /* 隐藏旧的消息头 */
 }
 
 .chat-container {
