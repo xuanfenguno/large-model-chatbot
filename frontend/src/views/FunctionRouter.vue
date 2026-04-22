@@ -109,8 +109,8 @@
                 <div class="message-content">
                   <div class="message-text">
                     {{ msg.content }}
-                    <img v-if="msg.image_url" :src="msg.image_url" alt="Image" class="message-image" />
                   </div>
+                  <img v-if="msg.image_url" :src="msg.image_url" alt="Image" class="message-image" />
                   <div class="message-time">{{ formatDate(msg.timestamp) }}</div>
                 </div>
               </div>
@@ -201,7 +201,7 @@ import { ref, onMounted, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 import axios from 'axios';
 import { ElMessage } from 'element-plus';
-import { Image, Plus, Close } from '@element-plus/icons-vue';
+import { Picture, Plus, Close } from '@element-plus/icons-vue';
 
 const router = useRouter();
 
@@ -258,21 +258,32 @@ const uploadImage = async (imageFile) => {
     formData.append('image', imageFile);
 
     const token = localStorage.getItem('token');
-    const response = await service.post('/upload-image/', formData, {
+    const config = {
       headers: {
-        'Content-Type': 'multipart/form-data',
-        'Authorization': `Bearer ${token}`
+        'Content-Type': 'multipart/form-data'
       },
       timeout: 30000
-    });
+    };
+    
+    // 只有当 token 存在时才添加 Authorization 头
+    if (token) {
+      config.headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    console.log('开始上传图片...');
+    const response = await service.post('/upload-image/', formData, config);
+    console.log('图片上传响应:', response.data);
 
     if (response.data && response.data.image_url) {
+      console.log('图片上传成功，URL:', response.data.image_url);
       return response.data.image_url;
     }
 
+    console.warn('图片上传响应中没有 image_url');
     return null;
   } catch (error) {
     console.error('图片上传失败:', error);
+    console.error('错误详情:', error.response);
     ElMessage.error('图片上传失败，请稍后重试');
     return null;
   }
@@ -285,6 +296,12 @@ const loadMessagesFromStorage = () => {
     try {
       messages.value = JSON.parse(savedMessages);
       console.log(`从缓存加载了 ${messages.value.length} 条消息`);
+      // 调试日志：检查是否有图片消息
+      messages.value.forEach((msg, index) => {
+        if (msg.image_url) {
+          console.log(`消息 ${index} 有图片 URL:`, msg.image_url);
+        }
+      });
     } catch (e) {
       console.error('解析缓存消息失败:', e);
     }
@@ -420,8 +437,11 @@ const sendMessage = async () => {
   
   // 处理图片上传
   if (selectedImage.value) {
+    console.log('开始上传图片，文件:', selectedImage.value);
     imageUrl = await uploadImage(selectedImage.value);
+    console.log('图片上传结果，URL:', imageUrl);
     if (!imageUrl) {
+      console.warn('图片上传失败，URL为空');
       return;
     }
   }
@@ -1215,14 +1235,15 @@ const scrollToBottom = async () => {
   border-radius: 8px;
   object-fit: cover;
   margin: 8px 0;
+  display: block;
 }
 
-.user-message .message-image {
+.message-item.user .message-image {
   align-self: flex-start;
   margin-left: 12px;
 }
 
-.assistant-message .message-image {
+.message-item.assistant .message-image {
   align-self: flex-start;
   margin-right: 12px;
 }

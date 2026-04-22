@@ -602,7 +602,6 @@ def upload_avatar(request):
 
 
 @api_view(['POST'])
-@permission_classes([permissions.IsAuthenticated])
 @parser_classes([MultiPartParser, FormParser])
 def upload_chat_image(request):
     """上传聊天图片，返回图片URL用于AI识别"""
@@ -626,7 +625,9 @@ def upload_chat_image(request):
 
         # 生成唯一文件名
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f"chat_images/{request.user.id}/{timestamp}_{image_file.name}"
+        # 对于未登录用户，使用 'guest' 作为用户ID
+        user_id = request.user.id if request.user.is_authenticated else 'guest'
+        filename = f"chat_images/{user_id}/{timestamp}_{image_file.name}"
 
         # 保存文件
         file_path = default_storage.save(filename, ContentFile(image_file.read()))

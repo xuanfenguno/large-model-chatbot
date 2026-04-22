@@ -380,11 +380,25 @@ class QwenApi(BaseAIApi):
     @staticmethod
     def get_supported_models():
         return [
-            {'id': 'qwen-turbo', 'name': 'Qwen Turbo', 'provider': 'Qwen', 'available': True, 'group': '通用'},
-            {'id': 'qwen-plus', 'name': 'Qwen Plus', 'provider': 'Qwen', 'available': True, 'group': '通用'},
-            {'id': 'qwen-max', 'name': 'Qwen Max', 'provider': 'Qwen', 'available': True, 'group': '高性能'},
+            # 多模态模型
             {'id': 'qwen-vl-plus', 'name': 'Qwen VL Plus (支持图片)', 'provider': 'Qwen', 'available': True, 'group': '多模态'},
             {'id': 'qwen-vl-max', 'name': 'Qwen VL Max (支持图片)', 'provider': 'Qwen', 'available': True, 'group': '多模态'},
+            {'id': 'gpt-4o', 'name': 'GPT-4o', 'provider': 'OpenAI', 'available': False, 'group': '多模态'},
+            {'id': 'gemini-1.5-pro', 'name': 'Gemini 1.5 Pro', 'provider': 'Google', 'available': False, 'group': '多模态'},
+            # 高性能模型
+            {'id': 'qwen-max', 'name': 'Qwen Max', 'provider': 'Qwen', 'available': True, 'group': '高性能'},
+            {'id': 'gpt-4', 'name': 'GPT-4', 'provider': 'OpenAI', 'available': False, 'group': '高性能'},
+            {'id': 'claude-3-opus', 'name': 'Claude 3 Opus', 'provider': 'Anthropic', 'available': False, 'group': '高性能'},
+            # 通用模型
+            {'id': 'qwen-turbo', 'name': 'Qwen Turbo', 'provider': 'Qwen', 'available': True, 'group': '通用'},
+            {'id': 'qwen-plus', 'name': 'Qwen Plus', 'provider': 'Qwen', 'available': True, 'group': '通用'},
+            {'id': 'gpt-3.5-turbo', 'name': 'GPT-3.5 Turbo', 'provider': 'OpenAI', 'available': False, 'group': '通用'},
+            {'id': 'claude-3-sonnet', 'name': 'Claude 3 Sonnet', 'provider': 'Anthropic', 'available': False, 'group': '通用'},
+            {'id': 'gemini-pro', 'name': 'Gemini Pro', 'provider': 'Google', 'available': False, 'group': '通用'},
+            {'id': 'deepseek-chat', 'name': 'DeepSeek Chat', 'provider': 'DeepSeek', 'available': False, 'group': '通用'},
+            # 开源模型
+            {'id': 'llama-3-70b', 'name': 'Llama 3 70B', 'provider': 'Meta', 'available': False, 'group': '开源'},
+            {'id': 'mistral-large', 'name': 'Mistral Large', 'provider': 'Mistral', 'available': False, 'group': '开源'}
         ]
     
     def send_message(self, message: str, config: Dict, image_url: Optional[str] = None) -> Dict:
@@ -555,14 +569,14 @@ class QwenApi(BaseAIApi):
             
             # 视觉模型需要额外的参数
             if is_vision_model:
-                # 将本地图片URL转换为Base64数据URI
-                for msg in messages:
-                    if msg.get('role') == 'user' and isinstance(msg.get('content'), list):
+                # 如果是HTTP URL，需要下载并转换为Base64
+                # 因为Qwen API服务器无法访问127.0.0.1这种本地地址
+                for msg in payload.get('messages', []):
+                    if isinstance(msg.get('content'), list):
                         for item in msg['content']:
                             if item.get('type') == 'image_url':
                                 image_url = item.get('image_url', {}).get('url', '')
-                                # 将图片URL转换为Base64数据URI
-                                if image_url:
+                                if image_url and image_url.startswith('http'):
                                     base64_url = self._convert_image_to_base64(image_url)
                                     if base64_url:
                                         item['image_url']['url'] = base64_url
