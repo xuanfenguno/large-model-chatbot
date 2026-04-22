@@ -146,12 +146,12 @@ class FunctionRouter:
             config = {
                 'model': model,
                 'temperature': 0.6,
-                'max_tokens': 2000,
+                'max_tokens': 500,
                 'top_p': 0.7,
                 'top_k': 30,
                 'frequency_penalty': 0.0,
                 'presence_penalty': 0.0,
-                'timeout': 30,
+                'timeout': 15,
                 'history': [{"role": "user", "content": user_input}]
             }
             
