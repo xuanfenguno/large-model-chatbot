@@ -380,11 +380,11 @@ class QwenApi(BaseAIApi):
     @staticmethod
     def get_supported_models():
         return [
-            {'name': 'qwen-turbo', 'label': 'Qwen Turbo'},
-            {'name': 'qwen-plus', 'label': 'Qwen Plus'},
-            {'name': 'qwen-max', 'label': 'Qwen Max'},
-            {'name': 'qwen-vl-plus', 'label': 'Qwen VL Plus (支持图片)'},
-            {'name': 'qwen-vl-max', 'label': 'Qwen VL Max (支持图片)'},
+            {'id': 'qwen-turbo', 'name': 'Qwen Turbo', 'provider': 'Qwen', 'available': True, 'group': '通用'},
+            {'id': 'qwen-plus', 'name': 'Qwen Plus', 'provider': 'Qwen', 'available': True, 'group': '通用'},
+            {'id': 'qwen-max', 'name': 'Qwen Max', 'provider': 'Qwen', 'available': True, 'group': '高性能'},
+            {'id': 'qwen-vl-plus', 'name': 'Qwen VL Plus (支持图片)', 'provider': 'Qwen', 'available': True, 'group': '多模态'},
+            {'id': 'qwen-vl-max', 'name': 'Qwen VL Max (支持图片)', 'provider': 'Qwen', 'available': True, 'group': '多模态'},
         ]
     
     def send_message(self, message: str, config: Dict, image_url: Optional[str] = None) -> Dict:
