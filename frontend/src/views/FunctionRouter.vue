@@ -209,7 +209,7 @@ const activeFunction = ref('auto');
 const inputMessage = ref('');
 const messages = ref([]);
 const loading = ref(false);
-const selectedModel = ref('qwen-max');
+const selectedModel = ref('qwen-vl-plus');
 const availableModels = ref([]);
 const messagesAreaRef = ref(null);
 const targetLanguage = ref('中文'); // 新增：翻译目标语言
@@ -314,6 +314,8 @@ const fetchAvailableModels = async () => {
     console.error('获取模型列表失败:', error);
     // 默认模型列表
     availableModels.value = [
+      { value: 'qwen-vl-plus', label: 'Qwen VL Plus (支持图片)' },
+      { value: 'qwen-vl-max', label: 'Qwen VL Max (支持图片)' },
       { value: 'kimi-large', label: 'Kimi Large' },
       { value: 'qwen-max', label: 'Qwen Max' },
       { value: 'qwen-plus', label: 'Qwen Plus' },
