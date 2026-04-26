@@ -105,13 +105,18 @@ class KnowledgeBaseManager:
     
     def search(self, query: str, n_results: int = 5) -> List[Dict]:
         """
-        搜索知识库
+        搜索知识库（带超时优化）
         """
         if not CHROMADB_AVAILABLE or self.collection is None:
             logger.warning("ChromaDB not available, skipping search")
             return []
         
         try:
+            # 优化：设置超时，避免搜索时间过长
+            import socket
+            old_timeout = socket.getdefaulttimeout()
+            socket.setdefaulttimeout(3)  # 3 秒超时
+            
             # 生成查询嵌入
             query_embedding = self.embeddings.encode([query]).tolist()[0]
             
@@ -120,6 +125,8 @@ class KnowledgeBaseManager:
                 query_embeddings=[query_embedding],
                 n_results=n_results
             )
+            
+            socket.setdefaulttimeout(old_timeout)
             
             # 格式化结果
             formatted_results = []
@@ -133,6 +140,7 @@ class KnowledgeBaseManager:
             return formatted_results
         except Exception as e:
             logger.error(f"Error searching knowledge base: {e}")
+            socket.setdefaulttimeout(old_timeout)
             return []
     
     def update_document(self, doc_id: str, content: str, metadata: Dict = None):

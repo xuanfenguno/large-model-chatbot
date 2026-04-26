@@ -254,133 +254,139 @@ class BackendProvider {
   }
 
   async sendMessageStream(message, config, onChunk, onComplete) {
-    // 优先使用流式接口，实现真正的逐字输出
-    return new Promise((resolve, reject) => {
-      const token = localStorage.getItem('token')
-      const history = config.history || []
+    // 使用 Fetch API + ReadableStream 实现真正的流式响应
+    const token = localStorage.getItem('token')
+    const history = config.history || []
+    
+    console.log('发送流式请求:', {
+      url: '/api/v1/stream-chat/',
+      model: config.model,
+      hasToken: !!token,
+      conversationId: config.conversation_id,
+      roleId: config.role_id
+    })
+    
+    let fullContent = ''
+    let isCompleted = false
+    
+    // 创建 AbortController 用于超时控制
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 120000) // 120秒超时
+    
+    try {
+      const response = await fetch('/api/v1/stream-chat/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          message: message,
+          model: config.model,
+          history: history,
+          conversation_id: config.conversation_id,
+          image_url: config.image_url,
+          role_id: config.role_id,
+          custom_role_prompt: config.custom_role_prompt
+        }),
+        signal: controller.signal
+      })
       
-      // 使用XMLHttpRequest处理SSE响应
-      const xhr = new XMLHttpRequest()
+      clearTimeout(timeoutId)
       
-      xhr.open('POST', '/api/v1/stream-chat/', true)
-      xhr.setRequestHeader('Content-Type', 'application/json')
-      xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+      console.log('收到响应:', response.status, response.statusText)
       
-      let fullContent = ''
+      if (!response.ok) {
+        const errorMsg = response.status === 401 ? '登录已过期，请重新登录' : `后端API错误: ${response.status}`
+        console.error('请求失败:', errorMsg)
+        throw new Error(errorMsg)
+      }
+      
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
       let buffer = ''
-      let processedLength = 0 // 跟踪已处理的响应长度
-      let isCompleted = false // 标记是否已完成
       
-      // 监听 readyState 变化以处理SSE数据
-      xhr.onreadystatechange = () => {
-        if (xhr.readyState === 3 || xhr.readyState === 4) { // 正在接收数据或接收完成
-          const responseText = xhr.responseText
-          if (responseText.length > processedLength) {
-            const newChunk = responseText.substring(processedLength)
-            processedLength = responseText.length
-            
-            // 处理新接收到的数据块
-            const lines = newChunk.split('\n')
-            for (const line of lines) {
-              if (line.trim() && line.startsWith('data: ')) {
-                try {
-                  const data = JSON.parse(line.slice(6).trim())
-                  
-                  if (data.content) {
-                    const content = data.content
-                    fullContent += content
-                    
-                    if (onChunk) {
-                      onChunk(content)
-                    }
-                  } else if (data.status === 'completed') {
-                    // 完成时调用complete回调
-                    isCompleted = true // 标记已完成
-                    if (onComplete) {
-                      onComplete({
-                        success: true,
-                        content: fullContent,
-                        model: config.model
-                      })
-                    }
-                    resolve({
-                      success: true,
-                      content: fullContent,
-                      model: config.model
-                    })
-                    return
-                  } else if (data.error) {
-                    reject(new Error(data.error))
-                    return
-                  }
-                } catch (e) {
-                  // 忽略解析错误，但记录以便调试
-                  console.warn('SSE数据解析错误:', e, line)
+      while (true) {
+        const { done, value } = await reader.read()
+        
+        if (done) {
+          break
+        }
+        
+        // 解码新接收的数据
+        buffer += decoder.decode(value, { stream: true })
+        
+        // 处理完整的 SSE 行
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || '' // 保留最后一个不完整的行
+        
+        for (const line of lines) {
+          if (line.trim() && line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6).trim())
+              
+              if (data.content) {
+                fullContent += data.content
+                
+                if (onChunk) {
+                  onChunk(data.content)
                 }
+              } else if (data.status === 'completed') {
+                isCompleted = true
+                if (onComplete) {
+                  onComplete({
+                    success: true,
+                    content: fullContent,
+                    model: config.model
+                  })
+                }
+                return {
+                  success: true,
+                  content: fullContent,
+                  model: config.model
+                }
+              } else if (data.error) {
+                throw new Error(data.error)
               }
+            } catch (e) {
+              if (e.message && !e.message.includes('JSON')) {
+                throw e
+              }
+              console.warn('SSE数据解析错误:', e, line)
             }
           }
         }
       }
       
-      xhr.onload = () => {
-        // 如果已经完成（收到completed状态），则忽略onload事件
-        if (isCompleted) {
-          return
-        }
-        
-        if (xhr.status >= 200 && xhr.status < 300) {
-          // 如果onload时还没有完成（即没有收到completed状态），则认为出错了
-          if (!fullContent) {
-            const error = new Error('未收到有效的AI响应')
-            if (onComplete) {
-              onComplete({
-                success: false,
-                error: error.message
-              })
-            }
-            reject(error)
-          }
-        } else {
-          // HTTP错误（如401未授权）
-          const errorMsg = xhr.status === 401 ? '登录已过期，请重新登录' : `后端API错误: ${xhr.status}`
-          const error = new Error(errorMsg)
-          
-          // 调用onComplete回调，让上层知道请求失败了
+      // 流结束但未收到completed
+      if (!isCompleted) {
+        if (fullContent) {
           if (onComplete) {
             onComplete({
-              success: false,
-              error: errorMsg
+              success: true,
+              content: fullContent,
+              model: config.model
             })
           }
-          
-          reject(error)
+          return {
+            success: true,
+            content: fullContent,
+            model: config.model
+          }
+        } else {
+          throw new Error('未收到有效的AI响应')
         }
       }
       
-      xhr.onerror = () => {
-        const errorMsg = '网络错误，请检查网络连接'
-        const error = new Error(errorMsg)
-        
-        // 调用onComplete回调
-        if (onComplete) {
-          onComplete({
-            success: false,
-            error: errorMsg
-          })
-        }
-        
-        reject(error)
+    } catch (error) {
+      if (onComplete) {
+        onComplete({
+          success: false,
+          error: error.message
+        })
       }
-      
-      xhr.send(JSON.stringify({
-        message: message,
-        model: config.model,
-        history: history,
-        conversation_id: config.conversation_id,
-        image_url: config.image_url
-      }))
-    })
+      throw error
+    }
   }
 
   async getModels() {

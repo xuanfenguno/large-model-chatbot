@@ -742,6 +742,13 @@ const customUploadAvatar = async (options) => {
       await authStore.fetchUserInfo()
       console.log('已重新获取用户信息')
       
+      // 手动触发一个自定义事件，通知其他组件头像已更新
+      window.dispatchEvent(new CustomEvent('avatar-updated', { 
+        detail: { avatarUrl: result.avatar_url } 
+      }))
+      
+      console.log('已触发头像更新事件，URL:', result.avatar_url)
+      
       return result
     } else {
       ElMessage.error(result.error || `上传失败，状态码: ${response.status}`)

@@ -10,6 +10,7 @@ from .views import (
     reset_password, 
     reset_password_test,
     function_router, 
+    stream_function_router_view,
     stream_chat, 
     chat,
     upload_avatar, 
@@ -21,7 +22,8 @@ from .views import (
     appearance_settings,
     privacy_settings,
     change_password,
-    profile
+    profile,
+    get_role_presets
 )
 from .voice_views import initiate_call, answer_call, reject_call, end_call, get_call_status, signaling, get_signaling, get_call_history, get_active_calls
 # Knowledge base views are now imported from their dedicated file
@@ -50,6 +52,10 @@ urlpatterns = [
     path('password/reset/test/', reset_password_test, name='reset-password-test'),
     # 功能路由API
     path('function-router/', function_router, name='function-router'),
+    # 流式功能路由API
+    path('stream-function-router/', stream_function_router_view, name='stream-function-router'),
+    # 预设角色列表API
+    path('role-presets/', get_role_presets, name='role-presets'),
     # 流式聊天API
     path('stream-chat/', stream_chat, name='stream-chat'),
     path('chat/', chat, name='chat'),

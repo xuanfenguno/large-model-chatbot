@@ -124,55 +124,17 @@
                     :disabled="!model.available"
                   >
                     <div class="model-option" :class="{ selected: selectedModel === model.id }">
-                      <div class="model-icon-left">
-                        <div class="model-icon">
-                          {{ getModelIcon(model.provider) }}
-                        </div>
+                      <div class="model-content-simple">
+                        <div class="model-name-simple">{{ model.name }}</div>
+                        <div class="model-desc-simple">{{ model.description || '' }}</div>
                       </div>
-                      <div class="model-content">
-                        <div class="model-header">
-                          <span class="model-name">{{ model.name }}</span>
-                          <div class="model-badges">
-                            <el-tag v-if="model.tag" :type="model.tagType" size="small" class="model-tag">
-                              {{ model.tag }}
-                            </el-tag>
-                            <div v-if="model.available" class="status-indicator available"></div>
-                            <div v-else class="status-indicator unavailable"></div>
-                          </div>
+                      <div class="model-status-right">
+                        <div v-if="selectedModel === model.id" class="model-check">
+                          <el-icon :size="16" color="#409eff">
+                            <Check />
+                          </el-icon>
                         </div>
-                        <div class="model-meta">
-                          <span class="provider">{{ model.provider }}</span>
-                          <el-tag 
-                            v-for="capability in model.capabilities.slice(0, 3)" 
-                            :key="capability" 
-                            size="small" 
-                            type="info" 
-                            class="capability-tag"
-                          >
-                            {{ capability }}
-                          </el-tag>
-                          <el-tag 
-                            v-if="model.pricing" 
-                            size="small" 
-                            type="warning" 
-                            class="pricing-tag"
-                          >
-                            ¥{{ (model.pricing.input + model.pricing.output).toFixed(2) }}/1M tokens
-                          </el-tag>
-                          <el-tag 
-                            v-if="model.performance" 
-                            size="small" 
-                            :type="getPerformanceTagType(model.performance.speed)"
-                            class="performance-tag"
-                          >
-                            {{ model.performance.speed }}
-                          </el-tag>
-                        </div>
-                      </div>
-                      <div class="model-arrow">
-                        <el-icon :size="16" color="#94a3b8">
-                          <ArrowRight />
-                        </el-icon>
+                        <div class="status-dot" :class="model.available ? 'available' : 'unavailable'"></div>
                       </div>
                     </div>
                   </el-option>
@@ -246,6 +208,7 @@
               </template>
             </div>
             <div class="message-bubble">
+              <img v-if="message.image_url" :src="message.image_url" alt="Image" class="message-image" />
               <div v-if="message.is_loading" class="loading-content">
                 <div class="ai-thinking">
                   <span class="thinking-dots">
@@ -265,7 +228,7 @@
                 </el-button>
               </div>
               <div v-else>
-                <MarkdownRenderer :source="message.content" />
+                <MarkdownRenderer :source="message.content" :streaming="message.is_loading" />
               </div>
             </div>
           </div>
@@ -276,11 +239,11 @@
       <footer class="chat-footer">
         <!-- 文字聊天模式 -->
         <div v-if="chatMode === 'text'" class="input-wrapper">
-          <div class="input-with-image">
+          <div class="input-row">
             <el-input
               v-model="inputContent"
               type="textarea"
-              :rows="1"
+              rows="1"
               placeholder="说点什么吧～"
               resize="none"
               @keyup.enter.exact="handleSendMessage"
@@ -305,6 +268,18 @@
               :disabled="isSending"
               class="image-upload-btn"
             />
+            
+            <el-button
+              type="primary"
+              size="large"
+              icon="Paperclip"
+              :loading="isSending"
+              @click="handleSendMessage"
+              :disabled="!inputContent.trim() && !imagePreviewUrl"
+              class="send-button"
+            >
+              发送
+            </el-button>
           </div>
           
           <!-- 图片预览区域 -->
@@ -313,17 +288,11 @@
             <el-icon class="remove-image-btn" @click="removeImage"><Close /></el-icon>
           </div>
           
-          <el-button
-            type="primary"
-            size="large"
-            icon="Paperclip"
-            :loading="isSending"
-            @click="handleSendMessage"
-            :disabled="!inputContent.trim() && !imagePreviewUrl"
-            class="send-button"
-          >
-            发送
-          </el-button>
+          <!-- 角色扮演选择器 -->
+          <RoleSelector
+            ref="roleSelectorRef"
+            @role-change="handleRoleChange"
+          />
         </div>
         
         <!-- 语音通话模式 -->
@@ -480,37 +449,20 @@ const loadAvailableModels = async () => {
     // 使用默认的模型列表作为后备（包含其他厂商的模型）
     modelGroups.value = [
       {
-        label: '多模态',
+        label: '模型',
         models: [
-          { id: 'qwen-vl-plus', name: 'Qwen VL Plus (支持图片)', provider: 'Qwen', group: '多模态', available: true },
-          { id: 'qwen-vl-max', name: 'Qwen VL Max (支持图片)', provider: 'Qwen', group: '多模态', available: true },
-          { id: 'gpt-4o', name: 'GPT-4o', provider: 'OpenAI', group: '多模态', available: true },
-          { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro', provider: 'Google', group: '多模态', available: true }
-        ]
-      },
-      {
-        label: '高性能',
-        models: [
-          { id: 'qwen-max', name: 'Qwen Max', provider: 'Qwen', group: '高性能', available: true },
-          { id: 'gpt-4', name: 'GPT-4', provider: 'OpenAI', group: '高性能', available: true },
-          { id: 'claude-3-opus', name: 'Claude 3 Opus', provider: 'Anthropic', group: '高性能', available: true }
-        ]
-      },
-      {
-        label: '通用',
-        models: [
-          { id: 'qwen-turbo', name: 'Qwen Turbo', provider: 'Qwen', group: '通用', available: true },
-          { id: 'qwen-plus', name: 'Qwen Plus', provider: 'Qwen', group: '通用', available: true },
-          { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo', provider: 'OpenAI', group: '通用', available: true },
-          { id: 'claude-3-sonnet', name: 'Claude 3 Sonnet', provider: 'Anthropic', group: '通用', available: true },
-          { id: 'gemini-pro', name: 'Gemini Pro', provider: 'Google', group: '通用', available: true }
-        ]
-      },
-      {
-        label: '开源',
-        models: [
-          { id: 'llama-3-70b', name: 'Llama 3 70B', provider: 'Meta', group: '开源', available: true },
-          { id: 'mistral-large', name: 'Mistral Large', provider: 'Mistral', group: '开源', available: true }
+          { id: 'qwen-vl-plus', name: 'Qwen VL Plus', description: '支持图片理解的多模态模型', provider: 'Qwen', group: '模型', available: true },
+          { id: 'qwen-vl-max', name: 'Qwen VL Max', description: '高性能多模态模型', provider: 'Qwen', group: '模型', available: true },
+          { id: 'gpt-4o', name: 'GPT-4o', description: 'OpenAI 多模态模型', provider: 'OpenAI', group: '模型', available: true },
+          { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro', description: 'Google 多模态模型', provider: 'Google', group: '模型', available: true },
+          { id: 'qwen-max', name: 'Qwen Max', description: '高性能文本模型', provider: 'Qwen', group: '模型', available: true },
+          { id: 'gpt-4', name: 'GPT-4', description: 'OpenAI 高性能模型', provider: 'OpenAI', group: '模型', available: true },
+          { id: 'claude-3-opus', name: 'Claude 3 Opus', description: 'Anthropic 高性能模型', provider: 'Anthropic', group: '模型', available: true },
+          { id: 'qwen-turbo', name: 'Qwen Turbo', description: '快速响应模型', provider: 'Qwen', group: '模型', available: true },
+          { id: 'qwen-plus', name: 'Qwen Plus', description: '均衡性能模型', provider: 'Qwen', group: '模型', available: true },
+          { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo', description: 'OpenAI 快速模型', provider: 'OpenAI', group: '模型', available: true },
+          { id: 'claude-3-sonnet', name: 'Claude 3 Sonnet', description: 'Anthropic 均衡模型', provider: 'Anthropic', group: '模型', available: true },
+          { id: 'gemini-pro', name: 'Gemini Pro', description: 'Google 通用模型', provider: 'Google', group: '模型', available: true }
         ]
       }
     ]
@@ -1307,6 +1259,64 @@ const loadData = async () => {
   }
 }
 
+// 处理头像更新事件
+const handleAvatarUpdated = (event) => {
+  const { avatarUrl } = event.detail
+  if (avatarUrl) {
+    // 添加时间戳破坏缓存
+    const newAvatarUrl = avatarUrl.includes('?') 
+      ? `${avatarUrl}&t=${Date.now()}` 
+      : `${avatarUrl}?t=${Date.now()}`
+    console.log('收到头像更新事件:', newAvatarUrl)
+    userAvatarUrl.value = newAvatarUrl
+    
+    // 同时更新 authStore.user
+    if (authStore.user) {
+      authStore.user.avatar = avatarUrl
+    }
+  }
+}
+
+// 加载用户头像
+const loadUserAvatar = async () => {
+  if (!authStore.isLoggedIn) {
+    console.log('Chat.vue: 用户未登录，跳过加载头像')
+    return
+  }
+  
+  try {
+    console.log('Chat.vue: 开始加载用户头像')
+    const response = await service.get('/user-info/')
+    
+    console.log('Chat.vue: 用户信息响应:', response.data)
+    
+    if (response.status === 200) {
+      const userData = response.data
+      // 后端返回的字段名是 avatar 而不是 avatar_url
+      const avatarUrl = userData.avatar || userData.avatar_url
+      console.log('Chat.vue: 获取到的头像URL:', avatarUrl)
+      
+      if (avatarUrl) {
+        // 添加时间戳破坏缓存
+        const cachedUrl = avatarUrl.includes('?') 
+          ? `${avatarUrl}&t=${Date.now()}` 
+          : `${avatarUrl}?t=${Date.now()}`
+        console.log('Chat.vue: 设置头像URL:', cachedUrl)
+        userAvatarUrl.value = cachedUrl
+        
+        // 同时更新 authStore.user 以确保 watch 能正确触发
+        if (authStore.user) {
+          authStore.user.avatar = avatarUrl
+        }
+      } else {
+        console.log('Chat.vue: 用户没有头像')
+      }
+    }
+  } catch (error) {
+    console.error('Chat.vue: 加载用户头像失败:', error)
+  }
+}
+
 // 页面挂载时调用
 onMounted(async () => {
   console.log('Chat.vue 页面挂载开始')
@@ -1365,40 +1375,32 @@ onMounted(async () => {
   // 获取用户头像
   await loadUserAvatar()
   
+  // 监听头像更新事件
+  window.addEventListener('avatar-updated', handleAvatarUpdated)
+  
   console.log('Chat.vue 页面挂载完成')
 })
 
-// 加载用户头像
-const loadUserAvatar = async () => {
-  if (!authStore.isAuthenticated) {
-    return
-  }
-  
-  try {
-    const response = await service.get('/user-info/')
-    
-    if (response.status === 200) {
-      const userData = response.data
-      if (userData.avatar_url) {
-        userAvatarUrl.value = userData.avatar_url
-      }
-    }
-  } catch (error) {
-    console.error('加载用户头像失败:', error)
-  }
-}
+// 页面卸载时移除事件监听
+onUnmounted(() => {
+  window.removeEventListener('avatar-updated', handleAvatarUpdated)
+})
 
 // 监听authStore.user变化，实现头像实时更新
 watch(
   () => authStore.user,
   (newUser, oldUser) => {
-    console.log('authStore.user变化:', {
+    console.log('Chat.vue: authStore.user变化:', {
       oldAvatar: oldUser?.avatar,
       newAvatar: newUser?.avatar
     })
     if (newUser?.avatar) {
-      console.log('更新userAvatarUrl:', newUser.avatar)
-      userAvatarUrl.value = newUser.avatar
+      // 添加时间戳破坏缓存
+      const avatarUrl = newUser.avatar.includes('?') 
+        ? `${newUser.avatar}&t=${Date.now()}` 
+        : `${newUser.avatar}?t=${Date.now()}`
+      console.log('Chat.vue: 更新userAvatarUrl:', avatarUrl)
+      userAvatarUrl.value = avatarUrl
     }
   },
   { deep: true }
@@ -1498,24 +1500,39 @@ const shouldShowTime = (index) => {
 
 /* 消息气泡 */
 .message-bubble {
-  padding: 10px 14px;
+  padding: 8px 12px;
   border-radius: 18px;
   word-wrap: break-word;
   white-space: pre-wrap;
   position: relative;
   max-width: 100%;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  line-height: 1.5;
+  font-size: 15px;
+}
+
+.message-image {
+  max-width: 200px;
+  max-height: 150px;
+  border-radius: 8px;
+  object-fit: cover;
+  margin-bottom: 8px;
+  display: block;
 }
 
 .message-item.user .message-bubble {
-  background-color: #dcf8c6; /* 绿色气泡（用户） */
+  background: linear-gradient(135deg, #e8f5e9, #c8e6c9);
+  color: #2e7d32;
   border-bottom-right-radius: 4px;
-  box-shadow: 0 1px 2px rgba(0, 150, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(76, 175, 80, 0.15);
 }
 
 .message-item.assistant .message-bubble {
-  background-color: #ffffff; /* 白色气泡（AI） */
+  background: #ffffff;
+  color: #333;
   border-bottom-left-radius: 4px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border: 1px solid #f0f0f0;
 }
 
 .message-header {
@@ -1883,15 +1900,15 @@ const shouldShowTime = (index) => {
 .ai-api-selector {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 8px;
   background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-  border-radius: 14px;
-  padding: 10px 20px;
+  border-radius: 8px;
+  padding: 4px 8px;
   border: 1px solid #e2e8f0;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
   position: static;
   z-index: 10;
-  height: 52px;
+  height: 36px;
   box-sizing: border-box;
   backdrop-filter: blur(10px);
   transition: all 0.3s ease;
@@ -1906,19 +1923,38 @@ const shouldShowTime = (index) => {
 }
 
 .ai-model-select {
-  width: 320px;
-  min-width: 280px;
+  width: auto;
+  min-width: 0;
+}
+
+.ai-model-select :deep(.el-input__wrapper) {
+  background: transparent !important;
+  border: 1px solid #e4e7ed !important;
+  border-radius: 3px !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  min-height: 16px !important;
+  transition: all 0.2s ease;
+}
+
+.ai-model-select :deep(.el-input__wrapper):hover {
+  border-color: #c0c4cc !important;
+}
+
+.ai-model-select :deep(.el-input__wrapper.is-focus) {
+  border-color: #409eff !important;
 }
 
 .ai-model-select :deep(.el-input__inner) {
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: #1e293b;
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: #606266;
   background: transparent;
   border: none;
   box-shadow: none;
-  padding: 10px 16px;
-  height: 40px;
+  padding: 0 2px;
+  height: auto;
+  line-height: 1.3;
 }
 
 .ai-model-select :deep(.el-input__inner:focus) {
@@ -1927,29 +1963,26 @@ const shouldShowTime = (index) => {
 }
 
 .ai-model-select :deep(.el-select__placeholder) {
-  color: #64748b;
-  font-weight: 500;
-  font-size: 0.95rem;
+  color: #c0c4cc;
+  font-weight: 400;
+  font-size: 0.75rem;
 }
 
 .ai-model-select :deep(.el-select .el-input .el-select__caret) {
-  color: #64748b;
-  font-size: 0.9rem;
+  color: #c0c4cc;
+  font-size: 9px;
+  transition: transform 0.2s ease;
 }
 
 .ai-model-select :deep(.el-select-dropdown) {
-  border: none;
-  box-shadow: 
-    0 2px 4px rgba(0, 0, 0, 0.05),
-    0 8px 24px rgba(0, 0, 0, 0.1);
-  border-radius: 12px;
+  border: 1px solid #e4e7ed;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
   overflow: hidden;
-  min-width: 380px !important;
+  min-width: 280px !important;
   width: auto !important;
-  padding: 0;
+  padding: 4px 0;
   background: #ffffff;
-  backdrop-filter: blur(10px);
-  position: relative;
 }
 
 .ai-model-select :deep(.el-select-dropdown__list) {
@@ -1965,101 +1998,131 @@ const shouldShowTime = (index) => {
   border-left: none !important;
 }
 
-.ai-model-select :deep(.el-option:hover) {
+.ai-model-select :deep(.el-option)::before,
+.ai-model-select :deep(.el-option)::after {
+  display: none !important;
+}
+
+.ai-model-select :deep(.el-select-group__title) {
+  padding: 6px 12px 2px !important;
+  font-size: 0.7rem !important;
+  font-weight: 500 !important;
+  color: #909399 !important;
   background: transparent !important;
+  border: none !important;
+  margin: 0 !important;
+  line-height: 1 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.5px !important;
+}
+
+.ai-model-select :deep(.el-select-group__title)::before,
+.ai-model-select :deep(.el-select-group__title)::after {
+  display: none !important;
+  content: none !important;
+}
+
+.ai-model-select :deep(.el-select-group) {
+  border: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.ai-model-select :deep(.el-select-group__wrap) {
+  border: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.ai-model-select :deep(.el-select-group__wrap):not(:last-of-type)::after {
+  display: none !important;
 }
 
 .model-option {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 16px 20px;
-  border-radius: 0;
+  justify-content: space-between;
+  padding: 8px 12px;
   transition: all 0.2s ease;
   cursor: pointer;
-  margin: 0;
-  border: none;
   width: 100%;
   box-sizing: border-box;
   background: transparent;
-  position: relative;
-  min-height: 60px;
-}
-
-.model-option:not(:last-child) {
-  margin-bottom: 0;
-}
-
-.model-option:last-child {
-  border-bottom: none;
+  border-radius: 4px;
+  margin: 2px 4px;
 }
 
 .model-option:hover {
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  background: #f5f7fa;
 }
 
 .model-option.selected {
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
+  background: #f0f7ff !important;
 }
 
-.model-option.selected {
-  background: #ffffff !important;
+.model-content-simple {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
-.model-option.selected .model-name {
-  font-weight: 400 !important;
-  color: #000000 !important;
+.model-name-simple {
+  font-size: 0.85rem;
+  font-weight: 400;
+  color: #303133;
+  line-height: 1.4;
 }
 
-.model-option.selected .provider {
-  font-weight: 400 !important;
-  color: #374151 !important;
+.model-option.selected .model-name-simple {
+  color: #409eff;
+  font-weight: 500;
 }
 
-
-
-.model-option:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.model-desc-simple {
+  font-size: 0.7rem;
+  color: #c0c4cc;
+  line-height: 1.3;
 }
 
-.model-icon-left {
+.model-check {
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.model-icon {
-  width: 32px;
-  height: 32px;
+.model-status-right {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 8px;
-  color: white;
-  font-size: 0.9rem;
-  font-weight: bold;
-  box-shadow: 
-    0 2px 4px rgba(0, 0, 0, 0.2),
-    inset 0 1px 1px rgba(255, 255, 255, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  position: relative;
+  gap: 8px;
 }
 
-.model-icon::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  border-radius: 8px;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, transparent 50%);
-  pointer-events: none;
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-dot.available {
+  background: #67c23a;
+  box-shadow: 0 0 4px rgba(103, 194, 58, 0.4);
+}
+
+.status-dot.unavailable {
+  background: #f56c6c;
+  box-shadow: 0 0 4px rgba(245, 108, 108, 0.4);
+}
+
+.ai-model-select :deep(.el-option:hover) {
+  background: transparent !important;
+}
+
+.model-option:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .model-content {
@@ -2632,9 +2695,10 @@ const shouldShowTime = (index) => {
 }
 
 .message-text {
-  font-size: 0.95rem;
-  color: #606266;
-  line-height: 1.6;
+  font-size: 1rem;
+  color: #334155;
+  line-height: 1.5;
+  padding: 8px 12px;
 }
 
 .message-text :deep(pre) {
@@ -2674,40 +2738,48 @@ const shouldShowTime = (index) => {
 
 .input-wrapper {
   display: flex;
-  gap: 0;
-  align-items: flex-end;
+  flex-direction: column;
+  align-items: center;
+  border: 1px solid #dcdfe6;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.95);
+  transition: all 0.3s ease;
+  padding: 8px;
   width: 98%;
   max-width: none;
   margin: 0 auto;
-  padding: 0 1rem;
   position: relative;
 }
 
-.input-with-image {
-  position: relative;
-  flex: 1;
+.input-wrapper:focus-within {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.input-row {
   display: flex;
   align-items: center;
-  position: relative;
+  width: 100%;
+  gap: 8px;
 }
 
 .message-input {
   flex: 1;
   padding: 0.75rem 1rem;
-  border: 1px solid #dcdfe6;
-  border-right: none;
-  border-radius: 12px 0 0 12px;
+  border: none;
   font-size: 1.1rem;
   font-weight: 600;
   color: #000000;
   resize: none;
-  background: rgba(255, 255, 255, 0.95);
+  background: transparent;
   height: 48px;
   line-height: 1.5;
   box-sizing: border-box;
-  display: flex;
-  align-items: center;
   letter-spacing: 0.5px;
+}
+
+.message-input:focus {
+  outline: none;
 }
 
 .message-input::placeholder {
@@ -2716,19 +2788,15 @@ const shouldShowTime = (index) => {
   font-size: 1rem;
 }
 
-.message-input:focus {
-  outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
-}
-
 .send-button {
   padding: 0.75rem 1.5rem;
   height: 48px;
+  min-height: 48px;
+  max-height: 48px;
   background: #3b82f6;
   color: white;
-  border: 1px solid #3b82f6;
-  border-radius: 0 12px 12px 0;
+  border: none;
+  border-radius: 12px;
   cursor: pointer;
   transition: all 0.3s ease;
   white-space: nowrap;
@@ -2736,67 +2804,80 @@ const shouldShowTime = (index) => {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 3px;
+  font-size: 0.9rem;
+  font-weight: 600;
 }
 
 .send-button:hover {
   background: #2563eb;
-  border-color: #2563eb;
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
 }
 
 .send-button:disabled {
   background: #9ca3af;
-  border-color: #9ca3af;
   cursor: not-allowed;
   transform: none;
   box-shadow: none;
 }
 
-/* 图片上传按钮样式 */
 .image-upload-btn {
-  position: absolute;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 10;
+  padding: 8px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: #606266;
+  transition: all 0.3s ease;
+  border-radius: 8px;
+  flex-shrink: 0;
 }
 
-/* 图片预览样式 */
+.image-upload-btn:hover {
+  background: #f5f7fa;
+  color: #3b82f6;
+}
+
 .image-preview-wrapper {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 0.5rem 1rem;
-  background: rgba(255, 255, 255, 0.95);
-  border: 1px solid #dcdfe6;
-  border-radius: 12px;
-  margin: 0.5rem 1rem;
-  max-width: 98%;
-  margin: 0 auto;
+  margin-top: 8px;
+  padding: 8px;
+  background: #f5f7fa;
+  border-radius: 8px;
+  position: relative;
+  max-width: 100%;
+  width: 100%;
 }
 
 .image-preview {
   max-width: 150px;
-  max-height: 150px;
-  border-radius: 8px;
+  max-height: 100px;
+  border-radius: 6px;
   object-fit: cover;
-  border: 1px solid #ebeef5;
 }
 
 .remove-image-btn {
-  color: #ff4d4f;
-  cursor: pointer;
-  padding: 4px;
-  transition: all 0.3s ease;
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
+  cursor: pointer;
+  color: #909399;
+  font-size: 14px;
+  transition: all 0.3s ease;
 }
 
 .remove-image-btn:hover {
-  color: #ff1f1f;
-  transform: scale(1.2);
+  background: #fff;
+  color: #f56c6c;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .video-controls-placeholder {
@@ -3108,6 +3189,45 @@ const shouldShowTime = (index) => {
 .thinking-text {
   color: #409eff;
   font-weight: 500;
+}
+
+/* 删除对话框样式 - 不透明 */
+:deep(.el-message-box__wrapper) {
+  --el-messagebox-bg-color: #ffffff;
+}
+
+:deep(.el-overlay) {
+  background-color: rgba(0, 0, 0, 0.5) !important;
+}
+
+:deep(.el-message-box) {
+  background: #ffffff !important;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+}
+
+:deep(.el-message-box__header) {
+  padding: 20px 20px 10px;
+}
+
+:deep(.el-message-box__title) {
+  font-size: 18px;
+  font-weight: 600;
+  color: #303133;
+}
+
+:deep(.el-message-box__content) {
+  padding: 10px 20px 20px;
+}
+
+:deep(.el-message-box__message) {
+  font-size: 15px;
+  color: #606266;
+  line-height: 1.5;
+}
+
+:deep(.el-message-box__btns) {
+  padding: 10px 20px 20px;
 }
 
 .thinking-timer {

@@ -7,8 +7,8 @@ from rest_framework.views import APIView
 from django.contrib.auth.models import User
 from django.http import JsonResponse, StreamingHttpResponse
 from django.views.decorators.csrf import csrf_exempt
-from django.utils.decorators import method_decorator
 from django.views.decorators.http import require_http_methods
+from django.utils.decorators import method_decorator
 from .models import Conversation, Message, PasswordResetToken, UserProfile
 from .serializers import ConversationSerializer, MessageSerializer, PasswordResetTokenSerializer, UserSerializer, UserProfileSerializer
 from django.contrib.auth import authenticate, login, logout
@@ -18,11 +18,14 @@ from django.core.mail import send_mail
 from django.conf import settings
 from django.utils import timezone
 from datetime import datetime, timedelta
+from django.core.cache import cache
 import uuid
 import json
 import requests
 import openai
 import logging
+import hashlib
+import socket
 from PIL import Image
 import os
 from .enhanced_api import EnhancedApiWrapper
@@ -53,6 +56,23 @@ def chat(request):
     model = request.data.get('model', 'qwen-turbo')
 
     logger.info(f"chat 被调用 - message: {message_content[:50]}..., model: {model}")
+    
+    # 优化：添加缓存键定义
+    cache_key = f"chat_cache_{hashlib.md5(message_content.encode()).hexdigest()}"
+    
+    # 优化：尝试从缓存获取响应
+    try:
+        cached_response = cache.get(cache_key)
+        if cached_response:
+            logger.info(f"✅ 使用缓存响应，节省 API 调用")
+            return Response({
+                'content': cached_response,
+                'conversation_id': conversation_id,
+                'status': 'completed',
+                'from_cache': True
+            })
+    except Exception as cache_error:
+        logger.warning(f"缓存不可用，跳过缓存：{cache_error}")
 
     try:
         if conversation_id:
@@ -81,12 +101,37 @@ def chat(request):
             elif msg.role == 'assistant':
                 history.append({"role": "assistant", "content": msg.content})
 
+        # 优化：在发送消息前，先检查知识库（带超时限制）
+        knowledge_context = ""
+        try:
+            # 优化：设置 1.5 秒超时，避免知识库检索拖慢响应
+            old_timeout = socket.getdefaulttimeout()
+            socket.setdefaulttimeout(1.5)
+
+            from .utils.knowledge_base import knowledge_base_manager
+            if knowledge_base_manager.client is not None:
+                # 优化：减少检索数量从 2 到 1，加快检索速度
+                search_results = knowledge_base_manager.search(message_content, n_results=1)
+                if search_results and search_results.get('documents'):
+                    kb_docs = search_results['documents'][0]
+                    if kb_docs:
+                        # 只使用最相关的 1 条，减少上下文长度
+                        knowledge_context = "\n".join(kb_docs[:1]) + "\n\n"
+
+            socket.setdefaulttimeout(old_timeout)
+        except Exception as kb_error:
+            logger.warning(f"⚠️ 知识库检索超时或失败（已跳过）: {str(kb_error)}")
+            # 知识库检索失败不影响主要功能，继续执行
+
+        # 准备发送给 AI 的消息，包含知识库上下文
+        enhanced_message = knowledge_context + message_content if knowledge_context else message_content
+        
         # 创建API实例
         api_instance = EnhancedApiWrapper.create_api_instance(model)
 
         try:
             result = api_instance.send_message(
-                message=message_content,
+                message=enhanced_message,
                 config={
                     'model': model,
                     'history': history[:-1] if history else [],
@@ -113,6 +158,13 @@ def chat(request):
             content=content
         )
         conversation.save()
+        
+        # 优化：缓存响应
+        try:
+            cache.set(cache_key, content, 3600)  # 缓存 1 小时
+            logger.info(f"✅ 已缓存响应到缓存系统")
+        except Exception as cache_error:
+            logger.warning(f"缓存保存失败：{cache_error}")
 
         return Response({
             'content': content,
@@ -131,27 +183,29 @@ def chat(request):
 @permission_classes([permissions.IsAuthenticated])
 def stream_chat(request):
     """流式聊天接口"""
-    conversation_id = request.data.get('conversation_id')
-    message_content = request.data.get('message')
-    image_url = request.data.get('image_url')
-    model = request.data.get('model', 'gpt-3.5-turbo')
-
-    # 调试日志
-    logger.info(f"stream_chat 被调用 - image_url: {image_url}, model: {model}")
-
-    # 如果上传了图片但当前模型不支持视觉，自动切换到视觉模型
-    vision_models = ['qwen-vl-plus', 'qwen-vl-max', 'gpt-4-vision', 'gpt-4o', 'claude-3-opus', 'claude-3-sonnet']
-    if image_url and model not in vision_models:
-        # 尝试使用 qwen-vl-plus 作为默认视觉模型
-        original_model = model
-        model = 'qwen-vl-plus'
-        logger.info(f"检测到图片但模型 {original_model} 不支持视觉，自动切换到 {model}")
-
     try:
+        conversation_id = request.data.get('conversation_id')
+        message_content = request.data.get('message')
+        image_url = request.data.get('image_url')
+        model = request.data.get('model', 'gpt-3.5-turbo')
+        role_id = request.data.get('role_id')
+        custom_role_prompt = request.data.get('custom_role_prompt')
+
+        # 调试日志
+        logger.info(f"stream_chat 被调用 - user: {request.user}, message: {message_content[:50] if message_content else 'None'}, image_url: {image_url}, model: {model}, role_id: {role_id}")
+
+        # 如果上传了图片但当前模型不支持视觉，自动切换到视觉模型
+        vision_models = ['qwen-vl-plus', 'qwen-vl-max', 'gpt-4-vision', 'gpt-4o', 'claude-3-opus', 'claude-3-sonnet']
+        if image_url and model not in vision_models:
+            # 尝试使用 qwen-vl-plus 作为默认视觉模型
+            original_model = model
+            model = 'qwen-vl-plus'
+            logger.info(f"检测到图片但模型 {original_model} 不支持视觉，自动切换到 {model}")
+
         if conversation_id:
             conversation = Conversation.objects.get(id=conversation_id, user=request.user)
         else:
-            title = message_content[:50] if message_content else "New Conversation"
+            title = (message_content or "New Conversation")[:50]
             conversation = Conversation.objects.create(user=request.user, title=title, model=model)
 
         message_data = {
@@ -164,6 +218,20 @@ def stream_chat(request):
         Message.objects.create(**message_data)
 
         history = []
+        
+        # 如果指定了角色，添加系统提示词
+        if role_id:
+            role_info = function_router_instance.role_presets.get(role_id, {})
+            system_prompt = role_info.get('system_prompt', '')
+            
+            # 如果是自定义角色，使用用户提供的提示词
+            if role_id == 'custom' and custom_role_prompt:
+                system_prompt = custom_role_prompt
+            
+            if system_prompt:
+                history.append({"role": "system", "content": system_prompt})
+                logger.info(f"添加角色系统提示词: {role_info.get('name', '自定义角色')}")
+        
         messages = Message.objects.filter(conversation=conversation).order_by('created_at')
         for msg in messages:
             if msg.role == 'user':
@@ -174,36 +242,37 @@ def stream_chat(request):
             elif msg.role == 'assistant':
                 history.append({"role": "assistant", "content": msg.content})
 
-        # EnhancedApiWrapper 不需要用户参数，直接使用静态方法
-        pass  # 删除这行，因为我们不需要创建api_wrapper实例
-        # 我们可以直接使用EnhancedApiWrapper.create_api_instance来创建API实例
+        # 添加缓存键定义（用于缓存响应）
+        cache_key = f"chat_cache_{hashlib.md5((message_content or '').encode()).hexdigest()}"
+        
+        # 创建API实例
+        logger.info(f"创建API实例，模型: {model}")
         api_instance = EnhancedApiWrapper.create_api_instance(model)
+        logger.info(f"API实例创建成功: {api_instance.name}")
 
         def stream_response_generator():
             full_response = ""
             try:
-                # 立即返回一个初始消息，防止客户端超时
-                yield f"data: {json.dumps({'content': ''})}" + "\n\n"
-                
-                # 在发送消息前，先检查知识库
-                knowledge_context = ""
+                # 优化：首先检查缓存
                 try:
-                    # 尝试从知识库中检索相关信息
-                    from .utils.knowledge_base import knowledge_base_manager
-                    if knowledge_base_manager.client is not None:
-                        search_results = knowledge_base_manager.search(message_content, n_results=3)
-                        if search_results and search_results.get('documents'):
-                            # 将知识库检索结果整合为上下文
-                            kb_docs = search_results['documents'][0]  # 取第一个结果的所有文档
-                            if kb_docs:
-                                knowledge_context = "基于知识库的相关信息：\n" + "\n".join(kb_docs[:2]) + "\n\n"
-                except Exception as kb_error:
-                    logger.warning(f"知识库检索失败: {str(kb_error)}")
-                    # 知识库检索失败不影响主要功能，继续执行
-
-                # 准备发送给AI的消息，包含知识库上下文
-                enhanced_message = knowledge_context + message_content if knowledge_context else message_content
-
+                    cached_response = cache.get(cache_key)
+                    if cached_response:
+                        logger.info(f"✅ 使用缓存响应，节省 API 调用")
+                        yield f"data: {json.dumps({'content': ' '})}" + "\n\n"
+                        yield f"data: {json.dumps({'content': cached_response})}" + "\n\n"
+                        yield f"data: {json.dumps({'status': 'completed', 'from_cache': True})}" + "\n\n"
+                        return
+                except Exception as cache_error:
+                    logger.warning(f"缓存检查失败：{cache_error}")
+                
+                # 优化：立即返回一个空格，让前端更快显示响应开始
+                yield f"data: {json.dumps({'content': ' '})}" + "\n\n"
+                
+                # 优化：移除知识库检索，直接发送消息给 AI，最大化响应速度
+                knowledge_context = ""
+                safe_message = message_content or ""
+                enhanced_message = safe_message
+                
                 # 使用api_instance发送消息
                 # 如果有图片，构建包含图片的消息内容
                 current_message_content = enhanced_message
@@ -224,7 +293,7 @@ def stream_chat(request):
                             message=current_message_content,
                             config={
                                 'model': model,
-                                'history': history[:-1] if history else [],
+                                'history': history[:-1] if len(history) > 1 else [],
                                 'temperature': 0.7,
                                 'max_tokens': 2000,
                                 'top_p': 0.9
@@ -239,7 +308,7 @@ def stream_chat(request):
                             message=current_message_content,
                             config={
                                 'model': model,
-                                'history': history[:-1] if history else [],
+                                'history': history[:-1] if len(history) > 1 else [],
                                 'temperature': 0.7,
                                 'max_tokens': 2000,
                                 'top_p': 0.9
@@ -252,6 +321,8 @@ def stream_chat(request):
                 except Exception as api_error:
                     # API调用失败，使用模拟响应
                     logger.warning(f"API调用失败，使用模拟响应: {str(api_error)}")
+                    import traceback
+                    logger.error(f"API错误详情: {traceback.format_exc()}")
                     from .enhanced_api import MockApiInstance
                     mock_api = MockApiInstance()
                     result = mock_api.send_message(
@@ -264,6 +335,13 @@ def stream_chat(request):
                     yield f"data: {json.dumps({'content': content})}" + "\n\n"
 
                 if full_response:
+                    # 优化：缓存响应，下次相同请求直接返回
+                    try:
+                        cache.set(cache_key, full_response, 3600)  # 缓存 1 小时
+                        logger.info(f"✅ 已缓存响应到缓存系统")
+                    except Exception as cache_error:
+                        logger.warning(f"缓存设置失败: {cache_error}")
+                    
                     Message.objects.create(
                         conversation=conversation,
                         role='assistant',
@@ -275,17 +353,23 @@ def stream_chat(request):
                     yield f"data: {json.dumps({'error': 'Empty response from AI'})}" + "\n\n"
 
             except Exception as e:
+                import traceback
                 logger.error(f"Streaming chat error: {str(e)}")
+                logger.error(f"详细错误: {traceback.format_exc()}")
                 yield f"data: {json.dumps({'error': str(e)})}" + "\n\n"
 
         response = StreamingHttpResponse(stream_response_generator(), content_type='text/event-stream')
         response['Cache-Control'] = 'no-cache'
+        response['X-Accel-Buffering'] = 'no'  # 禁用 Nginx 缓冲
         return response
 
     except Conversation.DoesNotExist:
         return Response({'error': '会话不存在或不属于当前用户'}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
+        import traceback
+        error_traceback = traceback.format_exc()
         logger.error(f"Stream chat setup error: {str(e)}")
+        logger.error(f"详细错误信息: {error_traceback}")
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -298,6 +382,8 @@ def function_router(request):
     language = request.data.get('language')
     model = request.data.get('model', 'qwen-turbo')
     image_url = request.data.get('image_url')
+    role_id = request.data.get('role_id')
+    custom_role_prompt = request.data.get('custom_role_prompt')
 
     if not feature_name or not user_input:
         return Response({'error': 'Feature name and user input are required.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -305,10 +391,222 @@ def function_router(request):
     try:
         # 将 feature_name 作为用户输入的一部分传入 route_function
         full_input = f"{feature_name} {user_input}".strip()
-        response_content = function_router_instance.route_function(full_input, model=model, language=language, image_url=image_url)
+        response_content = function_router_instance.route_function(full_input, model=model, language=language, image_url=image_url, role_id=role_id, custom_role_prompt=custom_role_prompt)
         return Response({'result': response_content})
     except Exception as e:
         logger.error(f"Error in function router: {e}")
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def stream_function_router_view(request):
+    """流式功能路由器视图"""
+    try:
+        data = json.loads(request.body)
+        feature_name = data.get('feature_name') or data.get('function')
+        user_input = data.get('user_input') or data.get('input')
+        language = data.get('language')
+        model = data.get('model', 'qwen-turbo')
+        image_url = data.get('image_url')
+        role_id = data.get('role_id')
+        custom_role_prompt = data.get('custom_role_prompt')
+
+        if not feature_name or not user_input:
+            return JsonResponse({'error': 'Feature name and user input are required.'}, status=400)
+
+        return stream_function_router(feature_name, user_input, model, language, image_url, role_id, custom_role_prompt)
+    except Exception as e:
+        logger.error(f"Error in stream_function_router_view: {e}", exc_info=True)
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+def stream_function_router(feature_name, user_input, model, language, image_url, role_id, custom_role_prompt):
+    """流式功能路由器"""
+    logger.info(f"开始流式处理 - feature: {feature_name}, model: {model}, role_id: {role_id}")
+    
+    def generate():
+        try:
+            full_input = f"{feature_name} {user_input}".strip()
+            logger.info(f"完整输入: {full_input[:100]}")
+            
+            # 如果指定了角色，优先使用角色扮演功能
+            if role_id and role_id != 'none':
+                logger.info(f"使用角色扮演模式，角色: {role_id}")
+                result = stream_role_play(user_input, model, role_id, custom_role_prompt, image_url)
+            else:
+                # 分析意图并路由到相应功能
+                intent = function_router_instance.analyze_intent(full_input)
+                logger.info(f"识别意图: {intent}")
+                
+                if intent == 'unknown':
+                    result = stream_chat_handler(full_input, model, image_url)
+                elif intent == 'translation':
+                    result = stream_generic_handler(full_input, model, 'translation_handler', language, image_url)
+                elif intent == 'programming':
+                    result = stream_generic_handler(full_input, model, 'programming_handler', image_url=image_url)
+                elif intent == 'story':
+                    result = stream_generic_handler(full_input, model, 'story_handler', image_url=image_url)
+                elif intent == 'poetry':
+                    result = stream_generic_handler(full_input, model, 'poetry_handler', image_url=image_url)
+                elif intent == 'chengyu':
+                    result = stream_generic_handler(full_input, model, 'chengyu_handler', image_url=image_url)
+                elif intent == 'text_summary':
+                    result = stream_generic_handler(full_input, model, 'text_summary_handler', image_url=image_url)
+                elif intent == 'report_generator':
+                    result = stream_generic_handler(full_input, model, 'report_generator_handler', image_url=image_url)
+                elif intent == 'travel_planner':
+                    result = stream_generic_handler(full_input, model, 'travel_planner_handler', image_url=image_url)
+                elif intent == 'social_media_copywriter':
+                    result = stream_generic_handler(full_input, model, 'social_media_copywriter_handler', image_url=image_url)
+                elif intent == 'visual_idiom_puzzle':
+                    result = stream_generic_handler(full_input, model, 'visual_idiom_puzzle_handler', image_url=image_url)
+                else:
+                    handler = function_router_instance.functions.get(intent, function_router_instance.chat_handler)
+                    import inspect
+                    sig = inspect.signature(handler)
+                    if 'image_url' in sig.parameters:
+                        result = handler(full_input, model, image_url)
+                    else:
+                        result = handler(full_input, model)
+                    yield f"data: {json.dumps({'content': result})}" + "\n\n"
+                    yield f"data: {json.dumps({'status': 'completed'})}" + "\n\n"
+                    return
+            
+            # 流式输出
+            logger.info("开始流式输出")
+            for chunk in result:
+                yield f"data: {json.dumps({'content': chunk})}" + "\n\n"
+            
+            yield f"data: {json.dumps({'status': 'completed'})}" + "\n\n"
+            logger.info("流式输出完成")
+            
+        except Exception as e:
+            logger.error(f"Error in stream function router: {e}", exc_info=True)
+            yield f"data: {json.dumps({'error': str(e)})}" + "\n\n"
+            yield f"data: {json.dumps({'status': 'completed'})}" + "\n\n"
+
+    response = StreamingHttpResponse(generate(), content_type='text/event-stream')
+    response['Cache-Control'] = 'no-cache'
+    response['X-Accel-Buffering'] = 'no'
+    return response
+
+
+def stream_generic_handler(user_input, model, handler_name, language=None, image_url=None):
+    """通用流式处理器，用于编程、故事等功能"""
+    from .enhanced_api import EnhancedApiWrapper
+    
+    api_instance = EnhancedApiWrapper.create_api_instance(model)
+    
+    if hasattr(api_instance, 'send_message_stream'):
+        config = {
+            'model': model,
+            'temperature': 0.7,
+            'max_tokens': 2000,
+            'top_p': 0.9,
+            'history': [{"role": "user", "content": user_input}]
+        }
+        
+        for chunk in api_instance.send_message_stream(user_input, config):
+            yield chunk
+    else:
+        handler = getattr(function_router_instance, handler_name, None)
+        if handler:
+            import inspect
+            sig = inspect.signature(handler)
+            if 'language' in sig.parameters and language:
+                result = handler(user_input, model, language)
+            elif 'image_url' in sig.parameters and image_url:
+                result = handler(user_input, model, image_url)
+            else:
+                result = handler(user_input, model)
+            yield result
+
+
+def stream_chat_handler(user_input, model, image_url=None):
+    """流式聊天处理器"""
+    from .enhanced_api import EnhancedApiWrapper
+    
+    api_instance = EnhancedApiWrapper.create_api_instance(model)
+    
+    if hasattr(api_instance, 'send_message_stream'):
+        config = {
+            'model': model,
+            'temperature': 0.6,
+            'max_tokens': 2000,
+            'top_p': 0.7,
+            'history': [{"role": "user", "content": user_input}]
+        }
+        
+        current_message_content = user_input
+        if image_url:
+            current_message_content = [
+                {"type": "text", "text": user_input},
+                {"type": "image_url", "image_url": {"url": image_url}}
+            ]
+        
+        for chunk in api_instance.send_message_stream(current_message_content, config):
+            yield chunk
+    else:
+        result = api_instance.send_message(user_input, {'model': model}, image_url=image_url)
+        yield result.get('content', '')
+
+
+def stream_role_play(user_input, model, role_id, custom_role_prompt=None, image_url=None):
+    """流式角色扮演处理器"""
+    from .enhanced_api import EnhancedApiWrapper
+    
+    role_info = function_router_instance.role_presets.get(role_id, function_router_instance.role_presets['custom'])
+    system_prompt = role_info['system_prompt']
+    
+    if role_id == 'custom' and custom_role_prompt:
+        system_prompt = custom_role_prompt
+    
+    history = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_input}
+    ]
+    
+    api_instance = EnhancedApiWrapper.create_api_instance(model)
+    
+    if hasattr(api_instance, 'send_message_stream'):
+        config = {
+            'model': model,
+            'temperature': 0.7,
+            'max_tokens': 2000,
+            'top_p': 0.8,
+            'history': history
+        }
+        
+        current_message_content = user_input
+        if image_url:
+            current_message_content = [
+                {"type": "text", "text": user_input},
+                {"type": "image_url", "image_url": {"url": image_url}}
+            ]
+        
+        for chunk in api_instance.send_message_stream(current_message_content, config):
+            yield chunk
+    else:
+        config = {
+            'model': model,
+            'temperature': 0.7,
+            'max_tokens': 800,
+            'history': history
+        }
+        result = api_instance.send_message(user_input, config, image_url=image_url)
+        yield result.get('content', '')
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def get_role_presets(request):
+    """获取预设角色列表"""
+    try:
+        presets = function_router_instance.get_role_presets()
+        return Response({'roles': presets})
+    except Exception as e:
+        logger.error(f"Error getting role presets: {e}")
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -396,12 +694,19 @@ def available_models(request):
     """获取所有可用模型列表"""
     logger.info("Attempting to fetch available models.")
     try:
+        logger.info("Calling EnhancedApiWrapper.get_available_models()")
         models = EnhancedApiWrapper.get_available_models()
         logger.info(f"Successfully fetched models: {models}")
         return Response(models)
     except Exception as e:
+        import traceback
+        error_traceback = traceback.format_exc()
         logger.error(f"获取模型列表失败: {str(e)}")
-        return Response({"error": "获取模型列表失败"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        logger.error(f"详细错误信息: {error_traceback}")
+        return Response(
+            {"error": "获取模型列表失败", "detail": str(e)}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 
 class ConversationViewSet(viewsets.ModelViewSet):
@@ -427,10 +732,11 @@ class ConversationViewSet(viewsets.ModelViewSet):
             serializer = MessageSerializer(messages, many=True)
             messages.filter(role='assistant', is_read=False).update(is_read=True)
             return Response(serializer.data)
-        except Conversation.DoesNotExist:
-            return Response({'error': '会话不存在'}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             logger.error(f"获取消息列表失败: {str(e)}")
+            # 检查是否是对象不存在的错误
+            if 'No Conversation matches the given query' in str(e) or 'does not exist' in str(e).lower():
+                return Response({'error': '会话不存在'}, status=status.HTTP_404_NOT_FOUND)
             return Response({'error': '获取消息列表失败'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class MessageViewSet(viewsets.ModelViewSet):
@@ -482,10 +788,23 @@ class UserLoginView(APIView):
         if user is not None:
             login(request, user)
             refresh = RefreshToken.for_user(user)
+            
+            # 获取用户信息，确保头像字段在根级别
+            try:
+                profile = user.profile
+                user_data = UserSerializer(user).data
+                profile_data = UserProfileSerializer(profile, context={'request': request}).data
+                user_data.update(profile_data)
+            except UserProfile.DoesNotExist:
+                profile = UserProfile.objects.create(user=user)
+                user_data = UserSerializer(user).data
+                profile_data = UserProfileSerializer(profile, context={'request': request}).data
+                user_data.update(profile_data)
+            
             return Response({
                 'refresh': str(refresh),
                 'access': str(refresh.access_token),
-                'user': UserSerializer(user).data
+                'user': user_data
             })
         else:
             return Response({"error": "Invalid credentials"}, status=status.HTTP_400_BAD_REQUEST)

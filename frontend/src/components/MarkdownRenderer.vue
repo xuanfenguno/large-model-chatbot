@@ -57,13 +57,66 @@ const props = defineProps({
   source: {
     type: String,
     default: ''
+  },
+  streaming: {
+    type: Boolean,
+    default: false
   }
 })
+
+const cleanStreamingMarkdown = (text) => {
+  if (!text) return ''
+  
+  let cleaned = text
+  
+  // 移除末尾未完成的加粗符号 **
+  cleaned = cleaned.replace(/\*\*$/, '')
+  
+  // 移除末尾未完成的斜体符号 *
+  cleaned = cleaned.replace(/(?<!\*)\*(?!\*)$/, '')
+  
+  // 移除末尾未完成的删除线 ~~
+  cleaned = cleaned.replace(/~~$/, '')
+  
+  // 移除末尾未完成的行内代码 `
+  cleaned = cleaned.replace(/`$/, '')
+  
+  // 移除末尾未完成的链接 [text](
+  cleaned = cleaned.replace(/\[[^\]]*\]\($/, '')
+  
+  // 移除末尾未完成的图片 ![alt](
+  cleaned = cleaned.replace(/!\[[^\]]*\]\($/, '')
+  
+  // 移除末尾未完成的标题 #
+  cleaned = cleaned.replace(/#+\s*$/, '')
+  
+  // 移除末尾未完成的任务列表 - [ ] 或 - [x]
+  cleaned = cleaned.replace(/-\s+\[[ xX]\]\s*$/, '- ')
+  
+  // 移除末尾未完成的无序列表符号
+  cleaned = cleaned.replace(/^[-*+]\s*$/, '')
+  
+  // 移除末尾未完成的有序列表 1. 
+  cleaned = cleaned.replace(/^\d+\.\s*$/, '')
+  
+  // 移除末尾未完成的引用 >
+  cleaned = cleaned.replace(/^>\s*$/, '')
+  
+  // 移除末尾未完成的表格分隔符 |
+  cleaned = cleaned.replace(/\|\s*$/, '')
+  
+  // 移除末尾未完成的水平线 ---
+  cleaned = cleaned.replace(/-{3,}$/, '')
+  cleaned = cleaned.replace(/\*{3,}$/, '')
+  
+  return cleaned
+}
 
 const renderedContent = computed(() => {
   if (!props.source) return ''
   try {
-    return md.render(props.source)
+    const contentToRender = props.streaming ? cleanStreamingMarkdown(props.source) : props.source
+    return md.render(contentToRender)
   } catch (error) {
     console.error('Markdown 渲染错误:', error)
     return props.source
@@ -82,9 +135,9 @@ const renderedContent = computed(() => {
 .markdown-renderer :deep(pre) {
   background: #f6f8fa;
   border-radius: 3px;
-  padding: 8px;
+  padding: 6px;
   overflow-x: auto;
-  margin: 0.2em 0;
+  margin: 0.05em 0;
   border: 1px solid #eaecef;
   font-size: 11px;
 }
@@ -117,14 +170,14 @@ const renderedContent = computed(() => {
 .markdown-renderer :deep(.katex-display) {
   overflow-x: auto;
   overflow-y: hidden;
-  padding: 0.1em 0;
+  padding: 0.05em 0;
 }
 
 /* 表格样式 */
 .markdown-renderer :deep(table) {
   border-collapse: collapse;
   width: 100%;
-  margin: 0.2em 0;
+  margin: 0.05em 0;
   display: block;
   overflow-x: auto;
   font-size: 11px;
@@ -143,23 +196,39 @@ const renderedContent = computed(() => {
 /* 引用块样式 */
 .markdown-renderer :deep(blockquote) {
   border-left: 2px solid #667eea;
-  padding-left: 0.4em;
-  margin: 0.2em 0;
+  padding-left: 0.3em;
+  margin: 0.02em 0;
   color: #6a737d;
   font-style: italic;
   font-size: 12px;
+}
+
+.markdown-renderer :deep(blockquote p) {
+  margin: 0;
 }
 
 /* 列表样式 */
 .markdown-renderer :deep(ul),
 .markdown-renderer :deep(ol) {
   padding-left: 1em;
-  margin: 0.1em 0;
+  margin: 0;
 }
 
 .markdown-renderer :deep(li) {
-  margin: 0.05em 0;
+  margin: 0;
+  padding: 0.005em 0;
   line-height: 1.1;
+}
+
+.markdown-renderer :deep(li p) {
+  margin: 0;
+}
+
+/* 嵌套列表样式 */
+.markdown-renderer :deep(li > ul),
+.markdown-renderer :deep(li > ol) {
+  margin: 0;
+  padding-left: 1em;
 }
 
 /* 图片样式 */
@@ -167,7 +236,7 @@ const renderedContent = computed(() => {
   max-width: 100%;
   height: auto;
   border-radius: 3px;
-  margin: 0.2em 0;
+  margin: 0.02em 0;
 }
 
 /* 链接样式 */
@@ -187,8 +256,7 @@ const renderedContent = computed(() => {
 .markdown-renderer :deep(h4),
 .markdown-renderer :deep(h5),
 .markdown-renderer :deep(h6) {
-  margin-top: 0.3em;
-  margin-bottom: 0.1em;
+  margin: 0.01em 0;
   font-weight: 600;
   line-height: 1;
   color: #24292e;
@@ -197,13 +265,13 @@ const renderedContent = computed(() => {
 .markdown-renderer :deep(h1) {
   font-size: 1.4em;
   border-bottom: 1px solid #eaecef;
-  padding-bottom: 0.05em;
+  padding-bottom: 0.02em;
 }
 
 .markdown-renderer :deep(h2) {
   font-size: 1.2em;
   border-bottom: 1px solid #eaecef;
-  padding-bottom: 0.05em;
+  padding-bottom: 0.02em;
 }
 
 .markdown-renderer :deep(h3) {
@@ -225,13 +293,14 @@ const renderedContent = computed(() => {
 
 /* 段落样式 */
 .markdown-renderer :deep(p) {
-  margin: 0.1em 0;
+  margin: 0;
+  padding: 0.005em 0;
 }
 
 /* 水平线样式 */
 .markdown-renderer :deep(hr) {
   border: 0;
   border-top: 1px solid #eaecef;
-  margin: 0.3em 0;
+  margin: 0.02em 0;
 }
 </style>

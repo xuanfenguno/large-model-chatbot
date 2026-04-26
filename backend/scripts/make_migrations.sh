@@ -41,4 +41,4 @@ echo "管理后台地址：http://localhost:8000/admin/"
 
 # 启动开发服务器
 echo "启动开发服务器..."
-python manage.py runserver 8000
+python manage.py runserver

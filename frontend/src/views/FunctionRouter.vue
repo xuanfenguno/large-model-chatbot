@@ -101,16 +101,19 @@
               <div 
                 v-for="(msg, index) in messages" 
                 :key="index" 
-                :class="['message-item', msg.role]"
+                :class="['message-bubble', msg.role]"
               >
                 <div class="message-avatar">
-                  {{ msg.role === 'user' ? '👤' : '🤖' }}
+                  <img v-if="msg.role === 'user' && userAvatarUrl" :src="userAvatarUrl" alt="User Avatar" class="avatar-img" />
+                  <template v-else>
+                    {{ msg.role === 'user' ? '👤' : '🤖' }}
+                  </template>
                 </div>
                 <div class="message-content">
-                  <div class="message-text">
-                    {{ msg.content }}
-                  </div>
                   <img v-if="msg.image_url" :src="msg.image_url" alt="Image" class="message-image" />
+                  <div class="message-text">
+                    <MarkdownRenderer :source="msg.content" :streaming="msg.is_loading" />
+                  </div>
                   <div class="message-time">{{ formatDate(msg.timestamp) }}</div>
                 </div>
               </div>
@@ -140,48 +143,62 @@
                 </el-select>
               </div>
 
-              <div class="input-container">
-                <div class="input-wrapper">
-                  <el-input
+              <!-- 角色扮演选择器 -->
+              <div v-if="activeFunction === 'role_playing'" class="role-selector">
+                <span class="selector-label">选择角色：</span>
+                <el-select v-model="selectedRole" placeholder="选择角色" size="default" style="width: 150px">
+                  <el-option
+                    v-for="role in rolePresets"
+                    :key="role.id"
+                    :label="role.name"
+                    :value="role.id"
+                  >
+                    <span>{{ getRoleIcon(role.name) }} {{ role.name }}</span>
+                  </el-option>
+                </el-select>
+              </div>
+
+              <div class="input-wrapper">
+                <div class="input-row">
+                  <textarea
                     v-model="inputMessage"
                     :placeholder="getInputPlaceholder(activeFunction)"
                     @keyup.enter="sendMessage"
                     :disabled="loading"
-                    size="large"
                     class="message-input"
-                    type="textarea"
-                    :rows="3"
-                    resize="none"
-                  >
-                    <template #append>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        @change="handleImageUpload"
-                        :disabled="loading"
-                        class="image-upload-input"
-                      />
-                      <el-button
-                        type="text"
-                        :icon="Image"
-                        @click="() => document.querySelector('.image-upload-input').click()"
-                        :disabled="loading"
-                        class="image-upload-btn"
-                      />
-                    </template>
-                  </el-input>
+                    rows="2"
+                  ></textarea>
+                  
+                  <input
+                    type="file"
+                    accept="image/*"
+                    style="display: none"
+                    ref="fileInputRef"
+                    @change="handleFileChange"
+                    :disabled="loading"
+                  />
+                  
+                  <el-button
+                    v-if="activeFunction === 'visual_idiom_puzzle'"
+                    type="text"
+                    size="small"
+                    icon="Picture"
+                    @click="triggerFileInput"
+                    :disabled="loading"
+                    class="image-upload-btn"
+                  />
+                  
                   <el-button 
                     @click="sendMessage" 
                     :loading="loading" 
                     type="primary"
-                    size="large"
                     class="send-button"
                   >
+                    <el-icon><Paperclip /></el-icon>
                     发送
                   </el-button>
                 </div>
                 
-                <!-- 图片预览区域 -->
                 <div v-if="imagePreviewUrl" class="image-preview-wrapper">
                   <img :src="imagePreviewUrl" alt="Preview" class="image-preview" />
                   <el-icon class="remove-image-btn" @click="removeImage"><Close /></el-icon>
@@ -197,13 +214,16 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick } from 'vue';
+import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import axios from 'axios';
 import { ElMessage } from 'element-plus';
-import { Picture, Plus, Close } from '@element-plus/icons-vue';
+import { Picture, Paperclip, Close } from '@element-plus/icons-vue';
+import MarkdownRenderer from '@/components/MarkdownRenderer.vue';
+import { useAuthStore } from '@/stores/auth';
 
 const router = useRouter();
+const authStore = useAuthStore();
 
 const activeFunction = ref('auto');
 const inputMessage = ref('');
@@ -212,29 +232,119 @@ const loading = ref(false);
 const selectedModel = ref('qwen-vl-plus');
 const availableModels = ref([]);
 const messagesAreaRef = ref(null);
-const targetLanguage = ref('中文'); // 新增：翻译目标语言
+const targetLanguage = ref('中文');
+const selectedRole = ref('friend');
+const fileInputRef = ref(null);
 const selectedImage = ref(null);
 const imagePreviewUrl = ref('');
 
-// 处理图片选择
-const handleImageUpload = (event) => {
+// 用户头像
+const userAvatarUrl = ref('');
+
+// 监听authStore.user变化，实现头像实时更新
+watch(
+  () => authStore.user,
+  (newUser) => {
+    if (newUser?.avatar) {
+      const avatarUrl = newUser.avatar.includes('?') 
+        ? `${newUser.avatar}&t=${Date.now()}` 
+        : `${newUser.avatar}?t=${Date.now()}`
+      userAvatarUrl.value = avatarUrl;
+    }
+  },
+  { deep: true }
+);
+
+// 处理头像更新事件
+const handleAvatarUpdated = (event) => {
+  const { avatarUrl } = event.detail
+  if (avatarUrl) {
+    const newAvatarUrl = avatarUrl.includes('?') 
+      ? `${avatarUrl}&t=${Date.now()}` 
+      : `${avatarUrl}?t=${Date.now()}`
+    console.log('FunctionRouter 收到头像更新事件:', newAvatarUrl)
+    userAvatarUrl.value = newAvatarUrl
+    
+    if (authStore.user) {
+      authStore.user.avatar = avatarUrl
+    }
+  }
+}
+
+// 初始化头像
+onMounted(() => {
+  if (authStore.user?.avatar) {
+    const avatarUrl = authStore.user.avatar.includes('?') 
+      ? `${authStore.user.avatar}&t=${Date.now()}` 
+      : `${authStore.user.avatar}?t=${Date.now()}`
+    userAvatarUrl.value = avatarUrl;
+  }
+  
+  // 监听头像更新事件
+  window.addEventListener('avatar-updated', handleAvatarUpdated)
+});
+
+// 页面卸载时移除事件监听
+onUnmounted(() => {
+  window.removeEventListener('avatar-updated', handleAvatarUpdated)
+});
+
+const rolePresets = ref([
+  { id: 'teacher', name: '老师', description: '知识渊博、耐心细致的老师' },
+  { id: 'doctor', name: '医生', description: '经验丰富的医生' },
+  { id: 'friend', name: '朋友', description: '开朗幽默的好朋友' },
+  { id: 'psychologist', name: '心理咨询师', description: '专业的心理咨询师' },
+  { id: 'chef', name: '厨师', description: '精通各种菜系的专业厨师' },
+  { id: 'programmer', name: '程序员', description: '资深程序员' },
+  { id: 'translator', name: '翻译官', description: '精通多国语言的翻译官' },
+  { id: 'writer', name: '作家', description: '才华横溢的作家' },
+  { id: 'fitness_coach', name: '健身教练', description: '专业健身教练' },
+  { id: 'historian', name: '历史学家', description: '博古通今的历史学家' }
+]);
+
+const getRoleIcon = (roleName) => {
+  const icons = {
+    '老师': '👨‍🏫',
+    '医生': '👨‍⚕️',
+    '朋友': '👫',
+    '心理咨询师': '🧠',
+    '厨师': '👨‍🍳',
+    '程序员': '💻',
+    '翻译官': '🌐',
+    '作家': '✍️',
+    '健身教练': '💪',
+    '历史学家': '📚'
+  };
+  return icons[roleName] || '🤖';
+};
+
+const removeImage = () => {
+  selectedImage.value = null;
+  imagePreviewUrl.value = '';
+  if (fileInputRef.value) {
+    fileInputRef.value.value = '';
+  }
+};
+
+const triggerFileInput = () => {
+  fileInputRef.value?.click();
+};
+
+const handleFileChange = (event) => {
   const file = event.target.files[0];
   if (file) {
-    // 验证文件类型
     const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     if (!allowedTypes.includes(file.type)) {
       ElMessage.error('不支持的图片格式，请上传 JPG、PNG、GIF 或 WebP 格式的图片');
       return;
     }
 
-    // 验证文件大小（最大10MB）
     if (file.size > 10 * 1024 * 1024) {
       ElMessage.error('图片大小不能超过10MB');
       return;
     }
 
     selectedImage.value = file;
-    // 生成预览URL
     const reader = new FileReader();
     reader.onload = (e) => {
       imagePreviewUrl.value = e.target.result;
@@ -243,15 +353,9 @@ const handleImageUpload = (event) => {
 
     ElMessage.success('图片已选择');
   }
+  event.target.value = '';
 };
 
-// 移除已选择的图片
-const removeImage = () => {
-  selectedImage.value = null;
-  imagePreviewUrl.value = '';
-};
-
-// 上传图片到后端（用于聊天图片识别）
 const uploadImage = async (imageFile) => {
   try {
     const formData = new FormData();
@@ -265,25 +369,19 @@ const uploadImage = async (imageFile) => {
       timeout: 30000
     };
     
-    // 只有当 token 存在时才添加 Authorization 头
     if (token) {
       config.headers['Authorization'] = `Bearer ${token}`;
     }
 
-    console.log('开始上传图片...');
     const response = await service.post('/upload-image/', formData, config);
-    console.log('图片上传响应:', response.data);
 
     if (response.data && response.data.image_url) {
-      console.log('图片上传成功，URL:', response.data.image_url);
       return response.data.image_url;
     }
 
-    console.warn('图片上传响应中没有 image_url');
     return null;
   } catch (error) {
     console.error('图片上传失败:', error);
-    console.error('错误详情:', error.response);
     ElMessage.error('图片上传失败，请稍后重试');
     return null;
   }
@@ -418,7 +516,7 @@ const getInputPlaceholder = (funcType) => {
     chengyu: '开始成语接龙...',
     role_playing: '请输入您想让AI扮演的角色和对话场景...',
     social_media_copywriter: '请输入产品或场景关键词，AI将为您生成小红书文案...',
-    visual_idiom_puzzle: '输入“开始”，获取第一个看图猜成语挑战！',
+    visual_idiom_puzzle: '请上传一张图片，让AI猜图片中隐藏的成语！',
   };
   return placeholders[funcType] || '请输入内容...';
 };
@@ -428,27 +526,28 @@ const handleFunctionSelect = (index) => {
   activeFunction.value = index;
 };
 
-// 发送消息
+// 发送消息（使用流式输出）
 const sendMessage = async () => {
   if (!inputMessage.value.trim() && !selectedImage.value) return;
   
   let content = inputMessage.value.trim();
   let imageUrl = null;
   
-  // 处理图片上传
-  if (selectedImage.value) {
-    console.log('开始上传图片，文件:', selectedImage.value);
+  if (activeFunction.value === 'visual_idiom_puzzle' && selectedImage.value) {
     imageUrl = await uploadImage(selectedImage.value);
-    console.log('图片上传结果，URL:', imageUrl);
     if (!imageUrl) {
-      console.warn('图片上传失败，URL为空');
+      ElMessage.error('图片上传失败，请重试');
       return;
     }
   }
   
-  // 如果只发送图片没有文字，添加默认提示让AI识别图片
-  if (!content && imageUrl) {
-    content = '请详细描述这张图片的内容，包括图片中的物体、人物、场景、文字等信息。';
+  if (activeFunction.value === 'visual_idiom_puzzle' && !content && !imageUrl) {
+    ElMessage.warning('请上传一张图片让AI猜成语');
+    return;
+  }
+  
+  if (activeFunction.value === 'visual_idiom_puzzle' && !content && imageUrl) {
+    content = '请猜出这张图片中隐藏的成语';
   }
   
   const userMessage = {
@@ -459,17 +558,27 @@ const sendMessage = async () => {
   };
   
   messages.value.push(userMessage);
-  saveMessagesToStorage(); // 保存聊天记录
+  saveMessagesToStorage();
   inputMessage.value = '';
   selectedImage.value = null;
   imagePreviewUrl.value = '';
   loading.value = true;
   
+  const aiMessageIndex = messages.value.length;
+  const aiMessage = {
+    role: 'assistant',
+    content: '',
+    timestamp: new Date().toISOString(),
+    is_loading: true
+  };
+  messages.value.push(aiMessage);
+  
   try {
     const payload = {
       input: content,
       model: selectedModel.value,
-      function: activeFunction.value
+      function: activeFunction.value,
+      stream: true
     };
 
     if (imageUrl) {
@@ -480,24 +589,84 @@ const sendMessage = async () => {
       payload.language = targetLanguage.value;
     }
 
-    const response = await service.post('/function-router/', payload);
-    
-    const aiMessage = {
-      role: 'assistant',
-      content: response.data.result,
-      timestamp: new Date().toISOString()
-    };
-    
-    messages.value.push(aiMessage);
-    saveMessagesToStorage(); // 保存聊天记录
+    if (activeFunction.value === 'role_playing') {
+      payload.role_id = selectedRole.value;
+    }
+
+    // 使用流式请求
+    const token = localStorage.getItem('token')
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 120000)
+
+    const response = await fetch('/api/v1/stream-function-router/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let fullContent = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            const data = JSON.parse(line.slice(6));
+            
+            if (data.error) {
+              throw new Error(data.error);
+            }
+            
+            if (data.status === 'completed') {
+              break;
+            }
+            
+            if (data.content) {
+              fullContent += data.content;
+              messages.value[aiMessageIndex] = {
+                ...messages.value[aiMessageIndex],
+                content: fullContent,
+                is_loading: false
+              };
+              scrollToBottom();
+            }
+          } catch (e) {
+            if (e.message && !e.message.includes('JSON')) {
+              throw e;
+            }
+          }
+        }
+      }
+    }
+
+    saveMessagesToStorage();
   } catch (error) {
     const errorMessage = {
       role: 'assistant',
       content: '很抱歉，请求失败：' + (error.response?.data?.error || error.message),
       timestamp: new Date().toISOString()
     };
-    messages.value.push(errorMessage);
-    saveMessagesToStorage(); // 保存聊天记录
+    messages.value[aiMessageIndex] = errorMessage;
+    saveMessagesToStorage();
   } finally {
     loading.value = false;
     scrollToBottom();
@@ -831,6 +1000,20 @@ const scrollToBottom = async () => {
   box-shadow: 0 2px 8px rgba(0,0,0,0.06);
 }
 
+/* 角色扮演选择器样式 */
+.role-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 0 20px;
+}
+
+:deep(.role-selector .el-input__wrapper) {
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
 @keyframes icon-float {
   0%, 100% {
     transform: translateY(0px);
@@ -1048,6 +1231,14 @@ const scrollToBottom = async () => {
   justify-content: center;
   flex-shrink: 0;
   font-size: 1.2rem;
+  overflow: hidden;
+}
+
+.message-avatar .avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
 }
 
 .message-bubble.user .message-avatar {
@@ -1061,6 +1252,15 @@ const scrollToBottom = async () => {
 .message-content {
   flex: 1;
   max-width: calc(100% - 52px);
+}
+
+.message-image {
+  max-width: 200px;
+  max-height: 150px;
+  border-radius: 8px;
+  object-fit: cover;
+  margin-bottom: 8px;
+  display: block;
 }
 
 .message-text {
@@ -1097,128 +1297,104 @@ const scrollToBottom = async () => {
 }
 
 /* 输入区域 */
-/* 删除重复的.input-container样式 */
-
-.message-input :deep(.el-input-group) {
-  display: flex;
-  width: 100%;
+.input-container {
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(10px);
+  border-top: 1px solid #ebeef5;
 }
 
-.message-input :deep(.el-input__inner) {
-  border-radius: 12px;
-  border: 1px solid #cbd5e1;
-  font-size: 1rem;
-  padding: 12px 20px;
-  transition: all 0.2s ease;
+.input-wrapper {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  width: 98%;
+  max-width: none;
+  margin: 0 auto;
+  padding: 0 1rem;
+  position: relative;
+}
+
+.input-with-image {
+  position: relative;
   flex: 1;
-}
-
-.message-input :deep(.el-input__inner:focus) {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-.message-input :deep(.el-input-group__append) {
-  border-radius: 12px;
-  border: 1px solid #3b82f6;
-  background: #3b82f6;
-  padding: 0 8px;
-  overflow: hidden;
-  border-left: none;
-}
-
-.send-button {
-  background: #3b82f6 !important;
-  border-color: #3b82f6 !important;
-  color: white !important;
-  border-radius: 12px !important;
-  transition: all 0.2s ease;
-  height: 80px !important;
-  width: 80px !important;
-  font-size: 0.9rem !important;
-  font-weight: 600 !important;
-  margin-bottom: 8px !important;
-}
-
-.send-button:hover {
-  background: #2563eb !important;
-  border-color: #2563eb !important;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
-}
-
-.send-button:active {
-  background: #1d4ed8 !important;
-  transform: translateY(0);
-  box-shadow: none;
-}
-
-.model-selector-wrapper {
   display: flex;
-  justify-content: center;
+  align-items: center;
+  height: 28px !important;
 }
 
-.model-selector {
-  width: 240px;
+.input-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border: 1px solid #dcdfe6;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.95);
+  transition: all 0.3s ease;
+  padding: 8px;
 }
 
-.model-selector :deep(.el-input__inner) {
-  border-radius: 8px;
-  font-size: 0.9rem;
+.input-wrapper:focus-within {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
 }
 
-/* 图片上传样式 */
-.image-upload-input {
-  display: none;
+.input-row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 8px;
 }
 
 .image-upload-btn {
-  position: absolute;
-  right: 80px;
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 10;
+  padding: 8px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
   color: #606266;
-  font-size: 20px;
+  transition: all 0.3s ease;
+  border-radius: 8px;
+  flex-shrink: 0;
 }
 
 .image-upload-btn:hover {
-  color: #409EFF;
+  background: #f5f7fa;
+  color: #3b82f6;
 }
 
-/* 图片预览样式 */
 .image-preview-wrapper {
   display: flex;
   align-items: center;
-  margin-top: 12px;
-  padding: 12px;
+  margin-top: 8px;
+  padding: 8px;
   background: #f5f7fa;
-  border-radius: 12px;
+  border-radius: 8px;
   position: relative;
   max-width: 100%;
+  width: 100%;
 }
 
 .image-preview {
-  max-width: 200px;
-  max-height: 150px;
-  border-radius: 8px;
+  max-width: 150px;
+  max-height: 100px;
+  border-radius: 6px;
   object-fit: cover;
 }
 
 .remove-image-btn {
   position: absolute;
-  top: 8px;
-  right: 8px;
-  background: rgba(255, 255, 255, 0.8);
+  top: 4px;
+  right: 4px;
+  background: rgba(255, 255, 255, 0.9);
   border-radius: 50%;
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   color: #909399;
-  font-size: 16px;
+  font-size: 14px;
   transition: all 0.3s ease;
 }
 
@@ -1228,24 +1404,75 @@ const scrollToBottom = async () => {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-/* 消息中的图片显示 */
-.message-image {
-  max-width: 200px;
-  max-height: 150px;
-  border-radius: 8px;
-  object-fit: cover;
-  margin: 8px 0;
-  display: block;
+.message-input {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  border: none;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #000000;
+  resize: none;
+  background: transparent;
+  height: 48px;
+  line-height: 1.5;
+  box-sizing: border-box;
+  letter-spacing: 0.5px;
 }
 
-.message-item.user .message-image {
-  align-self: flex-start;
-  margin-left: 12px;
+.message-input:focus {
+  outline: none;
 }
 
-.message-item.assistant .message-image {
-  align-self: flex-start;
-  margin-right: 12px;
+.message-input::placeholder {
+  color: #606266;
+  font-weight: 500;
+  font-size: 1rem;
+}
+
+.send-button {
+  padding: 0.75rem 1.5rem;
+  height: 48px;
+  min-height: 48px;
+  max-height: 48px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.send-button :deep(.el-icon) {
+  font-size: 12px;
+}
+
+.send-button:hover {
+  background: #2563eb;
+  border-color: #2563eb;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+}
+
+.send-button:active {
+  background: #1d4ed8;
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+.send-button:disabled {
+  background: #9ca3af;
+  border-color: #9ca3af;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 /* 响应式设计 */

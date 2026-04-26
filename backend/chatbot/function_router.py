@@ -33,7 +33,57 @@ class FunctionRouter:
             'game': self.game_handler,
             'education': self.education_handler,
             'health': self.health_handler,
-            'finance': self.finance_handler
+            'finance': self.finance_handler,
+            'role_play': self.role_play_handler,
+            'visual_idiom_puzzle': self.visual_idiom_puzzle_handler
+        }
+        
+        # 预设角色库
+        self.role_presets = {
+            'teacher': {
+                'name': '老师',
+                'system_prompt': '你是一位知识渊博、耐心细致的老师。请用简单易懂的方式解答学生的问题，善于举例说明，鼓励学生思考。'
+            },
+            'doctor': {
+                'name': '医生',
+                'system_prompt': '你是一位经验丰富的医生。请用专业但易懂的语言回答健康问题，给出合理的建议，但也要提醒用户必要时咨询专业医生。'
+            },
+            'friend': {
+                'name': '朋友',
+                'system_prompt': '你是用户的好朋友，性格开朗、幽默、善解人意。用轻松的语气聊天，关心用户的感受，给予支持和鼓励。'
+            },
+            'psychologist': {
+                'name': '心理咨询师',
+                'system_prompt': '你是一位专业的心理咨询师。请耐心倾听，给予共情和理解，帮助用户分析情绪和问题，提供心理支持和建议。'
+            },
+            'chef': {
+                'name': '厨师',
+                'system_prompt': '你是一位专业厨师，精通各种菜系。请分享烹饪技巧、菜谱建议，解答关于食材和料理的问题。'
+            },
+            'programmer': {
+                'name': '程序员',
+                'system_prompt': '你是一位资深程序员，精通多种编程语言和技术。请帮助用户解决编程问题，提供代码示例和最佳实践建议。'
+            },
+            'translator': {
+                'name': '翻译官',
+                'system_prompt': '你是一位专业翻译，精通多国语言。请帮助用户翻译文本，解释语言差异和文化背景。'
+            },
+            'writer': {
+                'name': '作家',
+                'system_prompt': '你是一位才华横溢的作家，擅长各种文体创作。请帮助用户写作，提供创作建议和文字润色。'
+            },
+            'fitness_coach': {
+                'name': '健身教练',
+                'system_prompt': '你是一位专业健身教练。请为用户提供运动建议、训练计划、饮食指导，帮助用户保持健康体魄。'
+            },
+            'historian': {
+                'name': '历史学家',
+                'system_prompt': '你是一位博学的历史学家，精通世界历史。请讲述历史故事，分析历史事件，帮助用户了解过去。'
+            },
+            'custom': {
+                'name': '自定义角色',
+                'system_prompt': ''
+            }
         }
         
         # 自定义回答数据库
@@ -42,10 +92,14 @@ class FunctionRouter:
         # 中文语义理解准确率
         self.chinese_accuracy = 0.90  # 90%准确率
         
-    def route_function(self, user_input: str, model: str = 'qwen-turbo', language: Optional[str] = None, image_url: Optional[str] = None):
+    def route_function(self, user_input: str, model: str = 'qwen-turbo', language: Optional[str] = None, image_url: Optional[str] = None, role_id: Optional[str] = None, custom_role_prompt: Optional[str] = None):
         """
         根据用户输入路由到相应功能
         """
+        # 如果指定了角色，直接使用角色扮演功能
+        if role_id:
+            return self.role_play_handler(user_input, model, role_id, custom_role_prompt, image_url)
+        
         # 分析用户意图
         intent = self.analyze_intent(user_input)
         
@@ -60,7 +114,13 @@ class FunctionRouter:
         if intent == 'translation':
             return handler(user_input, model, language, image_url)
         
-        return handler(user_input, model, image_url)
+        # 检查handler是否接受image_url参数
+        import inspect
+        sig = inspect.signature(handler)
+        if 'image_url' in sig.parameters:
+            return handler(user_input, model, image_url)
+        else:
+            return handler(user_input, model)
     
     def analyze_intent(self, user_input: str) -> str:
         """
@@ -84,7 +144,8 @@ class FunctionRouter:
             'news': 'news',     # 新闻
             'education': 'education', # 教育
             'health': 'health', # 健康
-            'finance': 'finance' # 金融
+            'finance': 'finance', # 金融
+            'visual_idiom_puzzle': 'visual_idiom_puzzle' # 看图猜成语
         }
         
         # 检查是否以功能名称开头
@@ -163,6 +224,63 @@ class FunctionRouter:
                 return result['content']
         except Exception as e:
             return f"抱歉，请求AI服务时发生错误：{str(e)}"
+    
+    def role_play_handler(self, user_input: str, model: str = 'qwen-turbo', role_id: str = 'custom', custom_role_prompt: Optional[str] = None, image_url: Optional[str] = None):
+        """
+        角色扮演功能处理
+        """
+        # 获取角色系统提示词
+        role_info = self.role_presets.get(role_id, self.role_presets['custom'])
+        system_prompt = role_info['system_prompt']
+        
+        # 如果是自定义角色，使用用户提供的提示词
+        if role_id == 'custom' and custom_role_prompt:
+            system_prompt = custom_role_prompt
+        
+        # 构建包含角色设定的对话历史
+        history = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_input}
+        ]
+        
+        # 使用增强的API包装器来创建API实例
+        api_instance = EnhancedApiWrapper.create_api_instance(model)
+        
+        try:
+            config = {
+                'model': model,
+                'temperature': 0.7,
+                'max_tokens': 800,
+                'top_p': 0.8,
+                'top_k': 40,
+                'frequency_penalty': 0.3,
+                'presence_penalty': 0.3,
+                'timeout': 30,
+                'history': history
+            }
+            
+            result = api_instance.send_message(user_input, config, image_url=image_url)
+            
+            if 'error' in result:
+                return f"抱歉，请求{api_instance.name}服务时发生错误：{result['error']}"
+            else:
+                return result['content']
+        except Exception as e:
+            return f"抱歉，角色扮演模式请求失败：{str(e)}"
+    
+    def get_role_presets(self):
+        """
+        获取所有预设角色列表
+        """
+        return [
+            {
+                'id': role_id,
+                'name': role_info['name'],
+                'description': role_info['system_prompt'][:50] + '...'
+            }
+            for role_id, role_info in self.role_presets.items()
+            if role_id != 'custom'
+        ]
     
     def joke_handler(self, user_input: str, model: str = 'qwen-turbo'):
         """
@@ -497,7 +615,7 @@ class FunctionRouter:
             ]
             return random.choice(poems)
     
-    def translation_handler(self, user_input: str, model: str = 'qwen-turbo', language: Optional[str] = None):
+    def translation_handler(self, user_input: str, model: str = 'qwen-turbo', language: Optional[str] = None, image_url: Optional[str] = None):
         """
         翻译功能处理
         """
@@ -1179,6 +1297,39 @@ class FunctionRouter:
                 "理性投资，避免情绪化决策。"
             ]
             return random.choice(finance_tips)
+    
+    def visual_idiom_puzzle_handler(self, user_input: str, model: str = 'qwen-turbo', image_url: Optional[str] = None):
+        """
+        看图猜成语功能处理
+        """
+        # 如果没有图片，提示用户上传图片
+        if not image_url:
+            return "请上传一张图片，我来帮你猜图片中隐藏的成语！点击图片上传按钮选择图片即可。"
+        
+        # 构建提示词，让AI分析图片中的成语
+        prompt = "请仔细观察这张图片，猜测图片中隐藏的成语是什么。请给出：\n1. 成语答案\n2. 成语的拼音\n3. 成语的解释\n4. 为什么这张图片代表这个成语（分析图片中的元素如何对应成语含义）\n\n请按照以上格式回答。"
+        
+        # 使用增强的API包装器来创建API实例
+        api_instance = EnhancedApiWrapper.create_api_instance(model)
+        
+        try:
+            config = {
+                'model': model,
+                'temperature': 0.7,
+                'max_tokens': 1000,
+                'top_p': 0.9,
+                'history': [{"role": "user", "content": prompt}]
+            }
+            
+            # 发送带图片的消息
+            result = api_instance.send_message(prompt, config, image_url=image_url)
+            
+            if 'error' in result:
+                return f"抱歉，分析图片时发生错误：{result['error']}。请确保图片清晰，并重新尝试。"
+            else:
+                return result['content']
+        except Exception as e:
+            return f"抱歉，看图猜成语功能暂时不可用：{str(e)}"
 
 
 # 创建全局功能路由器实例

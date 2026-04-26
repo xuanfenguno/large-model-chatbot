@@ -245,6 +245,32 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
+  // 更新会话标题
+  const updateConversationTitle = async (conversationId, title) => {
+    try {
+      await service.put(`/conversations/${conversationId}/`, { title })
+      
+      // 更新本地状态
+      const convIndex = conversations.value.findIndex(c => c.id === conversationId)
+      if (convIndex !== -1) {
+        conversations.value[convIndex].title = title
+        
+        // 保存到 localStorage
+        try {
+          localStorage.setItem('chat-store', JSON.stringify({
+            selectedConversationId: selectedConversationId.value,
+            messages: messages.value,
+            conversations: conversations.value
+          }))
+        } catch (e) {
+          console.error('缓存会话列表失败:', e)
+        }
+      }
+    } catch (error) {
+      console.error('更新会话标题失败:', error)
+    }
+  }
+
   // 发送消息（使用SSE流式响应，AI回复逐字动态生成）
   const sendMessage = async (content, image = null, model = null) => {
     isLoading.value = true
@@ -259,6 +285,30 @@ export const useChatStore = defineStore('chat', () => {
         const newConversation = await createConversation(content.slice(0, 30) + '...')
         if (!newConversation) {
           throw new Error('创建新会话失败')
+        }
+      } else {
+        // 如果当前会话标题是默认的，立即更新为第一条消息内容
+        const convIndex = conversations.value.findIndex(c => c.id === selectedConversationId.value)
+        if (convIndex !== -1) {
+          const currentConv = conversations.value[convIndex]
+          if (currentConv.title === '新会话' || currentConv.title === 'New Chat' || !currentConv.title) {
+            const newTitle = content.slice(0, 30) + (content.length > 30 ? '...' : '')
+            conversations.value[convIndex].title = newTitle
+            
+            // 同步到后端
+            await updateConversationTitle(selectedConversationId.value, newTitle)
+            
+            // 保存更新后的会话列表到 localStorage
+            try {
+              localStorage.setItem('chat-store', JSON.stringify({
+                selectedConversationId: selectedConversationId.value,
+                messages: messages.value,
+                conversations: conversations.value
+              }))
+            } catch (e) {
+              console.error('缓存会话列表失败:', e)
+            }
+          }
         }
       }
 
@@ -344,7 +394,7 @@ export const useChatStore = defineStore('chat', () => {
             }, 0)
           },
           // 完成时的回调
-          (result) => {
+          async (result) => {
             // 清除计时器
             if (waitTimer) {
               clearInterval(waitTimer)
@@ -381,7 +431,11 @@ export const useChatStore = defineStore('chat', () => {
                 const currentConv = conversations.value[convIndex]
                 if (currentConv.title === '新会话' || currentConv.title === 'New Chat') {
                   const firstMessage = messages.value[0]?.content || content
-                  conversations.value[convIndex].title = firstMessage.slice(0, 30) + (firstMessage.length > 30 ? '...' : '')
+                  const newTitle = firstMessage.slice(0, 30) + (firstMessage.length > 30 ? '...' : '')
+                  conversations.value[convIndex].title = newTitle
+                  
+                  // 同步到后端
+                  await updateConversationTitle(selectedConversationId.value, newTitle)
                 }
                 // 更新最后活动时间
                 conversations.value[convIndex].updated_at = new Date().toISOString()
@@ -537,7 +591,11 @@ export const useChatStore = defineStore('chat', () => {
             const currentConv = conversations.value[convIndex]
             if (currentConv.title === '新会话' || currentConv.title === 'New Chat') {
               const firstMessage = messages.value[0]?.content || content
-              conversations.value[convIndex].title = firstMessage.slice(0, 30) + (firstMessage.length > 30 ? '...' : '')
+              const newTitle = firstMessage.slice(0, 30) + (firstMessage.length > 30 ? '...' : '')
+              conversations.value[convIndex].title = newTitle
+              
+              // 同步到后端
+              await updateConversationTitle(selectedConversationId.value, newTitle)
             }
             // 更新最后活动时间
             conversations.value[convIndex].updated_at = new Date().toISOString()
@@ -688,6 +746,116 @@ export const useChatStore = defineStore('chat', () => {
     return conversation?.title || '新会话'
   })
 
+  // 使用角色扮演模式发送消息
+  const sendMessageWithRole = async (content, image = null, model = null, role_id = null, custom_role_prompt = null) => {
+    isLoading.value = true
+    const startTime = Date.now()
+
+    try {
+      // 如果没有选择会话，自动创建新会话
+      if (!selectedConversationId.value) {
+        const newConversation = await createConversation(content.slice(0, 30) + '...')
+        if (!newConversation) {
+          throw new Error('创建新会话失败')
+        }
+      }
+
+      // 创建本地用户消息预览
+      const userMessage = {
+        id: Date.now(),
+        role: 'user',
+        content: content,
+        image_url: image,
+        created_at: new Date().toISOString()
+      }
+
+      messages.value.push(userMessage)
+
+      // 创建AI回复的占位消息
+      const aiMessage = {
+        id: Date.now() + 1,
+        role: 'assistant',
+        content: '',
+        is_loading: true,
+        created_at: new Date().toISOString()
+      }
+      messages.value.push(aiMessage)
+
+      // 构建对话历史
+      const history = messages.value
+        .filter(msg => msg.id !== aiMessage.id)
+        .map(msg => ({
+          role: msg.role,
+          content: msg.content
+        }))
+
+      // 使用 function router API 发送消息，带角色信息
+      const response = await service.post('/function-router/', {
+        feature_name: 'chat',
+        user_input: content,
+        model: model,
+        image_url: image,
+        role_id: role_id,
+        custom_role_prompt: custom_role_prompt
+      })
+
+      const responseTime = Date.now() - startTime
+
+      if (response.data && response.data.result) {
+        // 更新最终AI回复
+        const aiIndex = messages.value.findIndex(msg => msg.id === aiMessage.id)
+        if (aiIndex !== -1) {
+          messages.value[aiIndex] = {
+            id: Date.now() + 2,
+            role: 'assistant',
+            content: response.data.result,
+            created_at: new Date().toISOString(),
+            model: model,
+            responseTime: responseTime
+          }
+        }
+        
+        // 更新会话标题
+        const convIndex = conversations.value.findIndex(c => c.id === selectedConversationId.value)
+        if (convIndex !== -1) {
+          const currentConv = conversations.value[convIndex]
+          if (currentConv.title === '新会话' || currentConv.title === 'New Chat' || !currentConv.title) {
+            const newTitle = content.slice(0, 30) + (content.length > 30 ? '...' : '')
+            conversations.value[convIndex].title = newTitle
+            
+            // 同步到后端
+            await updateConversationTitle(selectedConversationId.value, newTitle)
+          }
+        }
+        
+        return response.data.result
+      } else {
+        throw new Error('AI响应格式错误')
+      }
+    } catch (error) {
+      console.error('角色扮演模式发送消息失败:', error)
+      
+      // 更新AI消息为错误状态
+      const aiIndex = messages.value.findIndex(msg => msg.id === aiMessage?.id)
+      if (aiIndex !== -1) {
+        messages.value[aiIndex] = {
+          ...messages.value[aiIndex],
+          content: '抱歉，角色扮演模式请求失败，请稍后再试。',
+          is_loading: false
+        }
+      }
+
+      if (error.response?.status === 401) {
+        ElMessage.error('登录已过期，请重新登录')
+      } else {
+        ElMessage.error('发送消息失败')
+      }
+      throw error
+    } finally {
+      isLoading.value = false
+    }
+  }
+
   return {
     conversations,
     selectedConversationId,
@@ -700,9 +868,11 @@ export const useChatStore = defineStore('chat', () => {
     fetchMessages,
     sendMessage,
     sendMessageStream,
+    sendMessageWithRole,
     deleteConversation,
     clearMessages,
-    conversationTitle
+    conversationTitle,
+    updateConversationTitle
   }
 }, {
   persist: {

@@ -61,7 +61,31 @@ class APICacheMiddleware(MiddlewareMixin):
                 except json.JSONDecodeError:
                     pass  # 如果不是JSON响应，则不缓存
         
+        # 清除相关缓存：当有修改操作时
+        if request.method in ['POST', 'PUT', 'PATCH', 'DELETE']:
+            self.clear_related_cache(request)
+        
         return response
+
+    def clear_related_cache(self, request):
+        """
+        清除相关缓存
+        """
+        path = request.path
+        
+        # 如果删除或修改了会话，清除会话列表缓存
+        if '/api/v1/conversations/' in path:
+            # 使用 delete_pattern 清除所有会话相关的缓存
+            try:
+                # 清除所有包含 conversations 的缓存键
+                cache.delete_pattern('api_cache:*conversations*')
+                logger.info("Cleared all conversations cache")
+            except AttributeError:
+                # LocMemCache 不支持 delete_pattern 和 keys
+                # 对于 LocMemCache，我们只能清除已知的缓存键
+                # 或者清除整个缓存（不推荐）
+                # 这里我们简单地跳过，让缓存自然过期
+                logger.info("LocMemCache doesn't support pattern deletion, skipping cache clear")
 
     def generate_cache_key(self, request):
         """
@@ -87,6 +111,7 @@ class APICacheMiddleware(MiddlewareMixin):
             '/api/v1/chat/stream/',  # 流式聊天API
             '/api/v1/user/profile/',  # 实时用户资料
             '/api/v1/realtime/',     # 实时API
+            '/api/v1/conversations/',  # 会话列表（经常变化，不缓存）
         ]
         
         return any(request.path.startswith(path) for path in no_cache_paths)

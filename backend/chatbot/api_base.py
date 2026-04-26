@@ -73,8 +73,8 @@ class BaseAIApi:
         
         return messages
     
-    def _make_request(self, url: str, headers: Dict, payload: Dict, timeout: int = 30) -> Dict:
-        """执行HTTP请求"""
+    def _make_request(self, url: str, headers: Dict, payload: Dict, timeout: int = 15) -> Dict:
+        """执行HTTP请求 - 优化：减少默认超时时间"""
         try:
             response = requests.post(
                 url=url,
@@ -136,12 +136,15 @@ class BaseAIApi:
             config=config
         )
         
-        # 发送请求
+        # 构建请求URL
+        url = f"{self.base_url.rstrip('/')}/chat/completions"
+        
+        # 发送请求 - 优化：减少默认超时时间到15秒
         response_data = self._make_request(
-            url=self.base_url,
+            url=url,
             headers=headers,
             payload=payload,
-            timeout=config.get('timeout', 30)
+            timeout=config.get('timeout', 15)
         )
         
         # 提取响应内容
@@ -439,12 +442,12 @@ class QwenApi(BaseAIApi):
         # 对于OpenAI兼容API，需要在基础URL后添加/chat/completions端点
         url = f"{self.base_url.rstrip('/')}/chat/completions"
         
-        # 发送请求
+        # 发送请求 - 优化：减少默认超时时间到15秒
         response_data = self._make_request(
             url=url,
             headers=headers,
             payload=payload,
-            timeout=config.get('timeout', 30)
+            timeout=config.get('timeout', 15)
         )
         
         # 提取响应内容
@@ -481,7 +484,7 @@ class QwenApi(BaseAIApi):
                 url=url,
                 headers=headers,
                 json=payload,
-                timeout=config.get('timeout', 60),
+                timeout=(5, 30),  # 优化：连接超时5秒，读取超时30秒
                 stream=True  # 启用流式响应
             )
             
@@ -593,7 +596,7 @@ class QwenApi(BaseAIApi):
             # 如果是HTTP/HTTPS URL，先下载图片
             if image_url.startswith(('http://', 'https://')):
                 import requests
-                response = requests.get(image_url, timeout=10)
+                response = requests.get(image_url, timeout=5)  # 优化：减少图片下载超时到5秒
                 if response.status_code == 200:
                     image_data = response.content
                     # 检测图片类型

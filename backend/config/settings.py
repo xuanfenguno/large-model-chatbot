@@ -395,7 +395,41 @@ DEFENDER_USE_CELERY = False  # 不使用Celery
 DEFENDER_CACHE_PREFIX = 'defender'
 DEFENDER_LOCKOUT_BY_IP_ONLY = True  # 仅按IP锁定
 
-# 缓存配置 - 为django-ratelimit提供支持
+# 日志配置
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO',
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'chatbot': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+    },
+}
+
+# 缓存配置 - 为 django-ratelimit 提供支持
 try:
     import redis
     # 测试Redis连接

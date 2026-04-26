@@ -2,8 +2,11 @@
 增强的API调用类，支持模拟响应和API密钥检查
 """
 import random
+import logging
 from chatbot.api_base import OpenAIApi, GoogleGeminiApi, MoonshotKimiApi, QwenApi, DeepSeekApi
 from django.conf import settings
+
+logger = logging.getLogger(__name__)
 
 class EnhancedApiWrapper:
     """增强的API包装器，支持模拟响应和自动模型切换"""
@@ -77,20 +80,29 @@ class EnhancedApiWrapper:
         from .api_base import OpenAIApi, GoogleGeminiApi, MoonshotKimiApi, QwenApi, DeepSeekApi
         all_models = []
         
+        logger.info("开始获取可用模型列表")
+        
         # 检查哪些API密钥已配置，仅添加相应模型
         providers = EnhancedApiWrapper.get_available_providers()
+        logger.info(f"可用的API提供者: {list(providers.keys())}")
         
         if 'openai' in providers:
+            logger.info("添加OpenAI模型")
             all_models.extend(OpenAIApi.get_supported_models())
         if 'gemini' in providers:
+            logger.info("添加Gemini模型")
             all_models.extend(GoogleGeminiApi.get_supported_models())
         if 'qwen' in providers:
+            logger.info("添加Qwen模型")
             all_models.extend(QwenApi.get_supported_models())
         if 'deepseek' in providers:
+            logger.info("添加DeepSeek模型")
             all_models.extend(DeepSeekApi.get_supported_models())
         if 'kimi' in providers:
+            logger.info("添加Kimi模型")
             all_models.extend(MoonshotKimiApi.get_supported_models())
         if 'doubao' in providers:
+            logger.info("添加豆包模型")
             # 豆包API模型
             all_models.extend([
                 {'name': 'doubao-pro', 'label': '豆包Pro'},
@@ -98,6 +110,7 @@ class EnhancedApiWrapper:
                 {'name': 'doubao-ultra', 'label': '豆包Ultra'}
             ])
         
+        logger.info(f"总共获取 {len(all_models)} 个模型")
         return all_models
 
     @staticmethod
