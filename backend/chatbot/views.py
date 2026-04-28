@@ -138,7 +138,8 @@ def chat(request):
                     'temperature': 0.7,
                     'max_tokens': 2000,
                     'top_p': 0.9
-                }
+                },
+                image_url=image_url
             )
             content = result['content']
         except Exception as api_error:

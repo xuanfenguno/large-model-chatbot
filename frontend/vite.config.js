@@ -19,15 +19,15 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
         ws: true,
-        timeout: 60000,
-        proxyTimeout: 60000,
+        timeout: 180000,  // 3分钟超时
+        proxyTimeout: 180000,
         // 禁用缓冲,支持流式响应
         buffer: false,
         // 保持连接活跃
         followRedirects: true,
         headers: {
           Connection: 'keep-alive',
-          'Keep-Alive': 'timeout=60000'
+          'Keep-Alive': 'timeout=180000'
         },
         configure: (proxy, _options) => {
           proxy.on('error', (err, req, res) => {
@@ -54,6 +54,11 @@ export default defineConfig({
             }
           })
         }
+      },
+      '/media': {
+        target: 'http://127.0.0.1:8080',
+        changeOrigin: true,
+        secure: false
       }
     },
     hmr: {

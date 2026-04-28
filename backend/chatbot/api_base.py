@@ -4,10 +4,93 @@ API调用基类，用于封装公共的大模型API调用逻辑
 import requests
 import json
 import logging
+import base64
+import os
 from django.conf import settings
 from typing import Dict, List, Optional, Any
+from urllib.parse import urlparse
+from io import BytesIO
 
 logger = logging.getLogger(__name__)
+
+
+def _convert_local_image_to_base64(image_url: str) -> Optional[str]:
+    """将本地图片URL转换为Base64 Data URI（自动压缩）"""
+    try:
+        # 检查是否是本地URL
+        parsed = urlparse(image_url)
+        if parsed.hostname in ('127.0.0.1', 'localhost'):
+            # 提取文件路径
+            file_path = parsed.path
+            
+            # 移除 /media/ 前缀（因为MEDIA_ROOT已经包含media目录）
+            if file_path.startswith('/media/'):
+                file_path = file_path[len('/media/'):]
+            
+            # 转换为绝对路径
+            if not os.path.isabs(file_path):
+                from django.conf import settings as django_settings
+                media_root = getattr(django_settings, 'MEDIA_ROOT', '')
+                file_path = os.path.join(media_root, file_path.lstrip('/'))
+            
+            if os.path.exists(file_path):
+                original_size = os.path.getsize(file_path)
+                logger.info(f"原始图片大小: {original_size / 1024:.1f} KB, 路径: {file_path}")
+                
+                # 尝试使用PIL压缩图片
+                try:
+                    from PIL import Image
+                    
+                    img = Image.open(file_path)
+                    original_dimensions = img.size
+                    logger.info(f"原始图片尺寸: {original_dimensions}")
+                    
+                    # 更激进的压缩 - 最大边长512px
+                    max_size = 512
+                    if max(img.size) > max_size:
+                        ratio = max_size / max(img.size)
+                        new_size = (int(img.size[0] * ratio), int(img.size[1] * ratio))
+                        img = img.resize(new_size, Image.LANCZOS)
+                        logger.info(f"图片已压缩: {original_dimensions} -> {img.size}")
+                    
+                    # 转换为JPEG格式，更低的质量
+                    buffer = BytesIO()
+                    if img.mode in ('RGBA', 'P'):
+                        img = img.convert('RGB')
+                    img.save(buffer, format='JPEG', quality=70, optimize=True)
+                    image_data = buffer.getvalue()
+                    
+                    base64_size = len(base64.b64encode(image_data))
+                    logger.info(f"压缩后: {len(image_data)} bytes, Base64后: {base64_size / 1024:.1f} KB")
+                    
+                    # 转换为Base64 Data URI
+                    base64_data = base64.b64encode(image_data).decode('utf-8')
+                    return f"data:image/jpeg;base64,{base64_data}"
+                    
+                except ImportError:
+                    logger.warning("PIL未安装，使用原始图片")
+                    with open(file_path, 'rb') as f:
+                        image_data = f.read()
+                    
+                    ext = os.path.splitext(file_path)[1].lower()
+                    mime_types = {
+                        '.jpg': 'image/jpeg',
+                        '.jpeg': 'image/jpeg',
+                        '.png': 'image/png',
+                        '.gif': 'image/gif',
+                        '.webp': 'image/webp',
+                    }
+                    mime_type = mime_types.get(ext, 'image/jpeg')
+                    base64_data = base64.b64encode(image_data).decode('utf-8')
+                    return f"data:{mime_type};base64,{base64_data}"
+            else:
+                logger.warning(f"本地图片文件不存在: {file_path}")
+        return image_url
+    except Exception as e:
+        logger.error(f"转换本地图片到Base64失败: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return image_url
 
 class BaseAIApi:
     """大模型API调用基类"""
@@ -73,10 +156,18 @@ class BaseAIApi:
         
         return messages
     
-    def _make_request(self, url: str, headers: Dict, payload: Dict, timeout: int = 15) -> Dict:
-        """执行HTTP请求 - 优化：减少默认超时时间"""
+    def _make_request(self, url: str, headers: Dict, payload: Dict, timeout: int = 120) -> Dict:
+        """执行HTTP请求 - 优化：支持大图片和长超时"""
         try:
-            response = requests.post(
+            import requests.sessions
+            # 使用session提高性能
+            session = requests.Session()
+            session.headers.update({
+                'Connection': 'keep-alive',
+                'Expect': ''  # 避免100-continue延迟
+            })
+            
+            response = session.post(
                 url=url,
                 headers=headers,
                 json=payload,
@@ -139,12 +230,12 @@ class BaseAIApi:
         # 构建请求URL
         url = f"{self.base_url.rstrip('/')}/chat/completions"
         
-        # 发送请求 - 优化：减少默认超时时间到15秒
+        # 发送请求 - 优化：图片分析需要更长时间
         response_data = self._make_request(
             url=url,
             headers=headers,
             payload=payload,
-            timeout=config.get('timeout', 15)
+            timeout=config.get('timeout', 120)  # 默认120秒超时
         )
         
         # 提取响应内容
@@ -414,8 +505,10 @@ class QwenApi(BaseAIApi):
         if not api_key:
             raise Exception(f"未配置{self.name} API密钥")
         
-        # 处理图片URL
+        # 处理图片URL - 如果是本地URL则转换为Base64
         if image_url:
+            image_url = _convert_local_image_to_base64(image_url)
+            logger.info(f"图片URL处理完成，长度: {len(image_url) if image_url else 0}")
             # 构建多模态消息格式
             multimodal_message = [
                 {
@@ -463,6 +556,14 @@ class QwenApi(BaseAIApi):
         if not api_key:
             raise Exception(f"未配置{self.name} API密钥")
         
+        # 处理多模态消息中的本地图片URL - 转换为Base64
+        if isinstance(message, list):
+            for item in message:
+                if item.get('type') == 'image_url' and item.get('image_url', {}).get('url'):
+                    original_url = item['image_url']['url']
+                    item['image_url']['url'] = _convert_local_image_to_base64(original_url)
+                    logger.info(f"流式消息图片URL处理完成，原长度: {len(original_url)}, 新长度: {len(item['image_url']['url'])}")
+        
         # 准备请求参数
         headers = self._prepare_headers(api_key)
         
@@ -480,11 +581,18 @@ class QwenApi(BaseAIApi):
         
         # 发送流式请求
         try:
-            response = requests.post(
+            # 使用session提高性能
+            session = requests.Session()
+            session.headers.update({
+                'Connection': 'keep-alive',
+                'Expect': ''
+            })
+            
+            response = session.post(
                 url=url,
                 headers=headers,
                 json=payload,
-                timeout=(5, 30),  # 优化：连接超时5秒，读取超时30秒
+                timeout=(30, 180),  # 连接超时30秒，读取超时180秒（图片分析需要更长时间）
                 stream=True  # 启用流式响应
             )
             
@@ -583,6 +691,20 @@ class QwenApi(BaseAIApi):
                                     base64_url = self._convert_image_to_base64(image_url)
                                     if base64_url:
                                         item['image_url']['url'] = base64_url
+            
+            # 非视觉模型但包含图片时，也需要转换本地图片为Base64
+            elif any(isinstance(msg.get('content'), list) for msg in payload.get('messages', [])):
+                for msg in payload.get('messages', []):
+                    if isinstance(msg.get('content'), list):
+                        for item in msg['content']:
+                            if item.get('type') == 'image_url':
+                                image_url = item.get('image_url', {}).get('url', '')
+                                if image_url and image_url.startswith(('http://', 'https://')):
+                                    # 检查是否是本地地址
+                                    if '127.0.0.1' in image_url or 'localhost' in image_url:
+                                        base64_url = self._convert_image_to_base64(image_url)
+                                        if base64_url:
+                                            item['image_url']['url'] = base64_url
             
             return payload
 
