@@ -8,7 +8,7 @@ import base64
 import os
 from django.conf import settings
 from typing import Dict, List, Optional, Any
-from urllib.parse import urlparse
+from urllib.parse import urlparse, unquote
 from io import BytesIO
 
 logger = logging.getLogger(__name__)
@@ -17,77 +17,61 @@ logger = logging.getLogger(__name__)
 def _convert_local_image_to_base64(image_url: str) -> Optional[str]:
     """将本地图片URL转换为Base64 Data URI（自动压缩）"""
     try:
-        # 检查是否是本地URL
+        logger.info(f"[B64] 开始: {image_url[:80]}...")
+        
+        if image_url.startswith('data:image/'):
+            return image_url
+        
         parsed = urlparse(image_url)
-        if parsed.hostname in ('127.0.0.1', 'localhost'):
-            # 提取文件路径
-            file_path = parsed.path
+        is_local = parsed.hostname in ('127.0.0.1', 'localhost') or not parsed.hostname or image_url.startswith('/media/')
+        
+        logger.info(f"[B64] hostname={parsed.hostname}, is_local={is_local}")
+        
+        if is_local:
+            file_path = parsed.path if parsed.path else image_url
+            file_path = unquote(file_path)
             
-            # 移除 /media/ 前缀（因为MEDIA_ROOT已经包含media目录）
             if file_path.startswith('/media/'):
-                file_path = file_path[len('/media/'):]
+                file_path = file_path[7:]
             
-            # 转换为绝对路径
-            if not os.path.isabs(file_path):
-                from django.conf import settings as django_settings
-                media_root = getattr(django_settings, 'MEDIA_ROOT', '')
-                file_path = os.path.join(media_root, file_path.lstrip('/'))
+            media_root = getattr(settings, 'MEDIA_ROOT', '')
+            full_path = os.path.join(media_root, file_path.lstrip('/'))
             
-            if os.path.exists(file_path):
-                original_size = os.path.getsize(file_path)
-                logger.info(f"原始图片大小: {original_size / 1024:.1f} KB, 路径: {file_path}")
-                
-                # 尝试使用PIL压缩图片
+            logger.info(f"[B64] 路径={full_path}, 存在={os.path.exists(full_path)}")
+            
+            if os.path.exists(full_path):
                 try:
                     from PIL import Image
+                    img = Image.open(full_path)
                     
-                    img = Image.open(file_path)
-                    original_dimensions = img.size
-                    logger.info(f"原始图片尺寸: {original_dimensions}")
-                    
-                    # 更激进的压缩 - 最大边长512px
                     max_size = 512
                     if max(img.size) > max_size:
                         ratio = max_size / max(img.size)
-                        new_size = (int(img.size[0] * ratio), int(img.size[1] * ratio))
-                        img = img.resize(new_size, Image.LANCZOS)
-                        logger.info(f"图片已压缩: {original_dimensions} -> {img.size}")
+                        img = img.resize((int(img.size[0]*ratio), int(img.size[1]*ratio)), Image.LANCZOS)
                     
-                    # 转换为JPEG格式，更低的质量
-                    buffer = BytesIO()
+                    buf = BytesIO()
                     if img.mode in ('RGBA', 'P'):
                         img = img.convert('RGB')
-                    img.save(buffer, format='JPEG', quality=70, optimize=True)
-                    image_data = buffer.getvalue()
+                    img.save(buf, format='JPEG', quality=70, optimize=True)
+                    data = buf.getvalue()
                     
-                    base64_size = len(base64.b64encode(image_data))
-                    logger.info(f"压缩后: {len(image_data)} bytes, Base64后: {base64_size / 1024:.1f} KB")
-                    
-                    # 转换为Base64 Data URI
-                    base64_data = base64.b64encode(image_data).decode('utf-8')
-                    return f"data:image/jpeg;base64,{base64_data}"
+                    b64 = base64.b64encode(data).decode('utf-8')
+                    result = f"data:image/jpeg;base64,{b64}"
+                    logger.info(f"[B64] ✅ {len(data)}B -> {len(result)}字符")
+                    return result
                     
                 except ImportError:
-                    logger.warning("PIL未安装，使用原始图片")
-                    with open(file_path, 'rb') as f:
-                        image_data = f.read()
-                    
-                    ext = os.path.splitext(file_path)[1].lower()
-                    mime_types = {
-                        '.jpg': 'image/jpeg',
-                        '.jpeg': 'image/jpeg',
-                        '.png': 'image/png',
-                        '.gif': 'image/gif',
-                        '.webp': 'image/webp',
-                    }
-                    mime_type = mime_types.get(ext, 'image/jpeg')
-                    base64_data = base64.b64encode(image_data).decode('utf-8')
-                    return f"data:{mime_type};base64,{base64_data}"
+                    with open(full_path, 'rb') as f:
+                        data = f.read()
+                    ext = os.path.splitext(full_path)[1].lower()
+                    mimes = {'.jpg':'image/jpeg','.jpeg':'image/jpeg','.png':'image/png'}
+                    b64 = base64.b64encode(data).decode('utf-8')
+                    return f"data:{mimes.get(ext,'image/jpeg')};base64,{b64}"
             else:
-                logger.warning(f"本地图片文件不存在: {file_path}")
+                logger.warning(f"[B64] ❌ 文件不存在: {full_path}")
         return image_url
     except Exception as e:
-        logger.error(f"转换本地图片到Base64失败: {e}")
+        logger.error(f"[B64] ❌ 失败: {e}")
         import traceback
         logger.error(traceback.format_exc())
         return image_url
@@ -461,12 +445,14 @@ class DoubaoApi(BaseAIApi):
 
 
 class QwenApi(BaseAIApi):
-    """通义千问API实现 - OpenAI兼容接口"""
+    """通义千问API实现 - 支持OpenAI兼容接口和原生多模态接口"""
     
     def __init__(self):
         super().__init__()
         self.base_url = getattr(settings, 'QWEN_API_BASE_URL', 'https://dashscope.aliyuncs.com/compatible-mode/v1')
         self.name = "Qwen"
+        # 百炼原生多模态API端点
+        self.multimodal_url = 'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation'
     
     def _get_api_key(self, model: str) -> Optional[str]:
         return getattr(settings, 'QWEN_API_KEY', None) or settings.LLM_CONFIG.get('QWEN_API_KEY')
@@ -505,46 +491,155 @@ class QwenApi(BaseAIApi):
         if not api_key:
             raise Exception(f"未配置{self.name} API密钥")
         
-        # 处理图片URL - 如果是本地URL则转换为Base64
+        # 检查是否是多模态请求（有图片）
         if image_url:
-            image_url = _convert_local_image_to_base64(image_url)
-            logger.info(f"图片URL处理完成，长度: {len(image_url) if image_url else 0}")
-            # 构建多模态消息格式
-            multimodal_message = [
-                {
-                    "type": "text",
-                    "text": message
-                },
-                {
-                    "type": "image_url",
-                    "image_url": {
-                        "url": image_url
-                    }
-                }
-            ]
-            message = multimodal_message
+            # 使用百炼原生多模态API（非流式）
+            return self._send_multimodal_non_stream(message, config, api_key, image_url)
+        else:
+            # 使用OpenAI兼容API（纯文本）
+            headers = self._prepare_headers(api_key)
+            payload = self._prepare_payload(
+                message=message,
+                history=config.get('history', []),
+                config=config
+            )
+            
+            url = f"{self.base_url.rstrip('/')}/chat/completions"
+            
+            response_data = self._make_request(
+                url=url,
+                headers=headers,
+                payload=payload,
+                timeout=config.get('timeout', 15)
+            )
+            
+            return self._extract_response_content(response_data)
+    
+    def _send_multimodal_non_stream(self, message: str, config: Dict, api_key: str, image_url: str) -> Dict:
+        """使用百炼原生多模态API发送非流式请求"""
+        model = config.get('model', 'qwen-vl-max')
         
-        # 准备请求参数
-        headers = self._prepare_headers(api_key)
-        payload = self._prepare_payload(
-            message=message,
-            history=config.get('history', []),
-            config=config
-        )
+        # 转换图片为Base64
+        base64_image = _convert_local_image_to_base64(image_url)
+        logger.info(f"非流式多模态请求 - 图片转换完成，长度: {len(base64_image)}")
         
-        # 对于OpenAI兼容API，需要在基础URL后添加/chat/completions端点
-        url = f"{self.base_url.rstrip('/')}/chat/completions"
+        # 构建消息历史
+        messages = []
         
-        # 发送请求 - 优化：减少默认超时时间到15秒
-        response_data = self._make_request(
-            url=url,
-            headers=headers,
-            payload=payload,
-            timeout=config.get('timeout', 15)
-        )
+        # 添加系统消息
+        messages.append({
+            'role': 'system',
+            'content': 'You are a helpful assistant.'
+        })
         
-        # 提取响应内容
-        return self._extract_response_content(response_data)
+        # 添加历史消息
+        history = config.get('history', [])
+        if history:
+            for msg in history[-8:]:
+                role = msg.get('role', '')
+                content = msg.get('content', '')
+                
+                if role == 'assistant':
+                    messages.append({'role': role, 'content': content})
+                elif role == 'user':
+                    if isinstance(content, list):
+                        converted_content = []
+                        for item in content:
+                            if item.get('type') == 'text':
+                                converted_content.append({"text": item['text']})
+                            elif item.get('type') == 'image_url' and item.get('image_url', {}).get('url'):
+                                original_url = item['image_url']['url']
+                                if original_url.startswith('data:image/'):
+                                    converted_content.append({"image": original_url})
+                                else:
+                                    base64_url = _convert_local_image_to_base64(original_url)
+                                    if base64_url:
+                                        converted_content.append({"image": base64_url})
+                        messages.append({'role': role, 'content': converted_content})
+                    else:
+                        messages.append({'role': role, 'content': content})
+                else:
+                    messages.append({'role': role, 'content': content})
+        
+        # 添加当前用户消息（多模态格式）
+        content_items = [{"text": message}]
+        if base64_image:
+            content_items.append({"image": base64_image})
+        
+        messages.append({
+            'role': 'user',
+            'content': content_items
+        })
+        
+        # 构建请求载荷（百炼原生格式，非流式）
+        payload = {
+            "model": model,
+            "input": {
+                "messages": messages
+            },
+            "parameters": {
+                "incremental_output": False,  # 非流式
+                "temperature": config.get('temperature', 0.6),
+                "max_tokens": config.get('max_tokens', 2000),
+                "top_p": config.get('top_p', 0.7),
+            }
+        }
+        
+        # 百炼原生API端点
+        url = self.multimodal_url
+        
+        # 原生API头部
+        headers = {
+            'Content-Type': 'application/json',
+            'Authorization': f'Bearer {api_key}'
+        }
+        
+        logger.info(f"百炼原生多模态API非流式请求 - URL: {url}")
+        logger.info(f"百炼原生多模态API非流式请求 - Payload: {json.dumps(payload)[:1000]}")
+        
+        # 发送请求
+        try:
+            response = requests.post(
+                url=url,
+                headers=headers,
+                json=payload,
+                timeout=(30, 180)
+            )
+            
+            if not response.ok:
+                logger.error(f"百炼原生API非流式请求失败: {response.status_code} - {response.text}")
+                raise Exception(f"百炼API错误: {response.status_code}")
+            
+            response_data = response.json()
+            logger.info(f"百炼原生API非流式响应: {json.dumps(response_data)[:1000]}")
+            
+            # 解析响应
+            if response_data.get('output') and response_data['output'].get('choices'):
+                for choice in response_data['output']['choices']:
+                    if choice.get('message') and choice['message'].get('content'):
+                        content_list = choice['message']['content']
+                        
+                        if isinstance(content_list, list):
+                            full_content = ""
+                            for content_item in content_list:
+                                if content_item.get('text'):
+                                    full_content += content_item['text']
+                            return {'content': full_content, 'usage': {}}
+                        elif isinstance(content_list, str):
+                            return {'content': content_list, 'usage': {}}
+            
+            # 格式2: {"output":{"text":"..."}}
+            if response_data.get('output') and response_data['output'].get('text'):
+                return {'content': response_data['output']['text'], 'usage': {}}
+            
+            raise Exception("无法解析百炼API响应")
+            
+        except requests.exceptions.Timeout:
+            logger.error("百炼原生API非流式请求超时")
+            raise Exception("API请求超时")
+        except requests.exceptions.RequestException as e:
+            logger.error(f"百炼原生API非流式请求异常: {str(e)}")
+            raise Exception(f"API请求异常: {str(e)}")
     
     def send_message_stream(self, message: str, config: Dict):
         """流式发送消息，逐块返回响应"""
@@ -556,14 +651,262 @@ class QwenApi(BaseAIApi):
         if not api_key:
             raise Exception(f"未配置{self.name} API密钥")
         
-        # 处理多模态消息中的本地图片URL - 转换为Base64
-        if isinstance(message, list):
-            for item in message:
-                if item.get('type') == 'image_url' and item.get('image_url', {}).get('url'):
-                    original_url = item['image_url']['url']
-                    item['image_url']['url'] = _convert_local_image_to_base64(original_url)
-                    logger.info(f"流式消息图片URL处理完成，原长度: {len(original_url)}, 新长度: {len(item['image_url']['url'])}")
+        # 检查是否是多模态消息（包含图片）
+        is_multimodal = isinstance(message, list) and any(item.get('type') == 'image_url' for item in message)
         
+        if is_multimodal:
+            # 使用百炼原生多模态API（支持Base64图片）
+            yield from self._send_multimodal_stream(message, config, api_key)
+        else:
+            # 使用OpenAI兼容API（纯文本）
+            yield from self._send_text_stream(message, config, api_key)
+    
+    def _send_multimodal_stream(self, message: list, config: Dict, api_key: str):
+        """使用百炼原生多模态API发送流式请求"""
+        model = config.get('model', 'qwen-vl-max')
+        
+        # ===== 位置 1：确认传入的 message 结构 =====
+        logger.info(f"[STREAM DEBUG] message类型: {type(message)}")
+        logger.info(f"[STREAM DEBUG] message内容: {json.dumps(message, ensure_ascii=False)[:500]}")
+        
+        # 处理多模态消息中的本地图片URL - 转换为Base64
+        for item in message:
+            if item.get('type') == 'image_url' and item.get('image_url', {}).get('url'):
+                original_url = item['image_url']['url']
+                logger.info(f"开始转换图片URL: {original_url[:100]}")
+                base64_url = _convert_local_image_to_base64(original_url)
+                item['image_url']['url'] = base64_url
+                # ===== 位置 2：确认图片是否转成了 Base64 =====
+                logger.info(f"[STREAM DEBUG] 图片转换结果: {base64_url[:80] if base64_url else 'None'}...")
+                logger.info(f"[STREAM DEBUG] 是否Base64: {base64_url.startswith('data:image') if base64_url else False}")
+                logger.info(f"转换后图片URL长度: {len(base64_url)}, 前50字符: {base64_url[:50]}")
+                logger.info(f"多模态消息图片URL处理完成，原长度: {len(original_url)}, 新长度: {len(base64_url)}")
+        
+        # 构建百炼原生多模态API格式
+        # 注意：原生API使用 "image" 字段而不是 "image_url"
+        # 注意：原生API的content数组格式是 [{"text": "..."}, {"image": "..."}]
+        content_items = []
+        for item in message:
+            if item.get('type') == 'text':
+                content_items.append({"text": item['text']})
+            elif item.get('type') == 'image_url':
+                # 将 image_url 转换为 image（原生API格式）
+                image_url_value = item['image_url']['url']
+                logger.info(f"添加到content_items的图片URL长度: {len(image_url_value)}, 前50字符: {image_url_value[:50]}")
+                content_items.append({"image": image_url_value})
+        
+        # 构建消息历史
+        messages = []
+        
+        # 添加系统消息
+        messages.append({
+            'role': 'system',
+            'content': 'You are a helpful assistant. Please format your response in Markdown.'
+        })
+        
+        # 添加历史消息
+        history = config.get('history', [])
+        if history:
+            for msg in history[-8:]:
+                role = msg.get('role', '')
+                content = msg.get('content', '')
+                
+                # 百炼原生API：只有user消息可以是数组格式，assistant消息必须是字符串
+                if role == 'assistant':
+                    # 助手消息保持字符串格式
+                    messages.append({'role': role, 'content': content})
+                elif role == 'user':
+                    # 用户消息如果是多模态则保持数组格式
+                    if isinstance(content, list):
+                        # 转换历史多模态消息为原生API格式
+                        converted_content = []
+                        for item in content:
+                            if item.get('type') == 'text':
+                                converted_content.append({"text": item['text']})
+                            elif item.get('type') == 'image_url' and item.get('image_url', {}).get('url'):
+                                # 历史消息中的图片也需要转换为Base64
+                                original_url = item['image_url']['url']
+                                if original_url.startswith('data:image/'):
+                                    # 已经是Base64，直接使用
+                                    converted_content.append({"image": original_url})
+                                else:
+                                    # 需要转换为Base64
+                                    base64_url = _convert_local_image_to_base64(original_url)
+                                    if base64_url:
+                                        converted_content.append({"image": base64_url})
+                                    else:
+                                        logger.warning(f"历史消息图片转换失败: {original_url[:100]}")
+                        messages.append({'role': role, 'content': converted_content})
+                    else:
+                        messages.append({'role': role, 'content': content})
+                else:
+                    messages.append({'role': role, 'content': content})
+        
+        # 添加当前用户消息（多模态格式）
+        messages.append({
+            'role': 'user',
+            'content': content_items
+        })
+        
+        # 构建请求载荷（百炼原生格式）
+        payload = {
+            "model": model,
+            "input": {
+                "messages": messages
+            },
+            "parameters": {
+                "incremental_output": True,  # 启用增量输出（流式）
+                "temperature": config.get('temperature', 0.6),
+                "max_tokens": config.get('max_tokens', 2000),
+                "top_p": config.get('top_p', 0.7),
+            }
+        }
+        
+        # ===== 位置 3：确认发给百炼的 payload 格式 =====
+        logger.info(f"[STREAM DEBUG] payload: {json.dumps(payload, ensure_ascii=False)[:800]}")
+        
+        # 百炼原生API端点
+        url = self.multimodal_url
+        
+        # 原生API使用不同的头部格式
+        headers = {
+            'Content-Type': 'application/json',
+            'Authorization': f'Bearer {api_key}',
+            'X-DashScope-SSE': 'enable'  # 启用SSE
+        }
+        
+        logger.info(f"百炼原生多模态API请求 - URL: {url}")
+        logger.info(f"百炼原生多模态API请求 - Payload: {json.dumps(payload)[:1000]}")
+        
+        # 发送流式请求
+        try:
+            session = requests.Session()
+            session.headers.update({
+                'Connection': 'keep-alive',
+                'Expect': ''
+            })
+            
+            response = session.post(
+                url=url,
+                headers=headers,
+                json=payload,
+                timeout=(30, 180),
+                stream=True
+            )
+            
+            if not response.ok:
+                # ===== 位置 4：确认百炼返回的状态码和第一行数据 =====
+                logger.error(f"[STREAM DEBUG] 百炼状态码: {response.status_code}")
+                logger.error(f"[STREAM DEBUG] 百炼响应头: {dict(response.headers)}")
+                logger.error(f"[STREAM DEBUG] 百炼错误响应体: {response.text[:500]}")
+                logger.error(f"{self.name} 多模态API请求失败: {response.status_code} - {response.text}")
+                raise Exception(f"{self.name} API错误: {response.status_code}")
+            
+            logger.info(f"百炼原生多模态API响应状态码: {response.status_code}")
+            logger.info(f"[STREAM DEBUG] 百炼状态码: {response.status_code}")
+            logger.info(f"[STREAM DEBUG] 百炼响应头: {dict(response.headers)}")
+            
+            # 逐块读取SSE响应 - 修复版：增强容错和日志
+            line_count = 0
+            yield_count = 0
+            
+            try:
+                for line in response.iter_lines():
+                    line_count += 1
+                    if not line:
+                        continue
+                        
+                    line_str = line.decode('utf-8')
+                    logger.info(f"[RAW SSE #{line_count}] {line_str[:300]}")
+                    
+                    # 跳过SSE注释行（:HTTP_STATUS/200 或 :ok）
+                    if line_str.startswith(':'):
+                        continue
+                    
+                    # 跳过 event/id 行
+                    if line_str.startswith('event:') or line_str.startswith('id:'):
+                        continue
+                    
+                    # 处理 data: 行（兼容 data: 和 data:  两种格式）
+                    if line_str.startswith('data:'):
+                        data_str = line_str[5:].strip()  # 去掉 "data:" 前缀并去除前后空格
+                        
+                        # 结束标记
+                        if data_str == '[DONE]':
+                            logger.info("[SSE] 收到 [DONE]，流结束")
+                            break
+                        
+                        # 跳过空 data
+                        if not data_str:
+                            continue
+                        
+                        # 尝试解析JSON
+                        try:
+                            data = json.loads(data_str)
+                            logger.info(f"[PARSED] JSON结构: {list(data.keys())}")
+                            
+                            # 检查是否有错误字段
+                            if 'code' in data and 'message' in data:
+                                logger.error(f"[API ERROR] 百炼返回错误: {data}")
+                                raise Exception(f"百炼API错误: {data.get('message', '未知错误')}")
+                            
+                            # 格式1: {"output": {"choices": [{"message": {"content": [{"text":"..."}]}}]}}
+                            if data.get('output') and data['output'].get('choices'):
+                                for choice in data['output']['choices']:
+                                    finish_reason = choice.get('finish_reason', '')
+                                    logger.info(f"[CHOICE] finish_reason={finish_reason}")
+                                    
+                                    if choice.get('message') and choice['message'].get('content'):
+                                        content_list = choice['message']['content']
+                                        
+                                        if isinstance(content_list, list):
+                                            for content_item in content_list:
+                                                if content_item.get('text'):
+                                                    text_content = content_item['text']
+                                                    logger.info(f"[YIELD] 内容: {text_content[:50]}")
+                                                    yield text_content
+                                                    yield_count += 1
+                                        elif isinstance(content_list, str):
+                                            if content_list:
+                                                logger.info(f"[YIELD] 字符串内容: {content_list[:50]}")
+                                                yield content_list
+                                                yield_count += 1
+                            # 格式2: {"output":{"text":"..."}}
+                            elif data.get('output') and data['output'].get('text'):
+                                content = data['output']['text']
+                                if content:
+                                    logger.info(f"[YIELD] output.text: {content[:50]}")
+                                    yield content
+                                    yield_count += 1
+                            else:
+                                logger.warning(f"[UNKNOWN] 未识别的响应格式: {json.dumps(data)[:200]}")
+                                
+                        except json.JSONDecodeError as e:
+                            logger.warning(f"[JSON ERROR] 解析失败: {str(e)}")
+                            logger.warning(f"[JSON ERROR] 原始数据: {data_str[:300]}")
+                            continue
+                        except Exception as e:
+                            logger.error(f"[PARSE ERROR] 解析异常: {str(e)}")
+                            import traceback
+                            logger.error(f"[PARSE ERROR] 详细错误: {traceback.format_exc()}")
+                            continue
+            except Exception as e:
+                logger.error(f"SSE流读取异常: {str(e)}")
+                import traceback
+                logger.error(f"详细错误: {traceback.format_exc()}")
+                raise
+            finally:
+                logger.info(f"SSE流处理完成 - 读取{line_count}行，yield{yield_count}次")
+            
+        except requests.exceptions.Timeout:
+            logger.error(f"{self.name} 多模态API请求超时")
+            raise Exception(f"{self.name} API请求超时")
+        except requests.exceptions.RequestException as e:
+            logger.error(f"{self.name} 多模态API请求异常: {str(e)}")
+            raise Exception(f"{self.name} API请求异常: {str(e)}")
+    
+    def _send_text_stream(self, message: str, config: Dict, api_key: str):
+        """使用OpenAI兼容API发送纯文本流式请求"""
         # 准备请求参数
         headers = self._prepare_headers(api_key)
         

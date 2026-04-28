@@ -109,6 +109,7 @@ class APICacheMiddleware(MiddlewareMixin):
         # 如果路径包含实时数据，则跳过缓存
         no_cache_paths = [
             '/api/v1/chat/stream/',  # 流式聊天API
+            '/api/v1/stream-chat/',  # 流式聊天API（新路径）
             '/api/v1/user/profile/',  # 实时用户资料
             '/api/v1/realtime/',     # 实时API
             '/api/v1/conversations/',  # 会话列表（经常变化，不缓存）

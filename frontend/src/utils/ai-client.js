@@ -254,26 +254,26 @@ class BackendProvider {
   }
 
   async sendMessageStream(message, config, onChunk, onComplete) {
-    // 使用 Fetch API + ReadableStream 实现真正的流式响应
     const token = localStorage.getItem('token')
     const history = config.history || []
     
-    console.log('发送流式请求:', {
-      url: '/api/v1/stream-chat/',
-      model: config.model,
-      hasToken: !!token,
-      conversationId: config.conversation_id,
-      roleId: config.role_id
-    })
+    console.log('[SSE] 开始发送流式请求...')
+    console.log('[SSE] URL: /api/v1/stream-chat/')
+    console.log('[SSE] 模型:', config.model)
+    console.log('[SSE] 有Token:', !!token)
+    console.log('[SSE] 有图片:', !!config.image_url)
     
     let fullContent = ''
     let isCompleted = false
     
-    // 创建 AbortController 用于超时控制
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 120000) // 120秒超时
+    const timeoutId = setTimeout(() => {
+      console.warn('[SSE] 超时！120秒无响应')
+      controller.abort()
+    }, 180000)
     
     try {
+      console.log('[SSE] 发送fetch请求...')
       const response = await fetch('/api/v1/stream-chat/', {
         method: 'POST',
         headers: {
@@ -294,7 +294,8 @@ class BackendProvider {
       
       clearTimeout(timeoutId)
       
-      console.log('收到响应:', response.status, response.statusText)
+      console.log('[SSE] 收到响应:', response.status, response.statusText)
+      console.log('[SSE] Content-Type:', response.headers.get('content-type'))
       
       if (!response.ok) {
         const errorMsg = response.status === 401 ? '登录已过期，请重新登录' : `后端API错误: ${response.status}`
@@ -379,6 +380,16 @@ class BackendProvider {
       }
       
     } catch (error) {
+      console.error('[SSE] ❌ 错误:', error.name, error.message)
+      
+      if (error.name === 'AbortError') {
+        console.error('[SSE] 请求被中止（超时或手动取消）')
+      } else if (error.message.includes('Failed to fetch')) {
+        console.error('[SSE] 网络错误 - 请检查后端是否运行')
+      } else if (error.message.includes('401')) {
+        console.error('[SSE] 认证失败 - 需要重新登录')
+      }
+      
       if (onComplete) {
         onComplete({
           success: false,

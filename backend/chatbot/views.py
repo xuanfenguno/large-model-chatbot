@@ -244,7 +244,9 @@ def stream_chat(request):
                 history.append({"role": "assistant", "content": msg.content})
 
         # 添加缓存键定义（用于缓存响应）
-        cache_key = f"chat_cache_{hashlib.md5((message_content or '').encode()).hexdigest()}"
+        # 修复：缓存键必须包含图片URL，否则相同文字不同图片会命中错误缓存
+        cache_key_data = (message_content or '') + (image_url or '')
+        cache_key = f"chat_cache_{hashlib.md5(cache_key_data.encode()).hexdigest()}"
         
         # 创建API实例
         logger.info(f"创建API实例，模型: {model}")
@@ -290,19 +292,30 @@ def stream_chat(request):
                     # 检查API实例是否支持流式输出
                     if hasattr(api_instance, 'send_message_stream'):
                         # 使用真正的流式输出
-                        for content_chunk in api_instance.send_message_stream(
-                            message=current_message_content,
-                            config={
-                                'model': model,
-                                'history': history[:-1] if len(history) > 1 else [],
-                                'temperature': 0.7,
-                                'max_tokens': 2000,
-                                'top_p': 0.9
-                            }
-                        ):
-                            full_response += content_chunk
-                            # 逐块返回内容
-                            yield f"data: {json.dumps({'content': content_chunk})}" + "\n\n"
+                        stream_count = 0
+                        logger.info(f"开始流式输出 - message类型: {type(current_message_content)}")
+                        try:
+                            for content_chunk in api_instance.send_message_stream(
+                                message=current_message_content,
+                                config={
+                                    'model': model,
+                                    'history': history[:-1] if len(history) > 1 else [],
+                                    'temperature': 0.7,
+                                    'max_tokens': 2000,
+                                    'top_p': 0.9
+                                }
+                            ):
+                                stream_count += 1
+                                full_response += content_chunk
+                                logger.info(f"流式响应 #{stream_count}: {content_chunk[:50]}")
+                                # 逐块返回内容
+                                yield f"data: {json.dumps({'content': content_chunk})}" + "\n\n"
+                            logger.info(f"流式响应完成 - 共{stream_count}块，总长度: {len(full_response)}")
+                        except Exception as stream_error:
+                            logger.error(f"流式输出异常: {str(stream_error)}")
+                            import traceback
+                            logger.error(f"流式输出详细错误: {traceback.format_exc()}")
+                            raise
                     else:
                         # 回退到非流式方式
                         result = api_instance.send_message(
@@ -952,8 +965,8 @@ def upload_chat_image(request):
         # 保存文件
         file_path = default_storage.save(filename, ContentFile(image_file.read()))
 
-        # 构建完整URL
-        image_url = request.build_absolute_uri(default_storage.url(file_path))
+        # 构建相对URL（用于Vite代理）
+        image_url = default_storage.url(file_path)
 
         return Response({
             'image_url': image_url,

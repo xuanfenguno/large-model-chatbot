@@ -208,7 +208,7 @@
               </template>
             </div>
             <div class="message-bubble">
-              <img v-if="message.image_url" :src="message.image_url" alt="Image" class="message-image" />
+              <img v-if="message.image_url" :src="normalizeImageUrl(message.image_url)" alt="Image" class="message-image" />
               <div v-if="message.is_loading" class="loading-content">
                 <div class="ai-thinking">
                   <span class="thinking-dots">
@@ -325,6 +325,7 @@ import { useChatStore } from '@/stores/chat'
 import { useSettingsStore } from '@/stores/settings'
 import { useUnifiedAIApi } from '@/utils/ai-api'
 import { useAIConfig } from '@/utils/ai-config'
+import { normalizeImageUrl } from '@/utils/image-url'
 import { service } from '@/utils/request'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'

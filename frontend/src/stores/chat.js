@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import service from '@/utils/request'
 import { useUnifiedAIApi } from '@/utils/ai-api'
+import { normalizeImageUrl, normalizeMessagesImageUrls } from '@/utils/image-url'
 
 export const useChatStore = defineStore('chat', () => {
   const conversations = ref([])
@@ -161,7 +162,7 @@ export const useChatStore = defineStore('chat', () => {
       const cachedMessages = localStorage.getItem(`messages-${conversationId}`)
       if (cachedMessages) {
         try {
-          messages.value = JSON.parse(cachedMessages)
+          messages.value = normalizeMessagesImageUrls(JSON.parse(cachedMessages))
           console.log(`从缓存加载了 ${messages.value.length} 条消息`)
         } catch (e) {
           console.error('解析缓存消息失败:', e)
@@ -176,12 +177,12 @@ export const useChatStore = defineStore('chat', () => {
         }
       })
       
-      // 更新消息列表
-      messages.value = response.data
+      // 更新消息列表，自动纠正图片URL
+      messages.value = normalizeMessagesImageUrls(response.data)
       
       // 缓存到 localStorage
       try {
-        localStorage.setItem(`messages-${conversationId}`, JSON.stringify(response.data))
+        localStorage.setItem(`messages-${conversationId}`, JSON.stringify(messages.value))
       } catch (e) {
         console.error('缓存消息失败:', e)
       }
@@ -227,7 +228,7 @@ export const useChatStore = defineStore('chat', () => {
       const cachedMessages = localStorage.getItem(`messages-${conversationId}`)
       if (cachedMessages) {
         try {
-          messages.value = JSON.parse(cachedMessages)
+          messages.value = normalizeMessagesImageUrls(JSON.parse(cachedMessages))
           ElMessage({
             message: '已加载缓存的聊天记录',
             type: 'warning',
@@ -341,7 +342,79 @@ export const useChatStore = defineStore('chat', () => {
           content: msg.content
         }))
 
-      // 使用SSE流式发送消息，实现逐字动态生成效果
+      // 图文混合消息使用非流式接口，纯文本使用流式接口
+      const hasImage = !!image
+      
+      if (hasImage) {
+        // 非流式接口处理图文
+        try {
+          const response = await aiApi.sendMessage(content, {
+            model: model,
+            history: history,
+            conversation_id: selectedConversationId.value,
+            image_url: image,
+            temperature: 0.6,
+            maxTokens: 2000
+          })
+          
+          const responseTime = Date.now() - startTime
+          
+          if (response && response.success) {
+            const aiIndex = messages.value.findIndex(msg => msg.id === aiMessage.id)
+            if (aiIndex !== -1) {
+              messages.value[aiIndex] = {
+                id: Date.now() + 2,
+                role: 'assistant',
+                content: response.content || '请求成功',
+                created_at: new Date().toISOString(),
+                model: model,
+                responseTime: responseTime
+              }
+            }
+            
+            try {
+              localStorage.setItem(`messages-${selectedConversationId.value}`, JSON.stringify(messages.value))
+            } catch (e) {
+              console.error('缓存消息失败:', e)
+            }
+            
+            const convIndex = conversations.value.findIndex(c => c.id === selectedConversationId.value)
+            if (convIndex !== -1) {
+              const currentConv = conversations.value[convIndex]
+              if (currentConv.title === '新会话' || currentConv.title === 'New Chat') {
+                const firstMessage = messages.value[0]?.content || content
+                const newTitle = firstMessage.slice(0, 30) + (firstMessage.length > 30 ? '...' : '')
+                conversations.value[convIndex].title = newTitle
+                await updateConversationTitle(selectedConversationId.value, newTitle)
+              }
+              conversations.value[convIndex].updated_at = new Date().toISOString()
+              const updatedConv = conversations.value.splice(convIndex, 1)[0]
+              conversations.value.unshift(updatedConv)
+              try {
+                localStorage.setItem('chat-store', JSON.stringify({
+                  selectedConversationId: selectedConversationId.value,
+                  messages: messages.value,
+                  conversations: conversations.value
+                }))
+              } catch (e) {
+                console.error('缓存会话列表失败:', e)
+              }
+            }
+          }
+        } catch (error) {
+          console.error('非流式请求失败:', error)
+          const aiIndex = messages.value.findIndex(msg => msg.id === aiMessage.id)
+          if (aiIndex !== -1) {
+            messages.value[aiIndex] = {
+              ...messages.value[aiIndex],
+              content: `请求失败: ${error.message}`,
+              is_loading: false,
+              error: true
+            }
+          }
+        }
+      } else {
+        // 纯文本使用流式接口
         let fullContent = ''
         let isFirstChunk = true
         let waitTimer = null
@@ -476,7 +549,7 @@ export const useChatStore = defineStore('chat', () => {
             }
           }
         )
-
+      }
     } catch (error) {
       // 清除计时器
       if (waitTimer) {
