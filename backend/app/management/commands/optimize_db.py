@@ -3,7 +3,7 @@
 """
 from django.core.management.base import BaseCommand
 from django.db import connection
-from chatbot.models import Conversation, Message, UserProfile
+from app.models.models import Conversation, Message, UserProfile
 from django.core.management.color import no_style
 from django.db import transaction
 import logging
@@ -101,7 +101,7 @@ class Command(BaseCommand):
         self.stdout.write('清理不需要的数据...')
         
         # 示例：清理过期的密码重置令牌
-        from chatbot.models import PasswordResetToken
+        from app.models.models import PasswordResetToken
         from django.utils import timezone
         from datetime import timedelta
         

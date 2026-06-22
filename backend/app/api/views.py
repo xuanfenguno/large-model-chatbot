@@ -9,7 +9,7 @@ from django.http import JsonResponse, StreamingHttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.utils.decorators import method_decorator
-from .models import Conversation, Message, PasswordResetToken, UserProfile
+from app.models.models import Conversation, Message, PasswordResetToken, UserProfile
 from .serializers import ConversationSerializer, MessageSerializer, PasswordResetTokenSerializer, UserSerializer, UserProfileSerializer
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.password_validation import validate_password
@@ -28,15 +28,15 @@ import hashlib
 import socket
 from PIL import Image
 import os
-from .enhanced_api import EnhancedApiWrapper
-from .function_router import FunctionRouter
-from .middleware.rate_limit import rate_limit
+from app.core.enhanced_api import EnhancedApiWrapper
+from app.core.function_router import FunctionRouter
+from app.middleware.rate_limit import rate_limit
 
 logger = logging.getLogger(__name__)
 
 # 导入功能路由器
-from .function_router import FunctionRouter
-from .utils.knowledge_base import real_time_source
+from app.core.function_router import FunctionRouter
+from app.utils.knowledge_base import real_time_source
 function_router_instance = FunctionRouter()
 
 
@@ -108,7 +108,7 @@ def chat(request):
             old_timeout = socket.getdefaulttimeout()
             socket.setdefaulttimeout(1.5)
 
-            from .utils.knowledge_base import knowledge_base_manager
+            from app.utils.knowledge_base import knowledge_base_manager
             if knowledge_base_manager.client is not None:
                 # 优化：减少检索数量从 2 到 1，加快检索速度
                 search_results = knowledge_base_manager.search(message_content, n_results=1)
@@ -144,7 +144,7 @@ def chat(request):
             content = result['content']
         except Exception as api_error:
             logger.warning(f"API调用失败，使用模拟响应: {str(api_error)}")
-            from .enhanced_api import MockApiInstance
+            from app.core.enhanced_api import MockApiInstance
             mock_api = MockApiInstance()
             result = mock_api.send_message(
                 message=message_content,
@@ -337,7 +337,7 @@ def stream_chat(request):
                     logger.warning(f"API调用失败，使用模拟响应: {str(api_error)}")
                     import traceback
                     logger.error(f"API错误详情: {traceback.format_exc()}")
-                    from .enhanced_api import MockApiInstance
+                    from app.core.enhanced_api import MockApiInstance
                     mock_api = MockApiInstance()
                     result = mock_api.send_message(
                         message=current_message_content,
@@ -508,7 +508,7 @@ def stream_function_router(feature_name, user_input, model, language, image_url,
 
 def stream_generic_handler(user_input, model, handler_name, language=None, image_url=None):
     """通用流式处理器，用于编程、故事等功能"""
-    from .enhanced_api import EnhancedApiWrapper
+    from app.core.enhanced_api import EnhancedApiWrapper
     
     api_instance = EnhancedApiWrapper.create_api_instance(model)
     
@@ -539,7 +539,7 @@ def stream_generic_handler(user_input, model, handler_name, language=None, image
 
 def stream_chat_handler(user_input, model, image_url=None):
     """流式聊天处理器"""
-    from .enhanced_api import EnhancedApiWrapper
+    from app.core.enhanced_api import EnhancedApiWrapper
     
     api_instance = EnhancedApiWrapper.create_api_instance(model)
     
@@ -568,7 +568,7 @@ def stream_chat_handler(user_input, model, image_url=None):
 
 def stream_role_play(user_input, model, role_id, custom_role_prompt=None, image_url=None):
     """流式角色扮演处理器"""
-    from .enhanced_api import EnhancedApiWrapper
+    from app.core.enhanced_api import EnhancedApiWrapper
     
     role_info = function_router_instance.role_presets.get(role_id, function_router_instance.role_presets['custom'])
     system_prompt = role_info['system_prompt']

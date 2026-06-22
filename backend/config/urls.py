@@ -24,7 +24,7 @@ schema_view = get_schema_view(
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('api/v1/', include('chatbot.urls')),
+    path('api/v1/', include('app.api.urls')),
     # JWT token endpoints
     path('api/v1/token/', jwt_views.TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/v1/token/refresh/', jwt_views.TokenRefreshView.as_view(), name='token_refresh'),

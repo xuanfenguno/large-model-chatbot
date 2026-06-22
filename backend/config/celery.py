@@ -20,12 +20,12 @@ app.autodiscover_tasks()
 app.conf.beat_schedule = {
     # 每小时同步一次数据库内容到知识库
     'sync-knowledge-base-hourly': {
-        'task': 'chatbot.tasks.sync_knowledge_base_from_db',
+        'task': 'app.services.tasks.sync_knowledge_base_from_db',
         'schedule': crontab(minute=0),  # 每小时执行
     },
     # 每天同步一次外部数据源
     'sync-external-data-daily': {
-        'task': 'chatbot.tasks.sync_external_data_sources',
+        'task': 'app.services.tasks.sync_external_data_sources',
         'schedule': crontab(hour=2, minute=0),  # 每天凌晨2点执行
     },
 }

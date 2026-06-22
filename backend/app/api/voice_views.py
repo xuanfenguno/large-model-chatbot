@@ -10,7 +10,7 @@ import asyncio
 import redis
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
-from .models import VoiceCallRecord
+from app.models.models import VoiceCallRecord
 
 # 存储通话状态的临时存储（生产环境应使用Redis）
 active_calls = {}

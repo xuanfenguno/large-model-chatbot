@@ -1,5 +1,5 @@
 from django.core.management.base import BaseCommand
-from chatbot.middleware.rate_limit import BLACKLISTED_IPS
+from app.middleware.rate_limit import BLACKLISTED_IPS
 
 class Command(BaseCommand):
     help = 'Clear all IPs from the blacklist'

@@ -3,7 +3,7 @@
 """
 import random
 import logging
-from chatbot.api_base import OpenAIApi, GoogleGeminiApi, MoonshotKimiApi, QwenApi, DeepSeekApi
+from app.core.api_base import OpenAIApi, GoogleGeminiApi, MoonshotKimiApi, QwenApi, DeepSeekApi
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
@@ -77,7 +77,7 @@ class EnhancedApiWrapper:
     @staticmethod
     def get_available_models():
         """获取所有可用的模型列表"""
-        from .api_base import OpenAIApi, GoogleGeminiApi, MoonshotKimiApi, QwenApi, DeepSeekApi
+        from app.core.api_base import OpenAIApi, GoogleGeminiApi, MoonshotKimiApi, QwenApi, DeepSeekApi
         all_models = []
         
         logger.info("开始获取可用模型列表")

@@ -71,7 +71,7 @@ def get_cached_user_profile(user_id):
     cache_key = f"user_profile_{user_id}"
     profile = cache.get(cache_key)
     if profile is None:
-        from chatbot.models import UserProfile
+        from app.models.models import UserProfile
         try:
             user_profile = UserProfile.objects.select_related('user').get(user_id=user_id)
             # 只缓存必要的字段
@@ -101,7 +101,7 @@ def get_cached_conversations(user_id, limit=20):
     cache_key = f"user_conversations_{user_id}_limit_{limit}"
     conversations = cache.get(cache_key)
     if conversations is None:
-        from chatbot.models import Conversation
+        from app.models.models import Conversation
         conversations_qs = Conversation.objects.filter(user_id=user_id).order_by('-updated_at')[:limit]
         conversations = [
             {

@@ -4,7 +4,7 @@
 from django.db import connection
 from django.db.models import Prefetch, Count, Q
 from django.core.paginator import Paginator
-from chatbot.models import Conversation, Message, UserProfile, PasswordResetToken, VoiceCallRecord
+from app.models.models import Conversation, Message, UserProfile, PasswordResetToken, VoiceCallRecord
 from django.contrib.auth.models import User
 import logging
 

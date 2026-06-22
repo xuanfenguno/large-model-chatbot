@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from .models import Conversation, Message, PasswordResetToken, UserProfile
+from app.models.models import Conversation, Message, PasswordResetToken, UserProfile
 
 
 class MessageSerializer(serializers.ModelSerializer):

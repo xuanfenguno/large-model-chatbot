@@ -11,7 +11,7 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 django.setup()
 
 from django.contrib.auth.models import User
-from chatbot.models import UserProfile
+from app.models.models import UserProfile
 from django.db import transaction
 
 def fix_duplicate_userprofiles():

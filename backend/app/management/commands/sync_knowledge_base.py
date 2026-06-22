@@ -2,8 +2,8 @@
 知识库同步管理命令
 """
 from django.core.management.base import BaseCommand
-from chatbot.utils.knowledge_base import real_time_source
-from chatbot.tasks import sync_knowledge_base_from_db, sync_external_data_sources
+from app.utils.knowledge_base import real_time_source
+from app.services.tasks import sync_knowledge_base_from_db, sync_external_data_sources
 import logging
 
 logger = logging.getLogger(__name__)

@@ -141,7 +141,7 @@ def stream_chat(request):
                 # 如果响应为空，使用模拟响应
                 if not full_response:
                     logger.warning("响应为空，使用模拟响应")
-                    from .enhanced_api import MockApiInstance
+                    from app.core.enhanced_api import MockApiInstance
                     mock_api = MockApiInstance()
                     result = mock_api.send_message(
                         message=current_message_content,
@@ -183,7 +183,7 @@ def stream_chat(request):
                 # 即使出错，也返回模拟响应，确保前端不卡住
                 if not full_response:
                     try:
-                        from .enhanced_api import MockApiInstance
+                        from app.core.enhanced_api import MockApiInstance
                         mock_api = MockApiInstance()
                         result = mock_api.send_message(
                             message=message_content or "你好",

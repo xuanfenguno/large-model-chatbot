@@ -46,7 +46,7 @@ def apply_knowledge_search_timeout(message_content: str, n_results: int = 2, tim
         old_timeout = socket.getdefaulttimeout()
         socket.setdefaulttimeout(timeout)
         
-        from .utils.knowledge_base import knowledge_base_manager
+        from app.utils.knowledge_base import knowledge_base_manager
         if knowledge_base_manager.client is not None:
             search_results = knowledge_base_manager.search(message_content, n_results=n_results)
             if search_results and search_results.get('documents'):

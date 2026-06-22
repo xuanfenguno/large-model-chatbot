@@ -11,7 +11,7 @@ from django.core.management import execute_from_command_line
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 django.setup()
 
-from chatbot.models import Conversation, Message, UserProfile
+from app.models.models import Conversation, Message, UserProfile
 from django.contrib.auth.models import User
 from django.test import Client
 from django.core.cache import cache

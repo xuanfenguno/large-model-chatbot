@@ -2,7 +2,7 @@
 知识库同步任务
 """
 from celery import shared_task
-from chatbot.utils.knowledge_base import real_time_source
+from app.utils.knowledge_base import real_time_source
 import logging
 
 logger = logging.getLogger(__name__)

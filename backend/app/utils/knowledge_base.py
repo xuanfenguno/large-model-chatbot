@@ -206,7 +206,7 @@ class RealTimeDataSource:
             logger.warning("ChromaDB not available, skipping database sync")
             return
         
-        from chatbot.models import Conversation, Message, UserProfile
+        from app.models.models import Conversation, Message, UserProfile
         
         try:
             # 同步用户配置信息
